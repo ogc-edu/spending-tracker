@@ -8,11 +8,17 @@
 import { getDb } from './client';
 import { DrizzleAccountRepository } from '@/repositories/drizzle/accountRepository';
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
-import type { AccountRepository, CategoryRepository } from '@/repositories/types';
+import { DrizzleExpenseRepository } from '@/repositories/drizzle/expenseRepository';
+import type {
+  AccountRepository,
+  CategoryRepository,
+  ExpenseRepository,
+} from '@/repositories/types';
 
 export interface Repositories {
   accounts: AccountRepository;
   categories: CategoryRepository;
+  expenses: ExpenseRepository;
 }
 
 /** Repositories bound to the initialized app DB. Throws if initDb() hasn't resolved. */
@@ -21,5 +27,6 @@ export function repositories(): Repositories {
   return {
     accounts: new DrizzleAccountRepository(db as unknown as never),
     categories: new DrizzleCategoryRepository(db as unknown as never),
+    expenses: new DrizzleExpenseRepository(db as unknown as never),
   };
 }

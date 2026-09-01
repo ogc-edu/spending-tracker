@@ -44,3 +44,15 @@ export function formatSen(sen: number): string {
   const ringgitStr = ringgit.toLocaleString('en-US');
   return `${sign}RM${ringgitStr}.${String(rem).padStart(2, '0')}`;
 }
+
+/**
+ * Inverse of parseMoneyToSen for form prefill (edit flow): `12050 → "120.50"`.
+ * Plain digits + a dot — no "RM", no thousands separators — so the value
+ * round-trips through the money input regex unchanged.
+ */
+export function formatSenInput(sen: number): string {
+  const abs = Math.abs(sen);
+  const ringgit = Math.floor(abs / 100);
+  const rem = abs % 100;
+  return `${ringgit}.${String(rem).padStart(2, '0')}`;
+}

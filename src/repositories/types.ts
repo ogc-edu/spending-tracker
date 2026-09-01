@@ -5,7 +5,7 @@
  * the current user's id, so a repository can never read another user's rows.
  */
 
-import type { Account, Category, User } from '@/db/schema';
+import type { Account, Category, Expense, User } from '@/db/schema';
 
 export interface UserRepository {
   /**
@@ -56,4 +56,86 @@ export interface AccountRepository {
 export interface CategoryRepository {
   list(): Promise<Category[]>;
   byId(id: number): Promise<Category | null>;
+}
+
+/**
+ * E7 (plan 005): expenses auto-created from commitment payments
+ * (commitment_payment_id set) are READ-ONLY in the expense UI and service —
+ * edit/delete blocked; removal happens by un-paying the payment in Commitments
+ * (plan 008). Shown to the user verbatim.
+ */
+export const EXPENSE_LINKED_READ_ONLY_MESSAGE =
+  'This expense was auto-created from a commitment payment — un-pay the payment in Commitments to change or remove it';
+
+/** Input accepted by ExpenseService.create/edit — sen already parsed by the form (plan 005). */
+export interface ExpenseInput {
+  amountSen: number;
+  categoryId: number;
+  accountId: number;
+  /** TEXT `YYYY-MM-DD` (device-local calendar). */
+  date: string;
+  /** Optional free text, ≤200 chars. Stored, NEVER sent to AI (plan 013 hygiene). */
+  description?: string;
+}
+
+/** Row shape the transaction context inserts (service-scoped userId, description defaulted). */
+export interface NewExpenseRow {
+  userId: number;
+  amountSen: number;
+  categoryId: number;
+  accountId: number;
+  date: string;
+  description: string;
+}
+
+/**
+ * Transaction-scoped expense operations (plan 005 / ARCHITECTURE §10 "drizzle
+ * transaction {expense row ± account balance}"). See ExpenseRepository.transaction.
+ *
+ * **All methods are SYNCHRONOUS — do not await them.** Drizzle 0.45's
+ * expo-sqlite client (the app's `openDatabaseSync` session) runs
+ * `transaction(fn)` without awaiting the callback: an async fn would commit
+ * before its pending writes and break rollback on-device. The better-sqlite3
+ * harness tolerates async, which makes this trap easy to miss in tests.
+ */
+export interface ExpenseTx {
+  insert(input: NewExpenseRow): Expense;
+  /** User-scoped fetch (A10) — null for another user's row. */
+  getById(userId: number, id: number): Expense | null;
+  /** User-scoped update; throws 'expense not found' when the row is gone. */
+  update(userId: number, id: number, patch: Partial<Omit<NewExpenseRow, 'userId'>>): Expense;
+  /** User-scoped delete; no-op when the row is gone (verified by the caller first). */
+  remove(userId: number, id: number): void;
+  /** User-scoped account fetch — the service reads the account type for the sign convention. */
+  getAccount(userId: number, accountId: number): Account | null;
+  /** Global category fetch (categories have no user_id, A10). */
+  getCategory(categoryId: number): Category | null;
+  /**
+   * D1 balance adjustment: `balance_sen = balance_sen + deltaSen`, scoped by
+   * user. `deltaSen` is the SIGNED effect the caller computed (credit-card
+   * purchases arrive as +owed). Bumps updated_at.
+   */
+  adjustBalance(userId: number, accountId: number, deltaSen: number): void;
+}
+
+/**
+ * ExpenseRepository (plan 005) — all methods user-scoped (A10).
+ * byId/listForMonth are plain async reads; every WRITE runs inside
+ * `transaction()`, which pairs the expense row change with the owning
+ * account's balance adjustment so a failure rolls back everything.
+ */
+export interface ExpenseRepository {
+  byId(userId: number, id: number): Promise<Expense | null>;
+  /**
+   * Month-scoped list (local calendar): `date >= first of month` and
+   * `< first of next month`, newest first (EXP-4 ordering). Queries never
+   * touch another user's rows.
+   */
+  listForMonth(userId: number, year: number, month: number): Promise<Expense[]>;
+  /**
+   * Run `fn` inside ONE SQLite transaction (D1). The callback MUST be
+   * synchronous (see ExpenseTx) — it receives the transactional contexts and
+   * returns its value; any throw rolls back every statement.
+   */
+  transaction<T>(fn: (tx: ExpenseTx) => T): Promise<T>;
 }
