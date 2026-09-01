@@ -87,7 +87,7 @@ Refined from the spec schema (money columns suffixed `_sen`; two structural addi
 | `accounts` | id, **user_id FK**, name, type (`cash`\|`bank`\|`ewallet`\|`credit_card`), balance_sen, created_at, updated_at | balance_sen on a credit card = **amount owed** (positive); counted negatively in "available" |
 | `expenses` | id, **user_id FK**, amount_sen, category_id FK, description, date (TEXT `YYYY-MM-DD`, local), account_id FK **nullable**, **commitment_payment_id FK nullable UNIQUE**, created_at, updated_at | unique link enforces D3 idempotency (a payment's expense is created exactly once) |
 | `budgets` | id, **user_id FK**, category_id FK **nullable** (NULL = overall), month (1–12), year, amount_sen, **UNIQUE(user_id, category_id, month, year)** | upsert semantics: editing a month's budget replaces its row |
-| `commitments` | id, **user_id FK**, name, type, **total_sen nullable**, remaining_sen, payment_sen, frequency (`monthly`\|`one_time`), start_date, end_date **nullable**, due_date, status (`active`\|`completed`\|`cancelled`), created_at, updated_at | total_sen NULL = ongoing recurring (rent/subscription); fixed otherwise |
+| `commitments` | id, **user_id FK**, name, type, **total_sen nullable**, remaining_sen, payment_sen, frequency (`monthly`\|`one_time`), start_date, end_date **nullable**, due_date, status (`active`\|`completed`\|`cancelled`), **archived_at nullable**, created_at, updated_at | total_sen NULL = ongoing recurring (rent/subscription); fixed otherwise; `archived_at` = soft-delete (C1, plan 008) |
 | `commitment_payments` | id, **user_id FK**, commitment_id FK, amount_sen, due_date, paid_date **nullable**, status (`paid`) | **stores only PAID payments** (see §7); unpaid schedule is derived |
 
 Foreign keys enforced (PRAGMA foreign_keys = ON). Indexes: `users(email)` (unique covers it), `expenses(date)`, `expenses(category_id)`, `budgets(user_id,category_id,month,year)` (unique covers it), `commitments(status)`, `commitment_payments(commitment_id)`, plus a `user_id` index on each financial table.
@@ -151,7 +151,7 @@ interface AIService {
 }
 ```
 
-- `GeminiProvider` implements it using the official `@google/generative-ai` SDK; prompt = fixed template + JSON of the *computed* snapshot. Model chosen at implementation time (flash-class).
+- `GeminiProvider` implements it using the official `@google/generative-ai` SDK — **API-key auth only** (`x-goog-api-key` / `GEMINI_API_KEY`; never OAuth bearer), supporting Google AI Studio AQ-format keys (live-verified 2026-09-01); prompt = fixed template + JSON of the *computed* snapshot. Model: `gemini-3.6-flash` (pinned; A13).
 - **Input hygiene:** AI receives aggregates and category names only — raw free-text descriptions are **not** sent (reduces sensitive data leakage and prompt-injection surface).
 - **Output hygiene:** response parsed and Zod-validated (`AIResult {summary, points[]}` — presentation only, never merged into financial state). Failures map to a typed `AIUnavailableError` (offline/timeout/HTTP/key).
 - Key: stored in **expo-secure-store**, entered once in Settings (with a bundled dev fallback via app config for emulator use). Documented as a dev tradeoff — insecure for public distribution (PRD AI-6).
@@ -219,6 +219,8 @@ Dev: `drizzle-kit`, `jest`, `jest-expo`, `typescript`.
 | A9 | Password policy | **None** — any non-empty password; seeded `1234` is a deliberate exception | Confirmed |
 | A10 | Data scoping | Financial tables carry `user_id`; categories global; every repository query user-scoped | Confirmed |
 | A11 | Default user seed | `ooiguancheng18@gmail.com` / `1234` created on first run when `users` is empty (hash computed with the real hasher) | Confirmed |
+| A12 | Commitment soft-delete (C1) | Archive via `archived_at` (hidden from lists/upcoming/analytics, restorable); hard delete only for zero-payment commitments | Confirmed |
+| A13 | Gemini model & auth (G1) | `gemini-3.6-flash`, pinned; API-key auth (`x-goog-api-key` / `GEMINI_API_KEY`), never OAuth — AQ-format key live-verified 2026-09-01 | Confirmed |
 
 Alternatives considered: raw SQL + hand-rolled migration runner (my original recommendation — zero deps, more explicit SQL) and Kysely (typed builder, smaller expo-sqlite ecosystem); user chose Drizzle. Materialized payment rows rejected (A3); Zustand-as-cache rejected (A4); Gemini without SDK (raw fetch) rejected for MVP simplicity.
 

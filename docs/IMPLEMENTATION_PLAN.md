@@ -28,7 +28,7 @@ The system is decomposed into **16 independently implementable features**, follo
 | 008 | Commitments & Payments | Commitments CRUD (monthly/one-time); derived schedules; mark-paid txn (linked expense, idempotent); statuses | 002, 005 | CommitmentService, engine schedule/upcoming, UI | PRD COM-1..6; rem/paid math; idempotent |
 | 009 | Financial Calculation Engine | Pure engine: safe-to-spend, allowance, analytics math, projection, deficit; full Jest suite | 002 (types only) | engine `safeToSpend`/`dailyAllowance`/`analytics`/`projectMonthEnd` | PRD §11 test list green; PRD §8.4 formula exact |
 | 010 | Dashboard | Available, spent, budget, remaining, upcoming, safe, daily allowance, category summary; formula breakdown; deficit state | 009, 005, 007, 008 | CashFlowService.snapshot, Dashboard UI | PRD DASH-1..5; deterministic; refreshes |
-| 011 | Analytics | Month selector; category breakdown, MoM change, avg daily, largest, top categories, budget utilization, projection | 009, 005 | AnalyticsService, Analytics UI | PRD AN-1..4 vs hand-computed fixtures |
+| 011 | Analytics | Month selector; category breakdown, MoM change, avg daily, largest, top categories, budget utilization, projection | 009, 005, 007 | AnalyticsService, Analytics UI | PRD AN-1..4 vs hand-computed fixtures |
 | 012 | AI Service Abstraction | `AIService` interface, typed contexts, error taxonomy, Zod response validation, test double | 001 | `src/ai/*` abstraction only | UI never imports Gemini; provider = one class |
 | 013 | Gemini — Commitment Analysis | GeminiProvider + SecureStore key, "Analyze my debt" action | 012, 008 | Provider, debt-analysis UI | Aggregates-only payload; offline error |
 | 014 | Gemini — Spending Analysis | "Analyze my spending" action | 012, 011 | Spending-analysis UI | Same hygiene rules as 013 |
@@ -79,6 +79,6 @@ Each feature plan in `docs/plans/` starts as **Draft — decisions pending**, is
 
 ## 5. What's Next
 
-1. Approve this master plan (gate #3, rev. 2).
-2. Write/refine feature plans in order, grilling open decisions per plan (007–016 remain to be drafted; 001–006 are drafted).
-3. After each plan is approved → implementation-ready.
+1. Approve this master plan (gate #3, rev. 2). ✅ (approved)
+2. Feature plans **001–016** are drafted in `docs/plans/` — 001–016 approved 2026-09-01 after grilling (E7, F1, C1, A3, G1 decisions recorded in their plans).
+3. Implementation order follows the spine: 001 → 002 → 003 → 004 → 005 → 006, with 007/008, 009, 012 parallelizable per §2.
