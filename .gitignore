@@ -44,3 +44,9 @@ example
 
 # local secrets (Gemini dev key etc.)
 .env*
+
+# local IDE/build artifacts
+.idea/
+.gradle/
+local.properties
+*.iml
