@@ -62,6 +62,8 @@ interface UiState {
   setExpenseOffset(offset: number): void;
   /** Move the shared month selection (Budgets/Analytics). */
   setSelectedMonth(month: MonthSelection): void;
+  /** Record the account after a commitment payment (plan 008 mark-paid prefill). */
+  setLastUsedAccount(accountId: number | null): void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -89,4 +91,5 @@ export const useUiStore = create<UiState>((set) => ({
   setExpenseOffset: (offset) =>
     set((s) => ({ expenseFilter: { ...s.expenseFilter, offset } })),
   setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
+  setLastUsedAccount: (accountId) => set({ lastUsedAccountId: accountId }),
 }));

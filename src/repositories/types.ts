@@ -5,7 +5,7 @@
  * the current user's id, so a repository can never read another user's rows.
  */
 
-import type { Account, Budget, Category, Expense, User } from '@/db/schema';
+import type { Account, Budget, Category, Commitment, CommitmentPayment, Expense, User } from '@/db/schema';
 
 export interface UserRepository {
   /**
@@ -217,4 +217,130 @@ export interface ExpenseRepository {
    * returns its value; any throw rolls back every statement.
    */
   transaction<T>(fn: (tx: ExpenseTx) => T): Promise<T>;
+}
+
+/* ── Plan 008: Commitments & Payments ─────────────────────────────────────── */
+
+/** Semantic commitment types (PRD COM-1) — column `commitments.type`. */
+export const COMMITMENT_TYPES = [
+  'credit_card',
+  'installment',
+  'bnpl',
+  'bill',
+  'subscription',
+  'rent',
+  'phone',
+  'owed',
+  'other',
+] as const;
+export type CommitmentType = (typeof COMMITMENT_TYPES)[number];
+
+/** Monthly or one-time only (D4). */
+export const COMMITMENT_FREQUENCIES = ['monthly', 'one_time'] as const;
+export type CommitmentFrequency = (typeof COMMITMENT_FREQUENCIES)[number];
+
+/** COM-6 statuses — completed is derived (fixed remaining → 0), cancelled is terminal. */
+export const COMMITMENT_STATUSES = ['active', 'completed', 'cancelled'] as const;
+export type CommitmentStatus = (typeof COMMITMENT_STATUSES)[number];
+
+/** Input accepted by CommitmentService.create — sen already parsed by the form (plan 008). */
+export interface CommitmentInput {
+  name: string;
+  type: CommitmentType;
+  /** NULL = ongoing recurring / one-time; set = fixed installments (fixed XOR ongoing). */
+  totalSen: number | null;
+  paymentSen: number;
+  frequency: CommitmentFrequency;
+  /** TEXT `YYYY-MM-DD` (device-local calendar) — monthly schedule anchor. */
+  startDate: string;
+  /** Optional, fixed monthly only (caps the installment count). */
+  endDate: string | null;
+  /** TEXT `YYYY-MM-DD` — one-time due date; monthly mirrors the anchor (derived). */
+  dueDate: string;
+}
+
+/**
+ * Transaction-scoped commitment operations (plan 008 / ARCHITECTURE §10).
+ * See CommitmentRepository.transaction — same SYNCHRONOUS discipline as
+ * ExpenseTx (drizzle 0.45's expo-sqlite commits before an async callback
+ * resolves; the better-sqlite3 harness hides the trap — never await here).
+ */
+export interface CommitmentTx {
+  /** User-scoped fetch (A10) — null for another user's row. Includes archived (detail view). */
+  getById(userId: number, id: number): Commitment | null;
+  /** User-scoped account fetch (A15 — the paying account's sign convention). */
+  getAccount(userId: number, accountId: number): Account | null;
+  /** Global category lookup by EXACT name (categories have no user_id, A10). */
+  getCategoryByName(name: string): Category | null;
+  /** Existing paid record for a (commitment, dueDate) slot — the idempotency check. */
+  getPaymentByDueDate(userId: number, commitmentId: number, dueDate: string): CommitmentPayment | null;
+  /** User-scoped paid-record fetch (un-pay lookup). */
+  getPaymentById(userId: number, paymentId: number): CommitmentPayment | null;
+  /** Insert the paid record (A3 — only paid rows are ever persisted). */
+  insertPayment(input: {
+    userId: number;
+    commitmentId: number;
+    amountSen: number;
+    dueDate: string;
+    paidDate: string;
+  }): CommitmentPayment;
+  /** Insert the linked Debt/Repayment expense (D3) with its unique commitment_payment_id. */
+  insertExpense(input: {
+    userId: number;
+    amountSen: number;
+    categoryId: number;
+    description: string;
+    date: string;
+    accountId: number | null;
+    commitmentPaymentId: number;
+  }): Expense;
+  /** The expense auto-created from a payment (un-pay removal, E7 inverse). */
+  getExpenseByCommitmentPaymentId(userId: number, commitmentPaymentId: number): Expense | null;
+  /** Remove the linked expense (un-pay). */
+  deleteExpenseByCommitmentPaymentId(userId: number, commitmentPaymentId: number): void;
+  /** Remove the paid record (un-pay). */
+  deletePayment(userId: number, paymentId: number): void;
+  /** remaining_sen = remaining_sen + deltaSen (signed: − on mark-paid, + on un-pay). */
+  adjustRemaining(userId: number, commitmentId: number, deltaSen: number): void;
+  /** Set the commitment's status (auto-complete / cancel). */
+  updateStatus(userId: number, commitmentId: number, status: CommitmentStatus): void;
+  /** C1 archive: non-null sets archived_at, null un-archives. */
+  setArchivedAt(userId: number, commitmentId: number, archivedAt: number | null): void;
+  /** D1 balance adjustment — same signed-delta convention as ExpenseTx.adjustBalance. */
+  adjustBalance(userId: number, accountId: number, deltaSen: number): void;
+  /** Paid-record count (C1: hard delete only when this is 0). */
+  countPayments(userId: number, commitmentId: number): number;
+  /** Hard delete — call ONLY after countPayments === 0 (C1 guards upstream). */
+  deleteCommitment(userId: number, commitmentId: number): void;
+}
+
+/**
+ * CommitmentRepository (plan 008 / ARCHITECTURE §2, §4) — all methods
+ * user-scoped (A10). `commitment_payments` stores ONLY paid records (A3);
+ * the pending schedule is derived by the engine, never persisted. Every WRITE
+ * runs inside `transaction()` (mark-paid = payment + expense + balance +
+ * remaining in one atomic step; un-pay reverses all four).
+ */
+export interface CommitmentRepository {
+  /** Insert with the service-computed remainingSen (= totalSen for fixed, else 0). */
+  create(
+    userId: number,
+    input: CommitmentInput & { remainingSen: number },
+  ): Promise<Commitment>;
+  /** User-scoped fetch — includes archived rows (detail view + un-archive). */
+  byId(userId: number, id: number): Promise<Commitment | null>;
+  /** Non-archived commitments (any status), newest first — the Commitments tab. */
+  list(userId: number): Promise<Commitment[]>;
+  /** Archived commitments (C1), newest first — restore entry point. */
+  listArchived(userId: number): Promise<Commitment[]>;
+  /** EVERY paid record for the user, oldest first (upcoming + progress inputs). */
+  paidPayments(userId: number): Promise<CommitmentPayment[]>;
+  /** Paid records of one commitment, oldest first (detail schedule rows). */
+  paymentsForCommitment(userId: number, commitmentId: number): Promise<CommitmentPayment[]>;
+  /**
+   * The auto-created linked expenses of a commitment's paid records (detail
+   * pairing: paid row → its Debt/Repayment expense → paying account).
+   */
+  expensesForCommitment(userId: number, commitmentId: number): Promise<Expense[]>;
+  transaction<T>(fn: (tx: CommitmentTx) => T): Promise<T>;
 }
