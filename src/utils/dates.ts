@@ -130,3 +130,79 @@ export function formatDayLabel(dateStr: string): string {
   const [, month, day] = dateStr.split('-').map(Number);
   return `${String(day).padStart(2, '0')} ${SHORT_MONTHS[month - 1] ?? ''}`.trim();
 }
+
+/**
+ * ── Plan 008: pure calendar math for commitment schedules (ARCH §7) ──
+ *
+ * These three helpers use INTEGER arithmetic only — no Date objects, no
+ * timezone, no `new Date()` — so the financial engine can derive schedules
+ * deterministically (a Date-based implementation would make the engine
+ * timezone-dependent, violating ARCH §6). Inputs/outputs are `YYYY-MM-DD`.
+ */
+
+/** True for leap years (divisible by 4, except centuries not divisible by 400). */
+export function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+/** Number of days in a year-month (1–12), leap-aware. */
+export function daysInMonth(year: number, month: number): number {
+  const DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
+  if (month === 2 && isLeapYear(year)) return 29;
+  return DAYS[month - 1] ?? 31;
+}
+
+/**
+ * Add `months` to a `YYYY-MM-DD` date, CLAMPING the day to the target month's
+ * last valid day (Jan 31 → Feb 28 / Feb 29 on leap years — ARCH §7). The
+ * anchor day is preserved wherever the target month has it. `months` may be
+ * negative (subtract). Throws on malformed input.
+ */
+export function addMonthsClamped(dateStr: string, months: number): string {
+  if (!isValidDateStr(dateStr)) throw new Error(`invalid date: ${JSON.stringify(dateStr)}`);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const total = year * 12 + (month - 1) + months;
+  const targetYear = Math.floor(total / 12);
+  const targetMonth = (total % 12) + 1;
+  const clampedDay = Math.min(day, daysInMonth(targetYear, targetMonth));
+  return `${targetYear}-${pad2(targetMonth)}-${pad2(clampedDay)}`;
+}
+
+/**
+ * Whole months from `startDate` to `endDate` INCLUSIVE — the installment
+ * count when a fixed commitment's end_date bounds the series (ARCH §7):
+ * Jan 15 → Mar 10 is 3 (Jan, Feb, Mar). Throws when endDate < startDate.
+ * Day-of-month differences are ignored (the count is month-anchored).
+ */
+export function monthsBetweenInclusive(startDate: string, endDate: string): number {
+  if (!isValidDateStr(startDate) || !isValidDateStr(endDate)) {
+    throw new Error('invalid date');
+  }
+  const [sy, sm] = startDate.split('-').map(Number);
+  const [ey, em] = endDate.split('-').map(Number);
+  const months = ey * 12 + (em - 1) - (sy * 12 + (sm - 1)) + 1;
+  if (months < 1) throw new Error('end date must not be before start date');
+  return months;
+}
+
+/**
+ * ── Plan 009: engine allowance math (ARCH §6 / PRD §8.4) ──
+ *
+ * Pure local-calendar arithmetic on `YYYY-MM-DD` strings — no Date, no
+ * timezone, no clock — so the financial engine stays deterministic.
+ *
+ * Calendar days from `today` INCLUSIVE through `monthEnd` INCLUSIVE
+ * (PRD §8.4: the daily-allowance denominator, "incl. today"). Only defined
+ * for a `today` inside the month that `monthEnd` closes; any other input
+ * (different year-month, malformed string, past month-end) yields 0 — the
+ * engine's "no days left" reading (a stale caller gets a 0 allowance, never
+ * NaN). Last day of the month → 1 (the full remaining safe is allowed).
+ */
+export function daysRemainingInMonthInclusive(today: string, monthEnd: string): number {
+  if (!DATE_RE.test(today) || !DATE_RE.test(monthEnd)) return 0;
+  const [todayYear, todayMonth, todayDay] = today.split('-').map(Number);
+  const [endYear, endMonth, endDay] = monthEnd.split('-').map(Number);
+  if (todayYear !== endYear || todayMonth !== endMonth) return 0;
+  const days = endDay - todayDay + 1;
+  return days > 0 ? days : 0;
+}
