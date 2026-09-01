@@ -40,7 +40,7 @@ Non-negotiable rules:
 | **AIService** (`ai/`) | Abstraction over AI providers; prompt assembly from structured data; response validation | GeminiProvider → Gemini API |
 | **Store** (Zustand) | Non-persistent UI state: selected month, active filters, last-used category/account | — |
 | **AuthService** (`services/`) | Register/login/logout; Argon2id verification; session persistence (SecureStore); exposes the current user to services/repositories | UserRepository, PasswordHasher |
-| **PasswordHasher** (`auth/`) | `hash`/`verify` contract; Argon2IdHasher (native) for devices, FakeHasher for Jest | react-native-argon2 |
+| **PasswordHasher** (`auth/`) | `hash`/`verify` contract; Argon2IdHasher (hash-wasm pure WASM — A16) for devices, FakeHasher for Jest | hash-wasm |
 | **Utils** | Money (sen ↔ display), local-date handling, formatting | — |
 
 ## 3. Project Structure

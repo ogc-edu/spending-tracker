@@ -33,7 +33,7 @@ async function openAndInit(): Promise<AppDatabase> {
   const client = drizzle(sqlite, { schema });
   await runMigrations(client);
   await insertDefaultCategoriesIfEmpty(client);
-  // Default user seed — Argon2id hash requires the native module (dev build).
+  // Default user seed — Argon2id via hash-wasm (pure WASM, decision A16).
   // If it fails the init gate shows the retry screen (same path as migration failure).
   await seedDefaultUserIfEmpty(client, new Argon2IdHasher());
   return client;

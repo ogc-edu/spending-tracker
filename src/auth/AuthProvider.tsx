@@ -3,7 +3,7 @@
  *
  * Exposes {status: loading | signedOut | signedIn, user, login, register, logout}
  * and validates the persisted current_user_id on boot (stale id → signedOut).
- * The device hasher is Argon2IdHasher (native); callers can inject FakeHasher in tests
+ * The device hasher is Argon2IdHasher (hash-wasm — A16); callers can inject FakeHasher in tests
  * but the provider itself always uses the real hasher on-device.
  */
 

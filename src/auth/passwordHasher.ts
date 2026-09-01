@@ -2,9 +2,10 @@
  * PasswordHasher contract + FakeHasher (plan 003 / ARCHITECTURE §2, A7).
  *
  * The real hasher on-device is Argon2IdHasher (src/auth/argon2Hasher.ts)
- * which wraps react-native-argon2 (time=2, memory=65536 KiB, parallelism=1,
- * hashLength=32, mode argon2id) — requires a development build; Expo Go
- * cannot load it. Jest uses FakeHasher so no native module / key is needed.
+ * which wraps hash-wasm Argon2id (pure WASM — decision A16: time=2,
+ * memory=65536 KiB, parallelism=1, hashLength=32, mode argon2id). No native
+ * module — Expo Go works on both platforms. Jest uses FakeHasher so tests
+ * never pay the 64 MiB Argon2 cost.
  */
 
 export interface PasswordHasher {

@@ -41,7 +41,7 @@ Confirmed decisions (2026-09-01):
 
 ```ts
 interface PasswordHasher { hash(password: string): Promise<string>; verify(password: string, encoded: string): Promise<boolean>; }
-class Argon2IdHasher implements PasswordHasher { /* react-native-argon2: timeCost 2, memoryCost 65536, parallelism 1, hashLength 32 */ }
+class Argon2IdHasher implements PasswordHasher { /* hash-wasm argon2id (A16): timeCost 2, memoryCost 65536, parallelism 1, hashLength 32 */ }
 class FakeHasher implements PasswordHasher { /* deterministic, for Jest */ }
 ```
 
@@ -120,7 +120,7 @@ Consumes 002's `users` table + `user_id` columns (no new schema here beyond the 
 3. Session survives a full app restart (auto-login).
 4. Wrong password and duplicate email produce clear errors; nothing crashes on stale sessions.
 5. Tabs are unreachable while signed out (gate verified).
-6. `npm test` green (FakeHasher path), typecheck/lint green; Argon2id verified manually on a development build.
+6. `npm test` green (FakeHasher path + hash-wasm known-vector/round-trip tests), typecheck/lint green; Argon2id verified by known-vector test and a hash captured from a native build (A16 swap verification).
 
 ## Out of Scope
 

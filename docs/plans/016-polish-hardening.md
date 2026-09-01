@@ -86,7 +86,7 @@ All feature plans (010, 011, 013, 014, 015; implicitly everything downstream).
 2. Accessibility pass done (contrast, touch targets, labels).
 3. Settings completes SET-1 (buffer) and SET-2 (AI status).
 4. `npm test`, typecheck, lint all green; no dead code from the template remains.
-5. README documents running via development build (native Argon2id), seeding note, and the docs map.
+5. README documents running via Expo Go on both platforms (post-A16 — hash-wasm, no dev build), seeding note, and the docs map.
 
 ## Out of Scope
 
