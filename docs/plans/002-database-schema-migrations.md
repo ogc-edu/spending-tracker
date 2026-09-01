@@ -46,6 +46,9 @@ drizzle/*.sql      # generated
 
 - `users`: id, email (UNIQUE, COLLATE NOCASE), password_hash (Argon2id encoded string), created_at.
 - `accounts`, `expenses`, `budgets`, `commitments`, `commitment_payments` carry `user_id` FK (indexed) — every user's data is isolated; `categories` stays **global** (no user_id).
+- **Fold later-approved additions into this initial migration set (no reschema churn):**
+  - `settings` table (plan 010/016): `(user_id PK/FK, safety_buffer_sen default 30000, ai_active_provider, ai_model_gemini, ai_model_deepseek, updated_at)` — user preferences, **never secrets** (AI keys live in SecureStore, plan 013).
+  - `commitments.archived_at` (TIMESTAMP NULL) — C1 soft-delete (plan 008).
 
 - `expenses.date` is TEXT `YYYY-MM-DD` (local calendar; month/year derived in the engine, 009).
 - `commitments.total_sen` is NULLABLE — NULL = ongoing recurring (rent/subscription); fixed installments set it.
