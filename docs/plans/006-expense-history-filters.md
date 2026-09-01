@@ -22,7 +22,7 @@ The Expenses tab becomes useful: chronological history with detail view, real se
 - Chronological list, newest first, with day-grouping headers (nice-to-have) and batch pagination ("load more", 50/batch).
 - Detail view per expense (amount, category, description, date, account) with Edit / Delete actions (Edit routes to 005's form; delete reuses 005's service incl. E7 semantics).
 - Search: case-insensitive substring on description.
-- Filter by category (multi? **single-select in MVP** — decision F1, pending).
+- Filter by category: **single-select only — decision F1 (confirmed 2026-09-01)**; multi-select is future.
 - Filter by date range: presets (Today, This Week, This Month, Last Month, All) + custom from/to.
 - Totals bar: sum of the visible filtered set, always displayed, updates with every filter change.
 - Empty states: no expenses at all; no results for the active filters.
