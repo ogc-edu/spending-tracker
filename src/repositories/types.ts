@@ -5,7 +5,7 @@
  * the current user's id, so a repository can never read another user's rows.
  */
 
-import type { Account, Category, Expense, User } from '@/db/schema';
+import type { Account, Budget, Category, Expense, User } from '@/db/schema';
 
 export interface UserRepository {
   /**
@@ -116,6 +116,44 @@ export interface ExpenseTx {
    * purchases arrive as +owed). Bumps updated_at.
    */
   adjustBalance(userId: number, accountId: number, deltaSen: number): void;
+}
+
+/**
+ * Budget row identity (plan 007 / BUD-1): categoryId null = the OVERALL monthly
+ * budget; set = one per-category budget. Month 1–12, year absolute (4-digit).
+ */
+export interface BudgetKey {
+  /** NULL = overall budget; set = per-category budget. */
+  categoryId: number | null;
+  /** 1–12. */
+  month: number;
+  year: number;
+}
+
+/** Input accepted by BudgetService.upsert — sen already parsed by the form (BUD-1). */
+export interface BudgetInput extends BudgetKey {
+  amountSen: number;
+}
+
+/**
+ * BudgetRepository (plan 007 / ARCHITECTURE §2, §4) — all methods user-scoped
+ * (A10). Upsert semantics: editing a month's (category) budget REPLACES its
+ * row — never duplicates. The committed unique index is
+ * UNIQUE(user_id, category_id, month, year); because SQLite treats NULLs as
+ * distinct in unique indexes, the OVERALL row (category_id NULL) can never
+ * conflict with that index — the implementation enforces the
+ * single-overall-row invariant itself (delete-then-insert in one transaction,
+ * same sync-txn discipline as ExpenseRepository).
+ */
+export interface BudgetRepository {
+  /** REPLACE the row for (categoryId, month, year) — inserts or updates in place. */
+  upsert(userId: number, input: BudgetInput): Promise<Budget>;
+  /** DELETE the row — clearing is removal, never a zero sentinel (plan §Decisions). */
+  clear(userId: number, key: BudgetKey): Promise<void>;
+  /** The month's overall budget row, or null when unset (cash-flow input, PRD §8.4). */
+  overallFor(userId: number, month: number, year: number): Promise<Budget | null>;
+  /** EVERY budget row for the month (overall + all categories); other months excluded. */
+  forMonth(userId: number, month: number, year: number): Promise<Budget[]>;
 }
 
 /**

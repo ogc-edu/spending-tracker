@@ -16,6 +16,19 @@ import type { PeriodPreset } from '@/utils/dates';
 /** Default view = current month (matches the dashboard); one tap clears to All (plan 006). */
 const DEFAULT_PERIOD: PeriodPreset = 'thisMonth';
 
+/** Selected calendar month for month-scoped tabs (Budgets 007, Analytics 011) — ARCH §5. */
+export interface MonthSelection {
+  /** 1–12. */
+  month: number;
+  year: number;
+}
+
+/** Default selection follows the device calendar (plan 007 — rollover shows fresh months). */
+function currentMonthSelection(): MonthSelection {
+  const now = new Date();
+  return { month: now.getMonth() + 1, year: now.getFullYear() };
+}
+
 export interface ExpenseFilterState {
   /** Raw search text; applied after 300 ms debounce. */
   search: string;
@@ -33,6 +46,8 @@ interface UiState {
   lastUsedCategoryId: number | null;
   lastUsedAccountId: number | null;
   expenseFilter: ExpenseFilterState;
+  /** Month-scoped tabs (Budgets, Analytics) share this selection — plan 007 §UI. */
+  selectedMonth: MonthSelection;
   /** Record after a successful expense create/edit (plan 005 fast entry). */
   setLastUsed(categoryId: number, accountId: number): void;
   /** Debounced search text lands here; resets offset. */
@@ -45,6 +60,8 @@ interface UiState {
   setExpenseCustomRange(from: string, to: string): void;
   /** FlatList onEndReached — the ONLY setter that preserves/paginates offset. */
   setExpenseOffset(offset: number): void;
+  /** Move the shared month selection (Budgets/Analytics). */
+  setSelectedMonth(month: MonthSelection): void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -58,6 +75,7 @@ export const useUiStore = create<UiState>((set) => ({
     customTo: '',
     offset: 0,
   },
+  selectedMonth: currentMonthSelection(),
   setLastUsed: (categoryId, accountId) =>
     set({ lastUsedCategoryId: categoryId, lastUsedAccountId: accountId }),
   setExpenseSearch: (search) =>
@@ -70,4 +88,5 @@ export const useUiStore = create<UiState>((set) => ({
     set((s) => ({ expenseFilter: { ...s.expenseFilter, customFrom, customTo, period: 'custom', offset: 0 } })),
   setExpenseOffset: (offset) =>
     set((s) => ({ expenseFilter: { ...s.expenseFilter, offset } })),
+  setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
 }));
