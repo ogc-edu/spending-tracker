@@ -2,18 +2,37 @@ import { useCallback, useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { initDb } from '@/db';
+import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { DbErrorScreen } from '@/components/DbErrorScreen';
 import { DbLoadingScreen } from '@/components/DbLoadingScreen';
 
 /**
- * Root layout — plan 002 init gate. Await initDb() (migrations + category seed)
- * before rendering tabs; any failure shows the full-screen retry (Retry is safe:
- * migrations are recorded, seed is idempotent — re-run only continues).
+ * Root layout — plan 002 init gate + plan 003 AuthProvider gate.
+ * Flow: initDb() (migrations + category seed + user seed) → AuthProvider
+ * (validates SecureStore session) → Stack. Tabs are gated by AuthProvider
+ * status; login/register redirect to (tabs) when signed in and vice-versa
+ * (each screen handles its own Redirect).
  */
-type DbState =
-  | { status: 'loading' }
-  | { status: 'error'; error: unknown }
-  | { status: 'ready' };
+type DbState = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready' };
+
+function RootStack() {
+  const { status } = useAuth();
+
+  if (status === 'loading') {
+    return <DbLoadingScreen />;
+  }
+
+  return (
+    <>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="register" />
+      </Stack>
+    </>
+  );
+}
 
 export default function RootLayout() {
   const [dbState, setDbState] = useState<DbState>({ status: 'loading' });
@@ -43,11 +62,8 @@ export default function RootLayout() {
   }
 
   return (
-    <>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </>
+    <AuthProvider>
+      <RootStack />
+    </AuthProvider>
   );
 }

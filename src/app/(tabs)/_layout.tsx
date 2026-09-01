@@ -1,7 +1,18 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import type { ColorValue } from 'react-native';
+import { Redirect, Tabs } from 'expo-router';
+import { useAuth } from '@/auth/AuthProvider';
 import { colors } from '@/theme';
+import { ActivityIndicator, View } from 'react-native';
+
+/**
+ * Tabs gate — unreachable while signed out (plan 003 gate).
+ * AuthProvider already guarantees status !== loading by the time this
+ * layout mounts (RootStack renders this only after DB ready, and the
+ * provider's initial effect resolves to signedOut|signedIn). If auth is
+ * signedOut we push the user to /login; the login screen's own redirect
+ * brings them back after auth.
+ */
+import { Ionicons } from '@expo/vector-icons';
+import type { ColorValue } from 'react-native';
 
 const tabIcon = (name: React.ComponentProps<typeof Ionicons>['name']) =>
   function TabIcon({ color, size }: { color: ColorValue; size: number }) {
@@ -9,6 +20,20 @@ const tabIcon = (name: React.ComponentProps<typeof Ionicons>['name']) =>
   };
 
 export default function TabLayout() {
+  const { status } = useAuth();
+
+  if (status === 'loading') {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (status === 'signedOut') {
+    return <Redirect href={"/login" as never} />;
+  }
+
   return (
     <Tabs
       screenOptions={{
