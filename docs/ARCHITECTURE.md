@@ -151,10 +151,10 @@ interface AIService {
 }
 ```
 
-- `GeminiProvider` implements it using the official `@google/generative-ai` SDK — **API-key auth only** (`x-goog-api-key` / `GEMINI_API_KEY`; never OAuth bearer), supporting Google AI Studio AQ-format keys (live-verified 2026-09-01); prompt = fixed template + JSON of the *computed* snapshot. Model: `gemini-3.6-flash` (pinned; A13).
+- Two providers behind the abstraction (A14): `GeminiProvider` (**API-key auth** via `x-goog-api-key`, never OAuth — AQ-format keys live-verified 2026-09-01; v1beta REST) and `DeepSeekProvider` (OpenAI-compatible `chat/completions` + `GET /models` at `api.deepseek.com`, `Authorization: Bearer` — API shape verified from official docs; live check when a user key is added). Both implement `testConnection` / `listModels` / `generate`; **no models are hardcoded — discovery only**, with manual model-ID entry as the fallback.
 - **Input hygiene:** AI receives aggregates and category names only — raw free-text descriptions are **not** sent (reduces sensitive data leakage and prompt-injection surface).
 - **Output hygiene:** response parsed and Zod-validated (`AIResult {summary, points[]}` — presentation only, never merged into financial state). Failures map to a typed `AIUnavailableError` (offline/timeout/HTTP/key).
-- Key: stored in **expo-secure-store**, entered once in Settings (with a bundled dev fallback via app config for emulator use). Documented as a dev tradeoff — insecure for public distribution (PRD AI-6).
+- **Keys (BYOK):** user-supplied, per local user, in **expo-secure-store** (`key:{provider}:{userId}`) — never SQLite/Zustand/AsyncStorage; masked in UI; never logged or committed. No bundled key, no OAuth. Active provider + per-provider selected model persist as non-secret preferences in the `settings` table (010). **No automatic fallback** — the user explicitly picks the active provider; with none configured, AI actions show "No AI provider configured" and the app works fully.
 - Adding a future provider = new class behind `AIService`; the engine and UI never change (PRD AI-5).
 
 ## 10. Data Flows (key paths)
@@ -220,7 +220,8 @@ Dev: `drizzle-kit`, `jest`, `jest-expo`, `typescript`.
 | A10 | Data scoping | Financial tables carry `user_id`; categories global; every repository query user-scoped | Confirmed |
 | A11 | Default user seed | `ooiguancheng18@gmail.com` / `1234` created on first run when `users` is empty (hash computed with the real hasher) | Confirmed |
 | A12 | Commitment soft-delete (C1) | Archive via `archived_at` (hidden from lists/upcoming/analytics, restorable); hard delete only for zero-payment commitments | Confirmed |
-| A13 | Gemini model & auth (G1) | `gemini-3.6-flash`, pinned; API-key auth (`x-goog-api-key` / `GEMINI_API_KEY`), never OAuth — AQ-format key live-verified 2026-09-01 | Confirmed |
+| A13 | Gemini auth (G1, rev. 2026-09-01) | API-key auth (`x-goog-api-key` / `GEMINI_API_KEY`), never OAuth — AQ-format key live-verified 2026-09-01; **no pinned model — discovery only** (catalogs churn: 2.0-flash retired, DeepSeek chat → v4-*) | Confirmed |
+| A14 | AI BYOK (rev. 2026-09-01) | Gemini + DeepSeek providers, user-supplied keys (SecureStore, per local user); test connection; model discovery + manual entry fallback; explicit active provider, **no automatic fallback**; hardcoded endpoints; keys never in SQLite/logs/git | Confirmed |
 
 Alternatives considered: raw SQL + hand-rolled migration runner (my original recommendation — zero deps, more explicit SQL) and Kysely (typed builder, smaller expo-sqlite ecosystem); user chose Drizzle. Materialized payment rows rejected (A3); Zustand-as-cache rejected (A4); Gemini without SDK (raw fetch) rejected for MVP simplicity.
 

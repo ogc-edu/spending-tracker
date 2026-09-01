@@ -5,7 +5,7 @@
 | **Status** | Approved — decisions confirmed (2026-09-01) |
 | **Version** | 1.0 |
 | **Date** | 2026-09-01 |
-| **Dependencies** | 012, 010 |
+| **Dependencies** | 012, 013, 010 |
 | **PRD** | §7.1 DASH-4; §7.6 AI-2 (Cash Flow → Explain my allowance) |
 | **Plan doc** | IMPLEMENTATION_PLAN.md §1 row 015 |
 
@@ -28,7 +28,7 @@ The third contextual AI action — **"Explain my allowance"** on the Dashboard's
 ## Technical Design
 
 - `src/components/dashboard/FormulaCard.tsx` gains the action button; on tap, the Dashboard passes its current `CashFlowSnapshot` (010) mapped to the 012 `AllowanceSnapshot` shape (same fields) — no recomputation.
-- Reuses `createAIService()` (013's provider), `AIAnalysisCard`.
+- Reuses the **active provider** via `AIService` (012/013) — no provider logic here.
 - Deficit handling: snapshot carries negative `safeSen`; prompt fixed text covers "a deficit means …" — the AI explains the app's negative number, never "fixes" it.
 
 ## Files / Components Likely Affected

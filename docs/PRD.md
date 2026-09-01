@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Approved — decisions confirmed (2026-09-01) |
+| **Status** | Approved — decisions confirmed (2026-09-01, rev. 3: AI BYOK) |
 | **Version** | 1.0 |
 | **Date** | 2026-09-01 |
 | **Platform** | Android (React Native + Expo) |
@@ -69,14 +69,15 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | D4 | Commitment frequencies | **Monthly + one-time** only. Weekly/yearly are future. Installments define a payment count or end date; recurring monthly commitments (rent, subscriptions) have no end date. |
 | D5 | Project & docs location | `~/Documents/projects/spending-tracker/`, docs in `docs/` per auth-system convention (PRD / ARCHITECTURE / IMPLEMENTATION_PLAN / plans/NNN-*). |
 | D6 | Local user accounts (user request 2026-09-01) | Register/login/logout on the local DB. **Argon2id** hashing via native module (params mirroring the user's auth-system: time=2, 64 MiB, par=1); **auto-login** session (SecureStore) with explicit logout; **no password policy**; seeded default user `ooiguancheng18@gmail.com` / `1234`; financial data **user-scoped** (`user_id`), categories global; login gates the whole app. |
+| D7 | AI BYOK (user request 2026-09-01) | **Gemini + DeepSeek**, user-supplied API keys (per local user, SecureStore — never SQLite/logs/git); Test Connection; **model discovery only** (no hardcoded lists; manual model-ID entry when discovery fails); explicit **active provider**, no automatic fallback; hardcoded endpoints; app fully functional with no AI configured. |
 
 ### Assumptions (flag any that are wrong)
 
 - Currency is MYR, stored as integer **sen**, displayed as RM with thousand separators.
 - UI language is English.
-- Gemini API key is bundled in the app as a temporary dev tradeoff (documented insecure for public distribution).
+- AI API keys are **user-supplied (BYOK)** and stored per user in SecureStore; nothing is bundled in the app.
 - "Local calendar" = the device's configured timezone; month boundaries follow the device calendar.
-- AI model chosen at implementation time (feature plan); Gemini is the sole provider.
+- AI **models are discovered at runtime** from each provider's listing API — no hardcoded model lists (catalogs change: Gemini retired 2.0-flash; DeepSeek renamed chat → v4-*).
 - Financial engine is pure TypeScript, unit-tested with Jest, independent of UI and SQLite.
 - If no overall budget is set, the budget term in the cash-flow formula is `0` (dashboard shows a "set a budget" prompt).
 
@@ -140,12 +141,17 @@ The app solves this by combining manual expense tracking, budgets, and future co
 
 | ID | Requirement |
 |---|---|
-| AI-1 | AI is accessed exclusively through an application-level `AIService` abstraction → `GeminiProvider` → Gemini API. UI never talks to Gemini directly. |
+| AI-1 | AI is accessed exclusively through an application-level `AIService` abstraction → the **active provider** (`GeminiProvider` or `DeepSeekProvider`) → provider API. UI never talks to a provider directly. |
 | AI-2 | AI actions available where context exists: Commitments → analyze debt; Analytics → analyze spending; Cash Flow → explain allowance. |
 | AI-3 | AI receives only already-calculated structured financial data; it must not invent transactions, amounts, or trends. Its output is presentation, never authoritative financial data. |
 | AI-4 | When the network/API is unavailable, AI actions show a clear error and nothing else is blocked. |
-| AI-5 | The provider architecture must allow adding future providers without touching the financial engine. |
-| AI-6 | API key handling: bundled in-app for the MVP (dev tradeoff, explicitly documented as insecure for public distribution). |
+| AI-5 | Provider architecture: `GeminiProvider` and `DeepSeekProvider` implement the same capability interface (test connection, model discovery, generate); adding/switching providers never touches the financial engine or analysis UI. |
+| AI-6 | Keys: **user-supplied (BYOK)**, stored per user in SecureStore (never SQLite, AsyncStorage, or persistent app state); masked in UI; never logged, committed, or included in errors; sent only to the provider's own auth mechanism — never to an app-owned server. |
+| AI-7 | Test Connection (per provider): minimal real request; results distinguish invalid/unauthorized key, quota/rate limit, model unavailable, and network error. Never expose the raw credential. |
+| AI-8 | Model discovery: official provider listing APIs, filtered to text-generation models suitable for financial analysis (no image/speech/embedding); **no hardcoded model lists** — if discovery fails but the credential is valid, allow manual model-ID entry. |
+| AI-9 | Active provider: user selects among **configured** providers only; no automatic fallback; with none configured → "No AI provider configured" and every non-AI feature works normally. |
+| AI-10 | Selected model is stored as a preference (settings table) separate from the credential (SecureStore); if a model becomes unavailable, the app tells the user to re-select. |
+| AI-11 | Provider endpoints hardcoded (no custom base URL); provider-specific auth encapsulated per provider (Gemini `x-goog-api-key`; DeepSeek `Authorization: Bearer`). |
 
 ### 7.7 Accounts
 
@@ -175,7 +181,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | ID | Requirement |
 |---|---|
 | SET-1 | Edit the safety-buffer amount (default RM300). |
-| SET-2 | Read-only AI provider status (Gemini, key configured). |
+| SET-2 | AI provider configuration: per-provider keys (SecureStore, add/replace/remove), Test Connection, model selection, active provider (plan 013). |
 | SET-3 | No other settings in MVP (currency, language, categories are fixed/out of scope). |
 
 ### 7.10 Navigation
@@ -244,7 +250,7 @@ Properties of this formula (documented so implementers and users are not surpris
 
 ## 10. Constraints
 
-- Stack: React Native + TypeScript + Expo + Expo Router + Expo SQLite + Drizzle ORM + Zustand + React Hook Form + Zod; Gemini as the single AI provider; Argon2id (`react-native-argon2`) for local login.
+- Stack: React Native + TypeScript + Expo + Expo Router + Expo SQLite + Drizzle ORM + Zustand + React Hook Form + Zod; AI providers: **Gemini + DeepSeek with user-supplied API keys (BYOK)**; Argon2id (`react-native-argon2`) for local login.
 - Local login requires a native module: the app runs via a development build (`expo run:android` or EAS dev build) — not Expo Go.
 - Android only; no iOS/Web builds in the MVP.
 - No backend, cloud sync, or third-party BaaS.
@@ -286,4 +292,4 @@ The MVP is complete when a user can, on Android, fully offline (except AI action
 
 ## 13. Out of Scope (future, explicitly not in MVP)
 
-Web app, cloud DB, sync, cloud/remote authentication (local login is in the MVP), multiple AI providers / selection / fallback, general AI assistant, bank integrations, multi-currency, weekly/yearly commitments, category editing, manual balance editing, CSV import/export, recurring auto-expenses.
+Web app, cloud DB, sync, cloud/remote authentication (local login is in the MVP), automatic provider fallback, AI provider marketplace, OAuth login, cloud credential storage, other AI providers, general AI assistant, bank integrations, multi-currency, weekly/yearly commitments, category editing, manual balance editing, CSV import/export, recurring auto-expenses.

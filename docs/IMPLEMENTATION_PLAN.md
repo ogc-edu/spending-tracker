@@ -29,10 +29,10 @@ The system is decomposed into **16 independently implementable features**, follo
 | 009 | Financial Calculation Engine | Pure engine: safe-to-spend, allowance, analytics math, projection, deficit; full Jest suite | 002 (types only) | engine `safeToSpend`/`dailyAllowance`/`analytics`/`projectMonthEnd` | PRD §11 test list green; PRD §8.4 formula exact |
 | 010 | Dashboard | Available, spent, budget, remaining, upcoming, safe, daily allowance, category summary; formula breakdown; deficit state | 009, 005, 007, 008 | CashFlowService.snapshot, Dashboard UI | PRD DASH-1..5; deterministic; refreshes |
 | 011 | Analytics | Month selector; category breakdown, MoM change, avg daily, largest, top categories, budget utilization, projection | 009, 005, 007 | AnalyticsService, Analytics UI | PRD AN-1..4 vs hand-computed fixtures |
-| 012 | AI Service Abstraction | `AIService` interface, typed contexts, error taxonomy, Zod response validation, test double | 001 | `src/ai/*` abstraction only | UI never imports Gemini; provider = one class |
-| 013 | Gemini — Commitment Analysis | GeminiProvider + SecureStore key, "Analyze my debt" action | 012, 008 | Provider, debt-analysis UI | Aggregates-only payload; offline error |
-| 014 | Gemini — Spending Analysis | "Analyze my spending" action | 012, 011 | Spending-analysis UI | Same hygiene rules as 013 |
-| 015 | Cash-Flow Explanation | "Explain my allowance" on Dashboard | 012, 010 | Allowance-explanation UI | Explains snapshot; no new numbers |
+| 012 | AI Service Abstraction | `AIService` facade, typed contexts, error taxonomy, Zod response validation, provider-config + analyze, test double | 001 | `src/ai/*` abstraction only | UI never imports a provider; provider = one class |
+| 013 | AI Providers (BYOK) | Provider configuration: Gemini + DeepSeek keys (per-user SecureStore), Test Connection, model discovery + selection, active provider | 012 | Gemini/DeepSeek providers, config UI | No keys in DB/logs/git; discovery-only models; explicit active provider, no fallback |
+| 014 | AI Spending Analysis | "Analyze my spending" action via the active provider | 012, 013, 011 | Spending-analysis UI | Same hygiene rules as 013 |
+| 015 | Cash-Flow Explanation | "Explain my allowance" on Dashboard via the active provider | 012, 013, 010 | Allowance-explanation UI | Explains snapshot; no new numbers |
 | 016 | Polish & Hardening | Empty states, validation edge cases, toasts, deficit polish, offline verification, QA | 010, 011, 013, 014, 015 | Polished app | PRD DoD §11 items 1–17 verifiable offline (except AI) |
 
 ## 2. Dependency Graph
@@ -45,9 +45,9 @@ The system is decomposed into **16 independently implementable features**, follo
                                                │
 002 ──► 009 ◄── (parallelizable with 004–006)  ├──► 010
                                                ├──► 011
-001 ─► 012 ─┬─► 013 ◄── 008                    │
-            ├─► 014 ◄── 011                    ▼
-            └─► 015 ◄── 010            016 (all)
+001 ─► 012 ──► 013 ─┬─► 014 ◄── 011           │
+                    └─► 015 ◄── 010           ▼
+                                       016 (all)
 ```
 
 Sequencing notes:
@@ -55,7 +55,7 @@ Sequencing notes:
 - **001 → 002 → 003 → 004 → 005 → 006** is the strict spine. 003 (auth) is required by everything downstream because all data is user-scoped.
 - **007** and **008** depend on 005 (spent data / linked-expense transaction) — buildable in parallel.
 - **009** depends only on 002's types: develop and test in parallel with 003–006; consumed by 010/011.
-- **012** is independent of the financial spine (deps 001 only) and can land early; providers 013–015 wait for their data features (008, 011, 010).
+- **012** is independent of the financial spine (deps 001 only) and can land early. **013** (BYOK provider config) depends only on 012 and makes the analysis features usable; **014** waits for 011's snapshot; **015** waits for 010's snapshot.
 - **016** is the final cross-cutting pass.
 
 ## 3. Definition-of-Done Coverage
@@ -80,5 +80,5 @@ Each feature plan in `docs/plans/` starts as **Draft — decisions pending**, is
 ## 5. What's Next
 
 1. Approve this master plan (gate #3, rev. 2). ✅ (approved)
-2. Feature plans **001–016** are drafted in `docs/plans/` — 001–016 approved 2026-09-01 after grilling (E7, F1, C1, A3, G1 decisions recorded in their plans).
+2. Feature plans **001–016** are drafted in `docs/plans/` — 001–016 approved 2026-09-01 after grilling (E7, F1, C1, A3, G1 + BYOK/A14 decisions recorded in their plans; 013 rewritten as provider-agnostic BYOK: Gemini + DeepSeek).
 3. Implementation order follows the spine: 001 → 002 → 003 → 004 → 005 → 006, with 007/008, 009, 012 parallelizable per §2.

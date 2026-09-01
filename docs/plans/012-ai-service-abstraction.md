@@ -19,12 +19,12 @@ Per PRD AI-1 and ARCH §9: AI is accessed only through an application-level serv
 
 ## Requirements (PRD AI-1..6)
 
-- `AIService` interface with a single capability: `analyze(context, snapshot) → AIResult`.
+- `AIService` facade with provider-configuration capabilities (`testConnection(provider, key)`, `listModels(provider, key)`, active-provider get/set) **plus** `analyze(context, snapshot) → AIResult`, which dispatches to the **active** provider with its selected model (BYOK, plan 013).
 - **Contexts** (fixed union): `'debt' | 'spending' | 'allowance'` — each with its own typed, JSON-serializable snapshot built by the application services (008/011/010) — never raw expense rows with free-text descriptions (A6).
 - **Error taxonomy** (typed, all surfaced as UI-able messages): `offline`, `timeout`, `http` (status), `invalidKey`, `invalidResponse`, `unknown` — implemented as `AIUnavailableError` with a `reason` field (PRD AI-4: non-blocking, clear error).
 - **Zod response schema**: `AIResult { summary: string, points: string[] }` — provider output validated before any UI renders it; malformed output → `invalidResponse` error, never a crash.
 - **Hygiene invariants** (enforced at this layer): snapshot is a pure data transfer object (no functions/classes); provider receives only the snapshot + a fixed prompt template keyed by context; AI output is never merged into financial state.
-- **Test double**: `FakeProvider` implementing `AIService` (deterministic canned results incl. failure modes) so 013–015 UIs and services are testable in Jest without network.
+- **Test double**: `FakeProvider` implementing the `AIProvider` capability interface (deterministic canned results incl. failure modes) so provider config (013) and the analysis UIs (013–015) are testable in Jest without network.
 - **Factory**: `createAIService(providerName?)` — returns the configured provider; the future multi-provider switch lives here (AI-5; no provider-selection UI in MVP).
 
 ## Technical Design
@@ -34,10 +34,11 @@ src/ai/
 ├── types.ts            # AIContext union; snapshot record types per context; AIResult; AIErrorReason
 ├── schema.ts           # Zod: AIResultSchema; per-context snapshot schemas (mirrors what services produce)
 ├── errors.ts           # AIUnavailableError (reason, status?), mapping helpers (network/timeout/http/parse)
-├── AIService.ts        # interface + createAIService factory + prompt-template registry (context → instructions)
-├── providers/
-│   ├── fake.ts         # FakeProvider (tests + dev)
-│   └── gemini.ts       # (stub now — implemented in 013)
+│   ├── AIService.ts        # facade: provider config (test/listModels/active) + analyze + prompt registry
+│   ├── providers/
+│   │   ├── fake.ts         # FakeProvider (implements the AIProvider capability interface — tests + dev)
+│   │   ├── gemini.ts       # real provider (plan 013)
+│   │   └── deepseek.ts     # real provider (plan 013)
 └── __tests__/          # schema validation, error mapping, factory, fake behavior
 ```
 
@@ -72,7 +73,7 @@ None.
 
 ## Decisions (confirmed defaults — no open questions)
 
-- Single `analyze` capability (no streaming, no raw chat — the general assistant is explicitly future, PRD §7.6).
+- Capabilities: provider configuration (test connection, model listing, active-provider selection — plan 013) plus `analyze`; **no streaming, no raw chat** — the general assistant is explicitly future (PRD §7.6).
 - `AIResult` = summary + points (structured enough to render nicely, simple enough to validate).
 - No raw descriptions in snapshots (A6) — "largest expenses" in the spending snapshot is category-level, not transaction-level text.
 - Responses are capped (max_points: 5; max summary length) to keep UI tight.

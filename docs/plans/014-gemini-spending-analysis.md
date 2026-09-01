@@ -1,12 +1,12 @@
-# 014 — Gemini — Spending Analysis
+# 014 — AI Spending Analysis
 
 | | |
 |---|---|
 | **Status** | Approved — decisions confirmed (2026-09-01) |
 | **Version** | 1.0 |
 | **Date** | 2026-09-01 |
-| **Dependencies** | 012, 011 |
-| **PRD** | §7.5 AN-5; §7.6 AI-1..6 |
+| **Dependencies** | 012, 013, 011 |
+| **PRD** | §7.5 AN-5; §7.6 AI-1..11 |
 | **Plan doc** | IMPLEMENTATION_PLAN.md §1 row 014 |
 
 ## Objective
@@ -29,7 +29,7 @@ The **"Analyze my spending"** action in Analytics: the app's deterministic `Spen
 
 - `app/(tabs)/analytics.tsx`: adds the action button next to the MoM chip; on tap → `AIService.analyze('spending', snapshotFromSelectedMonth)` via the same `AIAnalysisCard` flow as 013.
 - `SpendingSnapshot` assembly already exists (011) — no new service. The button passes the *selected* month's snapshot (derive from the same state the screen renders, so the analysis always matches what's on screen).
-- Model + key: same G1 model and SecureStore key as 013 (one Settings entry; one provider instance).
+- Provider: routed through the **active provider** (Gemini or DeepSeek, plan 013) via `AIService.analyze` — no provider logic or key handling here.
 - Empty-month handling: if total = 0 and breakdown empty → hide the button ("nothing to analyze this month").
 
 ## Files / Components Likely Affected
