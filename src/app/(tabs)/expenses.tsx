@@ -1,12 +1,20 @@
 /**
- * Expenses tab (plan 005) — month-scoped list for the CURRENT local calendar
- * month + add/edit/delete entry points. Re-read on focus (ARCHITECTURE §5:
- * SQLite is the source of truth, no cache), monthly total via the pure engine,
- * rows show date, category, description, amount, account, and the E7 linked
- * badge. No filters/search (plan 006). Month navigation is analytics (011).
+ * Expenses tab (plan 006 / EXP-4..6) — browsable history: search, category
+ * single-select (F1), period presets + custom range, batch pagination
+ * (50/batch), and a pinned totals bar for the WHOLE filtered set (EXP-6).
+ *
+ * Data flow: uiStore holds the filter (search/category/period/offset) so
+ * returning from detail or edit keeps context; every filter change resets
+ * offset to 0. `load` re-runs on focus AND on every filter change (the
+ * useFocusEffect callback depends on the resolved filter — expo-router's
+ * implementation re-runs it while focused), always re-reading SQLite (A4:
+ * source of truth, no cache). No SQL or money math here — filters and
+ * totals come from ExpenseService.listFiltered/sumFiltered, which share the
+ * repository's one predicate builder, so the totals bar can never disagree
+ * with the list (tested).
  */
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -15,11 +23,17 @@ import type { Account, Category, Expense } from '@/db/schema';
 import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
-import { categoryColor } from '@/components/categoryMeta';
-import { monthlyTotals } from '@/engine/totals';
-import { formatDayLabel, formatMonthLabel } from '@/utils/dates';
+import type { ExpenseFilter, ExpenseTotals } from '@/repositories/types';
+import { useUiStore } from '@/store/uiStore';
+import { periodRange } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
+import { FilterBar } from '@/components/FilterBar';
+import { ExpenseList } from '@/components/ExpenseList';
+import { EmptyState } from '@/components/EmptyState';
 import { colors, spacing, typography } from '@/theme';
+
+/** Batch size for "load more" pagination (plan §UI — 50/batch). */
+const EXPENSE_PAGE_SIZE = 50;
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -28,9 +42,6 @@ function errMsg(error: unknown): string {
 export default function ExpensesScreen() {
   const router = useRouter();
   const { authService } = useAuth();
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
 
   const services = useMemo(() => {
     const repos = repositories();
@@ -41,111 +52,159 @@ export default function ExpensesScreen() {
     };
   }, [authService]);
 
+  // Filter state from uiStore — the load below depends on these, so a change
+  // re-fires the focus effect while this screen is focused.
+  const filter = useUiStore((s) => s.expenseFilter);
+  const setExpenseSearch = useUiStore((s) => s.setExpenseSearch);
+  const setExpenseCategory = useUiStore((s) => s.setExpenseCategory);
+  const setExpensePeriod = useUiStore((s) => s.setExpensePeriod);
+  const setExpenseCustomRange = useUiStore((s) => s.setExpenseCustomRange);
+  const setExpenseOffset = useUiStore((s) => s.setExpenseOffset);
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [totals, setTotals] = useState<ExpenseTotals>({ count: 0, totalSen: 0 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Stale-request guard: a rapid filter change discards the earlier load's
+  // result (out-of-order responses must never clobber the newest filter).
+  const requestRef = useRef(0);
+  // Pagination lock: onEndReached can fire repeatedly while a page loads;
+  // the lock prevents double offset bumps (skipped rows).
+  const endReachedLockRef = useRef(false);
+
+  /** Resolve the store period to an inclusive { from, to } (custom unapplied → no bounds). */
+  const range = useMemo(() => {
+    if (filter.period === 'custom') {
+      return filter.customFrom && filter.customTo ? { from: filter.customFrom, to: filter.customTo } : {};
+    }
+    return periodRange(filter.period);
+  }, [filter.period, filter.customFrom, filter.customTo]);
+
+  const queryFilter = useMemo<ExpenseFilter>(
+    () => ({
+      search: filter.search || undefined,
+      categoryId: filter.categoryId ?? undefined,
+      ...range,
+      limit: EXPENSE_PAGE_SIZE,
+      offset: filter.offset,
+    }),
+    [filter.search, filter.categoryId, filter.offset, range],
+  );
+
   const load = useCallback(async () => {
+    const requestId = ++requestRef.current;
     try {
-      const [rows, accs, cats] = await Promise.all([
-        services.expenses.listForMonth(year, month),
+      const [rows, accs, cats, sums] = await Promise.all([
+        services.expenses.listFiltered(queryFilter),
         services.accounts.list(),
         services.categories.list(),
+        services.expenses.sumFiltered(queryFilter),
       ]);
+      if (requestId !== requestRef.current) return; // superseded by a newer load
       setExpenses(rows);
       setAccounts(accs);
       setCategories(cats);
+      setTotals(sums);
       setError(null);
     } catch (loadError: unknown) {
-      setError(errMsg(loadError));
+      if (requestId === requestRef.current) setError(errMsg(loadError));
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) {
+        endReachedLockRef.current = false; // a fresh page is now loaded
+        setLoading(false);
+      }
     }
-  }, [services.expenses, services.accounts, services.categories, year, month]);
+  }, [services.expenses, services.accounts, services.categories, queryFilter]);
 
+  // Re-read on focus AND on every filter change (SQLite is the source of
+  // truth; edits/deletes elsewhere appear on return).
   useFocusEffect(
     useCallback(() => {
       void load();
     }, [load]),
   );
 
-  const accountName = (id: number | null): string | null =>
-    id == null ? null : (accounts.find((a) => a.id === id)?.name ?? null);
+  /** True while more batches exist: loaded rows so far < filtered count (EXP-6). */
+  const hasMore = filter.offset + expenses.length < totals.count;
 
-  const total = monthlyTotals(expenses, { month, year });
+  const handleEndReached = useCallback(() => {
+    if (!hasMore || endReachedLockRef.current) return;
+    endReachedLockRef.current = true;
+    setExpenseOffset(filter.offset + EXPENSE_PAGE_SIZE);
+  }, [hasMore, filter.offset, setExpenseOffset]);
+
+  const hasActiveFilters = filter.search.trim() !== '' || filter.categoryId != null || filter.period !== 'all';
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} testID="expenses-screen">
-        <View style={styles.header}>
-          <Text style={styles.monthLabel}>{formatMonthLabel(year, month)}</Text>
-          <Text style={styles.total} testID="expenses-month-total">
-            Total {formatSen(total)}
-          </Text>
+    <View style={styles.container} testID="expenses-screen">
+      <FilterBar
+        search={filter.search}
+        onSearchChange={setExpenseSearch}
+        categories={categories}
+        categoryId={filter.categoryId}
+        onSelectCategory={setExpenseCategory}
+        period={filter.period}
+        customFrom={filter.customFrom}
+        customTo={filter.customTo}
+        onSelectPeriod={setExpensePeriod}
+        onApplyCustom={setExpenseCustomRange}
+      />
+
+      <View style={styles.totalsBar} testID="expenses-totals-bar">
+        <Text style={styles.totalLabel}>Total</Text>
+        <Text style={styles.totalValue} testID="expenses-total">
+          {formatSen(totals.totalSen)}
+        </Text>
+        <Text style={styles.totalCount} testID="expenses-total-count">
+          {totals.count} {totals.count === 1 ? 'expense' : 'expenses'}
+        </Text>
+      </View>
+
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      {!error && loading ? (
+        <View style={styles.centerBox}>
+          <ActivityIndicator />
         </View>
+      ) : null}
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {!error && !loading && expenses.length === 0
+        ? hasActiveFilters
+          ? (
+              <EmptyState
+                icon="search-outline"
+                title="No matching expenses"
+                body="Try a different search, category, or period."
+                testID="expenses-empty-filtered"
+              />
+            )
+          : (
+              <EmptyState
+                icon="receipt-outline"
+                title="No expenses yet"
+                body="Tap + to record lunch, a bill, a ride…"
+                testID="expenses-empty"
+              />
+            )
+        : null}
 
-        {!error && loading ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator />
-          </View>
-        ) : null}
-
-        {!error && !loading && expenses.length === 0 ? (
-          <View style={styles.centerBox} testID="expenses-empty">
-            <Ionicons name="receipt-outline" size={44} color={colors.muted} style={styles.emptyIcon} />
-            <Text style={styles.emptyTitle}>No expenses this month</Text>
-            <Text style={styles.emptyBody}>Tap + to record lunch, a bill, a ride…</Text>
-          </View>
-        ) : null}
-
-        {!error && !loading && expenses.length > 0
-          ? expenses.map((expense) => {
-              const category = categories.find((c) => c.id === expense.categoryId);
-              const account = accountName(expense.accountId);
-              const linked = expense.commitmentPaymentId !== null;
-              return (
-                <Pressable
-                  key={expense.id}
-                  onPress={() => router.push(`/expenses/${expense.id}/edit` as never)}
-                  style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-                  accessibilityRole="button"
-                  testID={`expense-row-${expense.id}`}
-                >
-                  <View style={[styles.categoryDot, { backgroundColor: categoryColor(expense.categoryId) }]} />
-                  <View style={styles.rowInfo}>
-                    <View style={styles.rowTop}>
-                      <Text style={styles.rowTitle} numberOfLines={1}>
-                        {category?.name ?? 'Category'}
-                      </Text>
-                      <Text style={styles.rowAmount}>{formatSen(expense.amountSen)}</Text>
-                    </View>
-                    <View style={styles.rowBottom}>
-                      <Text style={styles.rowMeta} numberOfLines={1}>
-                        {formatDayLabel(expense.date)}
-                        {expense.description ? ` · ${expense.description}` : ''}
-                        {account ? ` · ${account}` : ''}
-                      </Text>
-                      {linked ? (
-                        <View style={styles.linkedChip}>
-                          <Ionicons name="link-outline" size={11} color={colors.warning} />
-                          <Text style={styles.linkedChipLabel}>commitment</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                </Pressable>
-              );
-            })
-          : null}
-      </ScrollView>
+      {!error && !loading && expenses.length > 0 ? (
+        <ExpenseList
+          expenses={expenses}
+          categories={categories}
+          accounts={accounts}
+          hasMore={hasMore}
+          onEndReached={handleEndReached}
+          onPressRow={(expense) => router.push(`/expenses/${expense.id}` as never)}
+        />
+      ) : null}
 
       <Pressable
         onPress={() => router.push('/expenses/new' as never)}
-        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+        style={({ pressed }) => (pressed ? [styles.fab, styles.fabPressed] : styles.fab)}
         accessibilityRole="button"
         accessibilityLabel="Add expense"
         testID="add-expense-fab"
@@ -158,36 +217,28 @@ export default function ExpensesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: 120 },
-  header: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.lg },
-  monthLabel: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
-  total: { fontSize: typography.body, color: colors.muted, fontWeight: '600' },
-  errorText: { fontSize: typography.body, color: colors.danger, marginBottom: spacing.lg },
-  centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl },
-  emptyIcon: { marginBottom: spacing.md },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
-  emptyBody: { fontSize: typography.body, color: colors.muted },
-  row: {
+  totalsBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    alignItems: 'baseline',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
     marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.border,
   },
-  pressed: { opacity: 0.6 },
-  categoryDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.md },
-  rowInfo: { flex: 1 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rowTitle: { fontSize: typography.body, fontWeight: '600', color: colors.text, flex: 1, marginRight: spacing.sm },
-  rowAmount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
-  rowBottom: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
-  rowMeta: { fontSize: typography.caption, color: colors.muted, flex: 1 },
-  linkedChip: { flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: spacing.sm },
-  linkedChipLabel: { fontSize: 10, color: colors.warning, fontWeight: '700' },
+  totalLabel: { fontSize: typography.body, color: colors.muted, fontWeight: '600' },
+  totalValue: { fontSize: typography.title, fontWeight: '700', color: colors.text },
+  totalCount: { fontSize: typography.caption, color: colors.muted },
+  errorText: {
+    fontSize: typography.body,
+    color: colors.danger,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
   fab: {
     position: 'absolute',
     right: spacing.xl,

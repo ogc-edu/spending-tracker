@@ -55,6 +55,67 @@ export function nextMonthStartDate(year: number, month: number): string {
   return month === 12 ? `${year + 1}-01-01` : `${year}-${pad2(month + 1)}-01`;
 }
 
+/** Last day of a year-month as `YYYY-MM-DD` (inclusive upper bound for SQL ranges). */
+export function monthEndDate(year: number, month: number): string {
+  // Day 0 of the FOLLOWING month = last day of this month (Date handles leap years).
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${year}-${pad2(month)}-${pad2(lastDay)}`;
+}
+
+/**
+ * Monday of the week containing the given local date (plan 006: weeks start
+ * Monday). Sunday (getDay() === 0) walks back 6 days; Mon–Sat walk back dow−1.
+ * The Date is normalized to local midnight first so time-of-day can't shift
+ * the result across days.
+ */
+export function weekStartLocal(date: Date = new Date()): string {
+  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const daysSinceMonday = local.getDay() === 0 ? 6 : local.getDay() - 1;
+  local.setDate(local.getDate() - daysSinceMonday);
+  return toLocalDateString(local);
+}
+
+/** Period presets for the expense-history filter bar (plan 006 §UI). `custom` is a from/to pair. */
+export const PERIOD_PRESETS = ['today', 'thisWeek', 'thisMonth', 'lastMonth', 'all', 'custom'] as const;
+export type PeriodPreset = (typeof PERIOD_PRESETS)[number];
+
+/**
+ * Resolve a period preset to INCLUSIVE `{ from, to }` local-date bounds.
+ * `all` → no bounds (no date predicate). `custom` is NOT resolvable here —
+ * the picker supplies explicit from/to. Deterministic for a fixed `now`.
+ * - today:      from = to = today
+ * - thisWeek:   Monday of this week → today (plan: weeks start Monday)
+ * - thisMonth:  1st → last day of the month (matches the dashboard view)
+ * - lastMonth:  previous calendar month, 1st → last day
+ */
+export function periodRange(
+  preset: Exclude<PeriodPreset, 'custom'>,
+  now: Date = new Date(),
+): { from?: string; to?: string } {
+  switch (preset) {
+    case 'today': {
+      const day = toLocalDateString(now);
+      return { from: day, to: day };
+    }
+    case 'thisWeek': {
+      return { from: weekStartLocal(now), to: toLocalDateString(now) };
+    }
+    case 'thisMonth': {
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      return { from: monthStartDate(year, month), to: monthEndDate(year, month) };
+    }
+    case 'lastMonth': {
+      const month = now.getMonth(); // 0-based; 0 = December of the previous year
+      const year = month === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const lastMonth = month === 0 ? 12 : month;
+      return { from: monthStartDate(year, lastMonth), to: monthEndDate(year, lastMonth) };
+    }
+    case 'all':
+      return {};
+  }
+}
+
 /** "September 2026" — month header for the expenses list. */
 export function formatMonthLabel(year: number, month: number): string {
   return new Date(year, month - 1, 1).toLocaleDateString('en-US', {

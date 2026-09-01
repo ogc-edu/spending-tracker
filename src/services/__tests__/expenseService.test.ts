@@ -372,6 +372,64 @@ describe('ExpenseService E7 — linked expenses are read-only', () => {
   });
 });
 
+describe('ExpenseService.listFiltered/sumFiltered — plan 006 filter boundary', () => {
+  it('rejects every filter op when not signed in', async () => {
+    const fixture = await makeFixture({ signedIn: false });
+    await expect(fixture.service.listFiltered({})).rejects.toThrow('not signed in');
+    await expect(fixture.service.sumFiltered({})).rejects.toThrow('not signed in');
+  });
+
+  it('rejects an inverted custom range (from > to)', async () => {
+    const fixture = await makeFixture();
+    await expect(fixture.service.listFiltered({ from: '2026-09-30', to: '2026-09-01' })).rejects.toThrow(
+      'From date must not be after To date',
+    );
+    await expect(fixture.service.sumFiltered({ from: '2026-09-30', to: '2026-09-01' })).rejects.toThrow(
+      'From date must not be after To date',
+    );
+  });
+
+  it('rejects malformed filters before they reach SQL', async () => {
+    const fixture = await makeFixture();
+    await expect(fixture.service.listFiltered({ from: '2026-13-01' })).rejects.toThrow('From must be a real date');
+    await expect(fixture.service.listFiltered({ to: 'not-a-date' })).rejects.toThrow('To must be YYYY-MM-DD');
+    await expect(fixture.service.listFiltered({ categoryId: 0 })).rejects.toThrow('Invalid category filter');
+    await expect(fixture.service.listFiltered({ search: 'x'.repeat(201) })).rejects.toThrow(
+      'Search must be 200 characters or fewer',
+    );
+    await expect(fixture.service.listFiltered({ limit: 0 })).rejects.toThrow();
+    await expect(fixture.service.listFiltered({ offset: -1 })).rejects.toThrow('Invalid offset');
+  });
+
+  it('trims search and treats empty search as "no predicate"', async () => {
+    const fixture = await makeFixture();
+    await fixture.service.create(input(fixture, { description: '  Lunch run  ' }));
+    const all = await fixture.service.listFiltered({ search: '' });
+    expect(all).toHaveLength(1);
+    const padded = await fixture.service.listFiltered({ search: '  lunch  ' });
+    expect(padded).toHaveLength(1); // trimmed before LIKE
+    const empty = await fixture.service.listFiltered({ search: '   ' });
+    expect(empty).toHaveLength(1); // whitespace-only → no predicate
+  });
+
+  it('listFiltered + sumFiltered agree and delegate pagination', async () => {
+    const fixture = await makeFixture();
+    const a = await fixture.service.create(input(fixture, { amountSen: 1000, date: '2026-09-01' }));
+    const b = await fixture.service.create(input(fixture, { amountSen: 2000, date: '2026-09-02' }));
+    const c = await fixture.service.create(input(fixture, { amountSen: 3000, date: '2026-09-03' }));
+
+    const totals = await fixture.service.sumFiltered({ from: '2026-09-01', to: '2026-09-30' });
+    expect(totals).toEqual({ count: 3, totalSen: 6000 });
+
+    const page1 = await fixture.service.listFiltered({ limit: 2, offset: 0 });
+    expect(page1.map((e) => e.id)).toEqual([c.id, b.id]); // newest first
+    const page2 = await fixture.service.listFiltered({ limit: 2, offset: 2 });
+    expect(page2.map((e) => e.id)).toEqual([a.id]);
+    // sum is pagination-blind — still the whole filtered set
+    expect(await fixture.service.sumFiltered({ limit: 2, offset: 2 })).toEqual(totals);
+  });
+});
+
 describe('ExpenseService user scoping (A10)', () => {
   it('another user can neither see nor mutate the row', async () => {
     const fixture = await makeFixture();

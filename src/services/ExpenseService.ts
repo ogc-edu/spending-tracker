@@ -28,8 +28,10 @@ import { DATE_RE, isValidDateStr } from '@/utils/dates';
 import {
   EXPENSE_LINKED_READ_ONLY_MESSAGE,
   type CategoryRepository,
+  type ExpenseFilter,
   type ExpenseInput,
   type ExpenseRepository,
+  type ExpenseTotals,
 } from '@/repositories/types';
 import type { CurrentUserSource } from './AccountService';
 
@@ -52,11 +54,57 @@ export const expenseInputSchema = z.object({
 
 export type ValidatedExpenseInput = z.infer<typeof expenseInputSchema>;
 
+/**
+ * Plan 006 filter validation — the service boundary for history queries
+ * (never trust the caller): search trimmed/≤200 chars, category positive
+ * int, dates real `YYYY-MM-DD` and not inverted (from ≤ to). `custom` range
+ * with `from > to` is rejected here AND on the picker (plan §Edge cases).
+ */
+export const expenseFilterSchema = z
+  .object({
+    search: z
+      .string()
+      .trim()
+      .max(200, 'Search must be 200 characters or fewer')
+      .optional(),
+    categoryId: z.number({ error: 'Invalid category filter' }).int().positive('Invalid category filter').optional(),
+    from: z
+      .string()
+      .regex(DATE_RE, 'From must be YYYY-MM-DD')
+      .refine(isValidDateStr, 'From must be a real date')
+      .optional(),
+    to: z
+      .string()
+      .regex(DATE_RE, 'To must be YYYY-MM-DD')
+      .refine(isValidDateStr, 'To must be a real date')
+      .optional(),
+    limit: z.number({ error: 'Invalid limit' }).int().positive().optional(),
+    offset: z
+      .number({ error: 'Invalid offset' })
+      .int()
+      .nonnegative('Invalid offset')
+      .optional(),
+  })
+  .refine((f) => f.from === undefined || f.to === undefined || f.from <= f.to, {
+    message: 'From date must not be after To date',
+  });
+
+export type ValidatedExpenseFilter = z.infer<typeof expenseFilterSchema>;
+
 function parseInput(input: ExpenseInput): ValidatedExpenseInput {
   const result = expenseInputSchema.safeParse(input);
   if (!result.success) {
     const issue = result.error.issues[0];
     throw new Error(issue?.message ?? 'invalid expense input');
+  }
+  return result.data;
+}
+
+function parseFilter(filter: ExpenseFilter): ValidatedExpenseFilter {
+  const result = expenseFilterSchema.safeParse(filter);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    throw new Error(issue?.message ?? 'invalid expense filter');
   }
   return result.data;
 }
@@ -169,6 +217,26 @@ export class ExpenseService {
       throw new Error('invalid month');
     }
     return this.expenses.listForMonth(await this.requireUserId(), year, month);
+  }
+
+  /**
+   * Filtered history (plan 006 / EXP-4, EXP-5): search + category + inclusive
+   * date range, AND-composed, newest first, paginated by limit/offset. Empty
+   * filter = all rows. Validates at this boundary (never trust the caller).
+   */
+  async listFiltered(filter: ExpenseFilter = {}): Promise<Expense[]> {
+    const userId = await this.requireUserId();
+    return this.expenses.query(userId, parseFilter(filter));
+  }
+
+  /**
+   * { count, totalSen } over the FULL filtered set (plan 006 / EXP-6) — the
+   * totals bar never disagrees with the list because query and sum share the
+   * repository's one predicate builder. Pagination fields are ignored.
+   */
+  async sumFiltered(filter: ExpenseFilter = {}): Promise<ExpenseTotals> {
+    const userId = await this.requireUserId();
+    return this.expenses.sum(userId, parseFilter(filter));
   }
 
   /** Map stale/unknown ids to friendly messages (plan §Edge cases); FK stays the backstop. */

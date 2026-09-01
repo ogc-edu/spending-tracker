@@ -119,8 +119,35 @@ export interface ExpenseTx {
 }
 
 /**
- * ExpenseRepository (plan 005) — all methods user-scoped (A10).
- * byId/listForMonth are plain async reads; every WRITE runs inside
+ * Expense history filter (plan 006 / EXP-5). All predicates are OPTIONAL and
+ * AND-compose; empty search + no category + no range = all rows (paginated).
+ * `from`/`to` are inclusive local-date boundaries (`YYYY-MM-DD`); `search` is
+ * a case-insensitive substring match on description with `%`/`_` escaped.
+ */
+export interface ExpenseFilter {
+  /** Case-insensitive LIKE '%…%' on description; `%` and `_` are escaped (matched literally). */
+  search?: string;
+  /** Single-select category filter (F1). */
+  categoryId?: number;
+  /** Inclusive lower bound, `YYYY-MM-DD` (local calendar). */
+  from?: string;
+  /** Inclusive upper bound, `YYYY-MM-DD` (local calendar). */
+  to?: string;
+  /** query() only: page size. sum() ignores pagination — totals cover the WHOLE filtered set (EXP-6). */
+  limit?: number;
+  /** query() only: row offset for the filtered set; reset to 0 on any filter change. */
+  offset?: number;
+}
+
+/** Aggregate over the filtered set (EXP-6): row count + sum of amountSen. one predicate set. */
+export interface ExpenseTotals {
+  count: number;
+  totalSen: number;
+}
+
+/**
+ * ExpenseRepository (plan 005 + 006) — all methods user-scoped (A10).
+ * byId/listForMonth/query/sum are plain async reads; every WRITE runs inside
  * `transaction()`, which pairs the expense row change with the owning
  * account's balance adjustment so a failure rolls back everything.
  */
@@ -132,6 +159,20 @@ export interface ExpenseRepository {
    * touch another user's rows.
    */
   listForMonth(userId: number, year: number, month: number): Promise<Expense[]>;
+  /**
+   * Filtered history, newest first (date DESC, id DESC), user-scoped.
+   * `limit`/`offset` paginate the FILTERED set (offset resets on filter
+   * change). Plan 006 single-source-of-predicates: query() and sum() build
+   * their WHERE with the SAME predicate function, so the totals bar can
+   * never disagree with the list.
+   */
+  query(userId: number, filter?: ExpenseFilter): Promise<Expense[]>;
+  /**
+   * { count, totalSen } over the FULL filtered set (pagination fields are
+   * ignored — EXP-6 "total for the currently filtered set"). Never disagrees
+   * with query(): identical predicate builder.
+   */
+  sum(userId: number, filter?: ExpenseFilter): Promise<ExpenseTotals>;
   /**
    * Run `fn` inside ONE SQLite transaction (D1). The callback MUST be
    * synchronous (see ExpenseTx) — it receives the transactional contexts and

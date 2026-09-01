@@ -15,15 +15,30 @@
  *
  * All reads are user-scoped (A10) — every query filters by `userId`.
  */
-import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, lte, sql, type Column, type SQL } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import { accounts, categories, expenses, type Account, type Category, type Expense } from '@/db/schema';
-import { monthStartDate, nextMonthStartDate } from '@/utils/dates';
-import type { ExpenseRepository, ExpenseTx, NewExpenseRow } from '../types';
+import { DATE_RE, monthStartDate, nextMonthStartDate } from '@/utils/dates';
+import type { ExpenseFilter, ExpenseRepository, ExpenseTotals, ExpenseTx, NewExpenseRow } from '../types';
 
 type AnyDb = BaseSQLiteDatabase<'sync' | 'async', unknown, typeof import('@/db/schema')>;
 /** The transactional handle drizzle passes to `transaction(fn)`. */
 type AnyTx = Parameters<Parameters<AnyDb['transaction']>[0]>[0];
+
+/**
+ * Escape LIKE wildcards (`%`, `_`, and the escape char itself) so a search
+ * term matches only its literal text (plan 006 edge case). Combined with the
+ * `ESCAPE '\'` clause in `likeEscaped` — without it SQLite treats `\` as a
+ * plain character and the escaping silently does nothing.
+ */
+export function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+/** `column LIKE ? ESCAPE '\'` — drizzle 0.45's `like()` has no escape-char parameter, so raw SQL. */
+function likeEscaped(column: Column, pattern: string): SQL {
+  return sql`${column} like ${pattern} escape '\\'`;
+}
 
 export class DrizzleExpenseRepository implements ExpenseRepository {
   constructor(private readonly db: AnyDb) {}
@@ -54,6 +69,66 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
         ),
       )
       .orderBy(desc(expenses.date), desc(expenses.id))) as unknown as Expense[];
+  }
+
+  /**
+   * THE plan-006 predicate builder — the single source of predicates for the
+   * Expenses tab. query() and sum() BOTH call it, so the list and the totals
+   * bar can never disagree (tested). Everything AND-composes against the
+   * user's rows; malformed optional values (bad date shapes, non-positive
+   * category ids) are dropped rather than crashing the history screen.
+   */
+  private predicatesFor(userId: number, filter: ExpenseFilter): SQL[] {
+    const predicates: SQL[] = [eq(expenses.userId, userId)];
+    const search = filter.search?.trim();
+    if (search) {
+      predicates.push(likeEscaped(expenses.description, `%${escapeLike(search)}%`));
+    }
+    if (filter.categoryId != null && Number.isInteger(filter.categoryId) && filter.categoryId > 0) {
+      predicates.push(eq(expenses.categoryId, filter.categoryId));
+    }
+    if (filter.from && DATE_RE.test(filter.from)) {
+      predicates.push(gte(expenses.date, filter.from)); // inclusive lower bound
+    }
+    if (filter.to && DATE_RE.test(filter.to)) {
+      predicates.push(lte(expenses.date, filter.to)); // inclusive upper bound
+    }
+    return predicates;
+  }
+
+  /**
+   * Filtered history (EXP-4/EXP-5): newest first, ties broken by id (later
+   * insert first) — deterministic pagination. limit/offset apply to the
+   * FILTERED set; the caller resets offset to 0 on any filter change.
+   */
+  async query(userId: number, filter: ExpenseFilter = {}): Promise<Expense[]> {
+    const builder = this.db
+      .select()
+      .from(expenses)
+      .where(and(...this.predicatesFor(userId, filter)))
+      .orderBy(desc(expenses.date), desc(expenses.id));
+    // limit/offset are a PAIR: SQLite rejects OFFSET without LIMIT, so offset
+    // alone is ignored (no pagination). The UI always sends both.
+    const withPage =
+      filter.limit != null ? builder.limit(filter.limit).offset(filter.offset ?? 0) : builder;
+    return (await withPage) as unknown as Expense[];
+  }
+
+  /**
+   * COUNT + SUM(amount_sen) over the WHOLE filtered set (EXP-6): pagination
+   * fields are deliberately ignored so the pinned totals bar reflects every
+   * matching row, not just the loaded page. Same predicates as query().
+   * COALESCE keeps an empty match set at { count: 0, totalSen: 0 }.
+   */
+  async sum(userId: number, filter: ExpenseFilter = {}): Promise<ExpenseTotals> {
+    const rows = (await this.db
+      .select({
+        count: sql<number>`count(*)`.mapWith(Number),
+        totalSen: sql<number>`COALESCE(sum(${expenses.amountSen}), 0)`.mapWith(Number),
+      })
+      .from(expenses)
+      .where(and(...this.predicatesFor(userId, filter)))) as unknown as ExpenseTotals[];
+    return rows[0] ?? { count: 0, totalSen: 0 };
   }
 
   /**
