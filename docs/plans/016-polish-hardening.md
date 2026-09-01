@@ -25,8 +25,9 @@ All features exist by the start of this plan. This is hardening + QA, not new fu
 - **Deficit polish**: Dashboard deficit styling + copy fully consistent; analytics/allowance don't contradict it.
 - **Accessibility**: readable contrast (theme tokens verified), minimum touch targets (≥44pt), screen-reader labels on key figures (money values read with currency context), form labels associated with inputs.
 - **Offline verification**: full DoD sweep with airplane mode on (AI actions error, everything else works) — checklist result recorded.
+- **iOS parity pass** (A16): keyboard avoiding + safe-area on notch/Dynamic Island devices; iOS font pairing for money figures (`Platform`-gated tabular figures in `typography.ts`); Keychain-reinstall handling for SecureStore session/API keys (iOS Keychain survives uninstall — clear stale session/keys on first launch or document the choice); iOS icon/splash confirmed present in `app.json`; `jest-expo` exercised with the ios preset.
 - **Settings completion**: safety-buffer editor (number field, sen parse, save); AI section status ("Gemini · key configured/not configured", add/clear key already in 013).
-- Housekeeping: final `npm test`/typecheck/lint; remove any leftover template or dead code; README run instructions incl. dev-build requirement (Argon2id/013).
+- Housekeeping: final `npm test`/typecheck/lint; remove any leftover template or dead code; README run instructions (Expo Go on both platforms — no dev-build requirement post A16).
 
 ## Technical Design
 

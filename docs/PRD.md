@@ -5,7 +5,7 @@
 | **Status** | Approved — decisions confirmed (2026-09-01, rev. 3: AI BYOK) |
 | **Version** | 1.0 |
 | **Date** | 2026-09-01 |
-| **Platform** | Android (React Native + Expo) |
+| **Platform** | Android + iOS (React Native + Expo); web out of MVP (A16) |
 | **MVP scope** | Local-first personal expense tracker with budgets, commitments, cash-flow awareness, and contextual AI analysis |
 
 ---
@@ -68,7 +68,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | D3 | Paid commitment payments | **Auto-create linked expense**: marking a payment paid creates an Expense (category **Debt / Repayment**) linked to that payment. Paid payments are excluded from upcoming totals; the expense counts exactly once in spending. |
 | D4 | Commitment frequencies | **Monthly + one-time** only. Weekly/yearly are future. Installments define a payment count or end date; recurring monthly commitments (rent, subscriptions) have no end date. |
 | D5 | Project & docs location | `~/Documents/projects/spending-tracker/`, docs in `docs/` per auth-system convention (PRD / ARCHITECTURE / IMPLEMENTATION_PLAN / plans/NNN-*). |
-| D6 | Local user accounts (user request 2026-09-01) | Register/login/logout on the local DB. **Argon2id** hashing via native module (params mirroring the user's auth-system: time=2, 64 MiB, par=1); **auto-login** session (SecureStore) with explicit logout; **no password policy**; seeded default user `ooiguancheng18@gmail.com` / `1234`; financial data **user-scoped** (`user_id`), categories global; login gates the whole app. |
+| D6 | Local user accounts (user request 2026-09-01) | Register/login/logout on the local DB. **Argon2id** hashing via `hash-wasm` (pure WASM — no native module; params mirroring the user's auth-system: time=2, 64 MiB, par=1); **auto-login** session (SecureStore) with explicit logout; **no password policy**; seeded default user `ooiguancheng18@gmail.com` / `1234`; financial data **user-scoped** (`user_id`), categories global; login gates the whole app. |
 | D7 | AI BYOK (user request 2026-09-01) | **Gemini + DeepSeek**, user-supplied API keys (per local user, SecureStore — never SQLite/logs/git); Test Connection; **model discovery only** (no hardcoded lists; manual model-ID entry when discovery fails); explicit **active provider**, no automatic fallback; hardcoded endpoints; app fully functional with no AI configured. |
 
 ### Assumptions (flag any that are wrong)
@@ -174,7 +174,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | USR-5 | User isolation: accounts, expenses, budgets, commitments, and commitment payments belong to a user (`user_id` FK); the 12 categories stay global. |
 | USR-6 | Gate: Dashboard and all tabs are unreachable while signed out; login/register are the only routes. |
 | USR-7 | Entirely offline; no remote authentication. |
-| USR-8 | Note: Argon2id is a native module → the app must run as a development build (`expo run:android` / EAS dev build); Expo Go cannot run it. |
+| USR-8 | Note: Argon2id runs via `hash-wasm` (pure WASM — no native module): **Expo Go works on Android and iOS**; dev builds are optional. Amended 2026-09-01 (cross-platform decision A16). |
 
 ### 7.9 Settings
 
@@ -250,15 +250,15 @@ Properties of this formula (documented so implementers and users are not surpris
 
 ## 10. Constraints
 
-- Stack: React Native + TypeScript + Expo + Expo Router + Expo SQLite + Drizzle ORM + Zustand + React Hook Form + Zod; AI providers: **Gemini + DeepSeek with user-supplied API keys (BYOK)**; Argon2id (`react-native-argon2`) for local login.
-- Local login requires a native module: the app runs via a development build (`expo run:android` or EAS dev build) — not Expo Go.
-- Android only; no iOS/Web builds in the MVP.
+- Stack: React Native + TypeScript + Expo + Expo Router + Expo SQLite + Drizzle ORM + Zustand + React Hook Form + Zod; AI providers: **Gemini + DeepSeek with user-supplied API keys (BYOK)**; Argon2id (`hash-wasm` — pure WASM, no native module) for local login.
+- **iOS + Android** in the MVP; web stays out of scope.
+- Local login hashing is pure WASM (`hash-wasm` Argon2id): the app runs in **Expo Go** on both platforms; development builds are optional (native tooling only).
 - No backend, cloud sync, or third-party BaaS.
 - Do not add features beyond this PRD unless required by the specified functionality.
 
 ## 11. Acceptance Criteria (Definition of Done)
 
-The MVP is complete when a user can, on Android, fully offline (except AI actions):
+The MVP is complete when a user can, on Android **or iOS**, fully offline (except AI actions):
 
 1. Open the app and land on a correct dashboard.
 2. Create/select an account (with initial balance).

@@ -11,7 +11,7 @@
 
 ## 1. Overview & Principles
 
-Android-only, local-first React Native (Expo) app. A four-layer separation of concerns, per the spec:
+Android-first → now **iOS + Android** (rev. 2026-09-01, A16), local-first React Native (Expo) app. A four-layer separation of concerns, per the spec:
 
 ```
 Screen                     ->  AIService -> GeminiProvider -> Gemini API
@@ -181,10 +181,10 @@ interface AIService {
 
 ## 12. Security Boundaries
 
-- Single-user-per-session local auth: Argon2id (`react-native-argon2`, time=2, 64 MiB, par=1, 32-byte salt/hash), per-user random salt; SQLite at rest is unencrypted inside the device sandbox. This is a **local gate, not production auth** — superseded by a future web backend (the user's own AWS auth system applies there).
-- Native module requirement: Argon2id only exists in development builds (`expo run:android` / EAS); Expo Go cannot run it (PRD USR-8).
+- Single-user-per-session local auth: Argon2id (`hash-wasm`, time=2, 64 MiB, par=1, 32-byte salt/hash), per-user random salt; SQLite at rest is unencrypted inside the device sandbox. This is a **local gate, not production auth** — superseded by a future web backend (the user's own AWS auth system applies there).
+- Hashing is pure WASM (`hash-wasm` Argon2id — no native module): **Expo Go works on both platforms**; dev builds only for optional native tooling (amended 2026-09-01, A16; implementation swap session pending — plan 003).
 - Session: current user id in SecureStore; validated at boot; logout clears it.
-- SQLite lives in Android app-private storage.
+- SQLite lives in app-private storage per platform (Android app-private dir; iOS Library/) — same driver (`expo-sqlite`), same schema.
 - Gemini key in SecureStore (obfuscation only — not a real secret store; explicitly documented insecure for distribution).
 - AI actions are explicit user gestures; every request sends only computed aggregates (§9) — never the full expense list with descriptions.
 - No network permissions needed beyond the AI call; everything else offline-capable.
@@ -223,6 +223,7 @@ Dev: `drizzle-kit`, `jest`, `jest-expo`, `typescript`.
 | A13 | Gemini auth (G1, rev. 2026-09-01) | API-key auth (`x-goog-api-key` / `GEMINI_API_KEY`), never OAuth — AQ-format key live-verified 2026-09-01; **no pinned model — discovery only** (catalogs churn: 2.0-flash retired, DeepSeek chat → v4-*) | Confirmed |
 | A14 | AI BYOK (rev. 2026-09-01) | Gemini + DeepSeek providers, user-supplied keys (SecureStore, per local user); test connection; model discovery + manual entry fallback; explicit active provider, **no automatic fallback**; hardcoded endpoints; keys never in SQLite/logs/git | Confirmed |
 | A15 | Account-required (deviation 2026-09-01) | **Manual expenses require an account** (ACC-2 determinism; closes the spent-without-available hole; account deletion stays safe — no unlinked orphans). DB column remains nullable **only** for plan-008 auto-created repayment expenses with no paying account (balance adjustment skipped); form uses last-used default so it costs one tap | Confirmed |
+| A16 | Cross-platform & hasher (2026-09-01) | **iOS + Android** in MVP (web out). Argon2id implementation swapped `react-native-argon2` → **`hash-wasm`** (same Argon2id v1.3 params, A7 intact) → no native module: **Expo Go works**, dev-build constraint removed. `ios.bundleIdentifier` already in app.json. Swap verification: known-vector test + a hash captured from a native build. iOS Keychain note: SecureStore entries survive app reinstall on iOS — handle explicitly in 016 | Confirmed |
 
 Alternatives considered: raw SQL + hand-rolled migration runner (my original recommendation — zero deps, more explicit SQL) and Kysely (typed builder, smaller expo-sqlite ecosystem); user chose Drizzle. Materialized payment rows rejected (A3); Zustand-as-cache rejected (A4); Gemini without SDK (raw fetch) rejected for MVP simplicity.
 

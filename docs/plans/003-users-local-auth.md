@@ -19,7 +19,7 @@ Scope change (user request, 2026-09-01): the PRD originally listed "no authentic
 
 Confirmed decisions (2026-09-01):
 
-- **A7 — Hashing: Argon2id via native module** (`react-native-argon2`), parameters mirroring the user's auth-system: time cost 2, 64 MiB memory, parallelism 1, 32-byte salt & hash. Requires a development build (native module — **Expo Go cannot run it**; use `npx expo run:android` or an EAS dev build).
+- **A7 — Hashing: Argon2id** via `hash-wasm` (pure WASM — **amended 2026-09-01, A16, cross-platform**: replaces `react-native-argon2`; **same algorithm and params**: Argon2id v1.3, time cost 2, 64 MiB memory, parallelism 1, 32-byte salt & hash), so **Expo Go works on both platforms** — no native module, no dev-build requirement. Swap verification (delegated session): a hash produced by the native lib (captured from the emulator) must verify under hash-wasm, plus a known-vector test.
 - **A8 — Session: auto-login across launches; explicit logout.** Current user id in `expo-secure-store`; boot validates the id still exists.
 - **A9 — Password policy: none.** Any non-empty password; the seeded `1234` is a deliberate exception (test convenience).
 - **A10 — Data scoping: user-scoped financial data, global categories.** `user_id` FK on accounts/expenses/budgets/commitments/commitment_payments; the 12 default categories are a global seed shared by all local users.
@@ -96,7 +96,7 @@ Consumes 002's `users` table + `user_id` columns (no new schema here beyond the 
 - **Duplicate email**: UNIQUE violation → friendly register error.
 - **Case sensitivity**: emails stored/compared NOCASE (foo@x.com == Foo@x.com).
 - **First-run order**: migrations → category seed → user seed → gate → login. If the user seed fails (hasher error), show the retry screen (same path as migration failure).
-- **Expo Go**: native module unavailable → app must be run via development build; document in README and show a clear error if the module fails to load.
+- **Expo Go**: works (hash-wasm, no native module — amended 2026-09-01); update the README accordingly.
 - **Hashing latency**: 2-iter/64MiB Argon2id is ~tens of ms — acceptable; UI shows a busy state on login/register.
 - **Two users on one device**: switching = logout → login as other user; data separation verified by tests.
 

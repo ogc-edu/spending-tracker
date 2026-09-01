@@ -16,11 +16,13 @@ The system is decomposed into **16 independently implementable features**, follo
 
 ## 1. Feature Decomposition
 
+**Platform: Android + iOS** (decision 2026-09-01 — web stays out; see PRD §10 / ARCH A16).
+
 | ID | Name | Goal | Dependencies | Key outputs | Acceptance criteria (summary) |
 |---|---|---|---|---|---|
 | 001 | Project Setup & Navigation | Scaffold Expo + TypeScript; six-tab navigation; theme; Jest/ESLint/typecheck | — | Expo app, router tabs, theme tokens, tooling | Builds; 6 tabs navigate; `npm test/lint/typecheck` green |
 | 002 | Database Schema & Migrations | Drizzle + expo-sqlite; **7 tables incl. `users` + `user_id` FKs**; migrations + seed (categories) | 001 | `src/db/*`, drizzle migrations, seeded schema | Fresh install → schema; migrations idempotent; failure → retry screen |
-| 003 | Users & Local Auth | Register/login/logout; **Argon2id** hashing; auto-login session; seeded default user; auth gate; user-scoped data | 002 | AuthService, hasher, login/register screens, user seed | Default user logs in; register/logout flows; data isolated per user; gate enforced |
+| 003 | Users & Local Auth | Register/login/logout; **Argon2id** hashing (hash-wasm/WASM — A16); auto-login session; seeded default user; auth gate; user-scoped data | 002 | AuthService, hasher, login/register screens, user seed | Default user logs in; register/logout flows; data isolated per user; gate enforced |
 | 004 | Categories & Accounts | Accounts CRUD (incl. credit-card owed semantics); categories queryable; `sumBalances` primitive | 002, 003 | AccountService/Repository, accounts UI | Create/list accounts; credit shows Owed; delete blocked when referenced |
 | 005 | Expense CRUD | Add/edit/delete expenses; Zod forms; fast-entry; account-balance auto-adjust; engine monthly/category totals; E7 linked-expense locks | 002, 003, 004 | ExpenseService, forms, engine totals | Record in ≤3 taps; edits keep same row; balances/totals exact |
 | 006 | Expense History & Filters | Chronological list, detail, search, category filter, date-range, period totals | 005 | Query/sum repositories, history UI | Filters compose; totals match engine; empty states |
@@ -33,7 +35,7 @@ The system is decomposed into **16 independently implementable features**, follo
 | 013 | AI Providers (BYOK) | Provider configuration: Gemini + DeepSeek keys (per-user SecureStore), Test Connection, model discovery + selection, active provider | 012 | Gemini/DeepSeek providers, config UI | No keys in DB/logs/git; discovery-only models; explicit active provider, no fallback |
 | 014 | AI Spending Analysis | "Analyze my spending" action via the active provider | 012, 013, 011 | Spending-analysis UI | Same hygiene rules as 013 |
 | 015 | Cash-Flow Explanation | "Explain my allowance" on Dashboard via the active provider | 012, 013, 010 | Allowance-explanation UI | Explains snapshot; no new numbers |
-| 016 | Polish & Hardening | Empty states, validation edge cases, toasts, deficit polish, offline verification, QA | 010, 011, 013, 014, 015 | Polished app | PRD DoD §11 items 1–17 verifiable offline (except AI) |
+| 016 | Polish & Hardening | Empty states, validation edge cases, toasts, deficit polish, offline verification, **iOS parity pass** (A16), QA | 010, 011, 013, 014, 015 | Polished app (Android + iOS) | PRD DoD §11 items 1–17 verifiable offline (except AI) |
 
 ## 2. Dependency Graph
 
