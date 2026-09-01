@@ -222,6 +222,7 @@ Dev: `drizzle-kit`, `jest`, `jest-expo`, `typescript`.
 | A12 | Commitment soft-delete (C1) | Archive via `archived_at` (hidden from lists/upcoming/analytics, restorable); hard delete only for zero-payment commitments | Confirmed |
 | A13 | Gemini auth (G1, rev. 2026-09-01) | API-key auth (`x-goog-api-key` / `GEMINI_API_KEY`), never OAuth — AQ-format key live-verified 2026-09-01; **no pinned model — discovery only** (catalogs churn: 2.0-flash retired, DeepSeek chat → v4-*) | Confirmed |
 | A14 | AI BYOK (rev. 2026-09-01) | Gemini + DeepSeek providers, user-supplied keys (SecureStore, per local user); test connection; model discovery + manual entry fallback; explicit active provider, **no automatic fallback**; hardcoded endpoints; keys never in SQLite/logs/git | Confirmed |
+| A15 | Account-required (deviation 2026-09-01) | **Manual expenses require an account** (ACC-2 determinism; closes the spent-without-available hole; account deletion stays safe — no unlinked orphans). DB column remains nullable **only** for plan-008 auto-created repayment expenses with no paying account (balance adjustment skipped); form uses last-used default so it costs one tap | Confirmed |
 
 Alternatives considered: raw SQL + hand-rolled migration runner (my original recommendation — zero deps, more explicit SQL) and Kysely (typed builder, smaller expo-sqlite ecosystem); user chose Drizzle. Materialized payment rows rejected (A3); Zustand-as-cache rejected (A4); Gemini without SDK (raw fetch) rejected for MVP simplicity.
 

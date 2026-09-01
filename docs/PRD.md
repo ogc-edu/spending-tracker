@@ -97,7 +97,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 
 | ID | Requirement |
 |---|---|
-| EXP-1 | Add expense: amount, category, description, date, account (optional). Amount in sen (integer), validated by Zod. |
+| EXP-1 | Add expense: amount, category, description, date, **account (required — approved deviation 2026-09-01; nullable only for auto-created commitment-repayment expenses, plan 008)**. Amount in sen (integer), validated by Zod. |
 | EXP-2 | Edit an expense (updates the same transaction — never silently duplicates), adjusting the linked account balance deterministically. |
 | EXP-3 | Delete an expense (adjusts the linked account balance). |
 | EXP-4 | Expense history, chronological (newest first), with detail view. |

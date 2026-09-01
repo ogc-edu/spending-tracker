@@ -19,7 +19,7 @@ The app's core loop — "record lunch in a few seconds" — and the double-count
 
 ## Requirements
 
-- **Add expense**: amount (sen), category (from the 12 seeds), description (optional, ≤200 chars), date (default today), account (optional, last-used default). Zod-validated; money via `parseMoneyToSen` (004).
+- **Add expense**: amount (sen), category (from the 12 seeds), description (optional, ≤200 chars), date (default today), **account (required for manual entries** — deviation 2026-09-01, see Decisions; last-used default). Zod-validated; money via `parseMoneyToSen` (004).
 - **Edit expense**: same form; updates the existing row; balance adjustments compute the delta against the old values (see Technical Design).
 - **Delete expense**: removes the row and reverses its balance effect.
 - **Linked-expense (D3) handling on edit/delete**: expenses auto-created from commitment payments carry `commitment_payment_id` and are **read-only in the expense UI** — edit and delete are blocked with a hint ("un-pay this payment in Commitments"). Decision **E7 (confirmed): block** — the linked expense is removed only by un-paying the commitment payment (Commitments flow, plan 007); this keeps the expense set and payment set consistent (PRD §8.3).
@@ -46,7 +46,7 @@ delete(id)     → txn { if linked (E7, see Decisions); adjust(account, +amount)
 
 - `src/components/ExpenseForm.tsx` (RHF + Zod schema shared with the service: `ExpenseFormSchema`).
 - `app/expenses/new.tsx` — create; `app/expenses/[id]/edit.tsx` — edit (route from detail, 005).
-- Category picker: chips/grid from `CategoryRepository`; account picker: `AccountRepository.list()` + "None" option (form shows current balance per account, and the projected balance after save).
+- Category picker: chips/grid from `CategoryRepository`; account picker: `AccountRepository.list()` — **no "None" option for manual entries** (decision: account required, last-used default; projected balance after save shown). The DB column stays nullable solely for plan-008 auto-created repayment expenses (no paying account chosen), where balance adjustment is skipped (008).
 - Save button disables while pending (double-submit guard).
 
 ### Engine additions (`src/engine/`)
