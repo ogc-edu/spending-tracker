@@ -11,12 +11,14 @@ import { DrizzleBudgetRepository } from '@/repositories/drizzle/budgetRepository
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
 import { DrizzleCommitmentRepository } from '@/repositories/drizzle/commitmentRepository';
 import { DrizzleExpenseRepository } from '@/repositories/drizzle/expenseRepository';
+import { DrizzleSettingsRepository } from '@/repositories/drizzle/settingsRepository';
 import type {
   AccountRepository,
   BudgetRepository,
   CategoryRepository,
   CommitmentRepository,
   ExpenseRepository,
+  SettingsRepository,
 } from '@/repositories/types';
 
 export interface Repositories {
@@ -25,6 +27,7 @@ export interface Repositories {
   expenses: ExpenseRepository;
   budgets: BudgetRepository;
   commitments: CommitmentRepository;
+  settings: SettingsRepository;
 }
 
 /** Repositories bound to the initialized app DB. Throws if initDb() hasn't resolved. */
@@ -36,5 +39,6 @@ export function repositories(): Repositories {
     expenses: new DrizzleExpenseRepository(db as unknown as never),
     budgets: new DrizzleBudgetRepository(db as unknown as never),
     commitments: new DrizzleCommitmentRepository(db as unknown as never),
+    settings: new DrizzleSettingsRepository(db as unknown as never),
   };
 }

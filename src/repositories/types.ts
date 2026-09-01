@@ -5,7 +5,16 @@
  * the current user's id, so a repository can never read another user's rows.
  */
 
-import type { Account, Budget, Category, Commitment, CommitmentPayment, Expense, User } from '@/db/schema';
+import type {
+  Account,
+  Budget,
+  Category,
+  Commitment,
+  CommitmentPayment,
+  Expense,
+  Settings,
+  User,
+} from '@/db/schema';
 
 export interface UserRepository {
   /**
@@ -333,7 +342,7 @@ export interface CommitmentRepository {
   list(userId: number): Promise<Commitment[]>;
   /** Archived commitments (C1), newest first — restore entry point. */
   listArchived(userId: number): Promise<Commitment[]>;
-  /** EVERY paid record for the user, oldest first (upcoming + progress inputs). */
+  /** Every paid record for the user, oldest first (upcoming + progress inputs). */
   paidPayments(userId: number): Promise<CommitmentPayment[]>;
   /** Paid records of one commitment, oldest first (detail schedule rows). */
   paymentsForCommitment(userId: number, commitmentId: number): Promise<CommitmentPayment[]>;
@@ -343,4 +352,28 @@ export interface CommitmentRepository {
    */
   expensesForCommitment(userId: number, commitmentId: number): Promise<Expense[]>;
   transaction<T>(fn: (tx: CommitmentTx) => T): Promise<T>;
+}
+
+/* ── Plan 010: Settings ──────────────────────────────────────────────────── */
+
+/**
+ * SettingsRepository (plan 010 / PRD SET-1) — user preferences, NEVER secrets
+ * (AI keys live in SecureStore, plan 013; only provider/model selections and
+ * the cash-flow buffer persist here). The `settings` table is single-row per
+ * user (PK = user_id) and already exists in migration 0000 — this plan only
+ * adds the repository + service on top of it.
+ *
+ * Missing-row semantics: the DEFAULT safety buffer (RM300 = 30000 sen, the
+ * committed column default) applies until the user first writes a setting —
+ * buffer() never returns null, so CashFlowService can feed it straight into
+ * the engine.
+ */
+export interface SettingsRepository {
+  /**
+   * The user's safety-buffer sen value, or the 30000 default when no row
+   * exists yet (SET-1 / plan 010).
+   */
+  buffer(userId: number): Promise<number>;
+  /** Insert or REPLACE the user's settings row (PK = user_id). Returns the row. */
+  setBuffer(userId: number, safetyBufferSen: number): Promise<Settings>;
 }
