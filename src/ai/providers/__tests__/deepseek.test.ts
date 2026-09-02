@@ -9,6 +9,7 @@ import { describe, expect, it } from '@jest/globals';
 import { createDeepseekProvider } from '../deepseek';
 import { AIUnavailableError } from '../../errors';
 import type { AIAnalyzeRequest } from '../../types';
+import { RequestCancelledError, type FetchLike } from '../http';
 import { bodyOf, mockFetch, type MockCall } from './mockFetch';
 
 const DEEPSEEK_BASE = 'https://api.deepseek.com';
@@ -125,6 +126,38 @@ describe('DeepSeekProvider.testConnection (AI-7 — minimal real request)', () =
     expect(calls).toHaveLength(3);
     // deepseek-v4-flash 404'd → the next suitable model (pro) is tested.
     expect((bodyOf(calls[2]!) as { model: string }).model).toBe('deepseek-v4-pro');
+  });
+
+  it('aborting the signal rejects with RequestCancelledError and stops the loop', async () => {
+    const controller = new AbortController();
+    const urls: string[] = [];
+    const fetchImpl: FetchLike = async (url, init) => {
+      urls.push(url);
+      if (url.endsWith('/models')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(MODELS_BODY),
+        } as unknown as Response;
+      }
+      // chat/completions hangs until OUR signal aborts it.
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        );
+      });
+    };
+    const provider = createDeepseekProvider(fetchImpl);
+
+    const pending = provider
+      .testConnection(KEY, { signal: controller.signal })
+      .catch((err) => err);
+    await new Promise((r) => setTimeout(r, 0));
+    controller.abort();
+    const err = await pending;
+
+    expect(err).toBeInstanceOf(RequestCancelledError);
+    expect(urls).toHaveLength(2); // discovery + ONLY the first model attempt
   });
 });
 

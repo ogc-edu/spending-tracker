@@ -12,7 +12,8 @@
 import { describe, expect, it } from '@jest/globals';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { AiConfigService } from '@/services/AiConfigService';
-import type { TestResult } from '@/ai/types';
+import type { TestResult, TestStep } from '@/ai/types';
+import { RequestCancelledError } from '@/ai/providers/http';
 import {
   InMemorySecureStore,
   InMemorySettingsRepository,
@@ -330,5 +331,46 @@ describe('ProviderConfigScreen — state flows', () => {
     expect(hasTestID(tree.root, 'ai-model-option-gemini-3.6-flash')).toBe(true);
     await press(tree, 'ai-model-option-gemini-2.5-pro');
     expect(await config.getModelId('gemini')).toBe('gemini-2.5-pro');
+  });
+
+  it('shows live steps while testing and a Stop button that aborts the test', async () => {
+    const { config } = makeConfig();
+    // A test that never resolves on its own — only the Stop abort settles it.
+    const tree = await render(
+      <ProviderConfigScreen
+        provider="gemini"
+        config={config}
+        service={{
+          testConnection: (_provider, _key, options?: { signal?: AbortSignal; onStep?: (s: TestStep) => void }) =>
+            new Promise<TestResult>((_resolve, reject) => {
+              options?.onStep?.({ phase: 'discovering' });
+              options?.onStep?.({ phase: 'testing', modelId: 'gemini-3.6-flash' });
+              options?.signal?.addEventListener(
+                'abort',
+                () => reject(new RequestCancelledError()),
+                { once: true },
+              );
+            }),
+          listModels: async () => [],
+        }}
+      />,
+    );
+
+    await changeText(tree, 'ai-key-input', RAW_KEY);
+    await press(tree, 'ai-test-button');
+    await act(async () => {});
+
+    // Live progress: the current step is rendered while the test runs…
+    expect(hasTestID(tree.root, 'ai-test-step')).toBe(true);
+    expect(textOf(tree.root, 'ai-test-step')).toContain('Testing gemini-3.6-flash');
+    // …and a Stop button appears next to Test.
+    expect(hasTestID(tree.root, 'ai-stop-test-button')).toBe(true);
+
+    await press(tree, 'ai-stop-test-button');
+    await act(async () => {});
+
+    expect(textOf(tree.root, 'ai-test-stopped')).toBe('Connection test stopped.');
+    expect(hasTestID(tree.root, 'ai-stop-test-button')).toBe(false);
+    expect(resultBadges(tree.root)).toHaveLength(0); // no failure badge for a stop
   });
 });

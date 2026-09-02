@@ -7,7 +7,8 @@
 import { describe, expect, it } from '@jest/globals';
 import { createGeminiProvider } from '../gemini';
 import { AIUnavailableError } from '../../errors';
-import type { AIAnalyzeRequest } from '../../types';
+import type { AIAnalyzeRequest, TestStep } from '../../types';
+import { RequestCancelledError, type FetchLike } from '../http';
 import { bodyOf, mockFetch } from './mockFetch';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -182,6 +183,59 @@ describe('GeminiProvider.testConnection (AI-7 — minimal real request)', () => 
       reason: 'invalidKey',
     });
     expect(calls).toHaveLength(2); // discovery + ONE generate attempt
+  });
+
+  it('reports live progress: discovering → testing → unavailable-skip → testing → ok', async () => {
+    const { fetchImpl } = mockFetch(
+      { json: DISCOVERY_BODY },
+      { status: 404, json: { error: {} } },
+      { json: { candidates: [] } },
+    );
+    const steps: TestStep[] = [];
+    const provider = createGeminiProvider(fetchImpl);
+
+    await expect(
+      provider.testConnection(KEY, { onStep: (step) => steps.push(step) }),
+    ).resolves.toEqual({ ok: true });
+
+    expect(steps).toEqual([
+      { phase: 'discovering' },
+      { phase: 'testing', modelId: 'gemini-2.5-pro' },
+      { phase: 'unavailable', modelId: 'gemini-2.5-pro' },
+      { phase: 'testing', modelId: 'gemini-3.6-flash' },
+    ]);
+  });
+
+  it('aborting the signal rejects with RequestCancelledError and stops the loop', async () => {
+    const controller = new AbortController();
+    const urls: string[] = [];
+    const fetchImpl: FetchLike = async (url, init) => {
+      urls.push(url);
+      if (url.includes('/models') && !url.includes(':generateContent')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(DISCOVERY_BODY),
+        } as unknown as Response;
+      }
+      // Model generate calls hang until OUR signal aborts them.
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        );
+      });
+    };
+    const provider = createGeminiProvider(fetchImpl);
+
+    const pending = provider
+      .testConnection(KEY, { signal: controller.signal })
+      .catch((err) => err);
+    await new Promise((r) => setTimeout(r, 0));
+    controller.abort();
+    const err = await pending;
+
+    expect(err).toBeInstanceOf(RequestCancelledError);
+    expect(urls).toHaveLength(2); // discovery + ONLY the first model attempt
   });
 });
 

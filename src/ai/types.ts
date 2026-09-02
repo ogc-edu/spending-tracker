@@ -149,6 +149,27 @@ export interface ModelInfo {
   label?: string;
 }
 
+/* ------------------------------------------------------------------ *
+ * Plan 013 — Test Connection UX: live progress + cancellation (Stop).
+ * ------------------------------------------------------------------ */
+
+/** One live step of a running Test Connection, rendered by the config UI. */
+export type TestStep =
+  | { phase: 'discovering' }
+  | { phase: 'testing'; modelId: string }
+  | { phase: 'unavailable'; modelId: string };
+
+/** Options for `AIProvider.testConnection` (and the facade passthrough). */
+export interface TestOptions {
+  /**
+   * Abort the in-flight test. The provider rejects with RequestCancelledError
+   * (never a TestResult) so the UI can distinguish Stop from a real failure.
+   */
+  signal?: AbortSignal;
+  /** Live progress — called once per attempted model / discovery phase. */
+  onStep?: (step: TestStep) => void;
+}
+
 /**
  * Implemented by every provider. The facade dispatches to the ACTIVE provider
  * only. Providers own their credentials (BYOK, plan 013); keys never touch the
@@ -163,8 +184,10 @@ export interface AIProvider {
   /**
    * Minimal real request (AI-7): the first discovered suitable model. Returns
    * a typed TestResult rather than throwing — the config UI renders it inline.
+   * Options add live progress (which model is being tested / skipped) and
+   * cancellation (rejects with RequestCancelledError on abort).
    */
-  testConnection(key: string): Promise<TestResult>;
+  testConnection(key: string, options?: TestOptions): Promise<TestResult>;
   /**
    * Official listing filtered to text-generation models suitable for financial
    * analysis (AI-8); no hardcoded model lists anywhere. Throws a typed

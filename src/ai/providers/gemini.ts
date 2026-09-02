@@ -18,8 +18,8 @@
  * never logged, committed, or included in errors.
  */
 import { AIUnavailableError, fromHttpStatus, fromInvalidResponse, fromNetworkError, fromTimeoutError, fromUnknown } from '../errors';
-import type { AIAnalyzeRequest, AIProvider, ModelInfo, TestResult } from '../types';
-import { HttpError, NetworkError, TimeoutError, requestJson, testResultFromError, type FetchLike } from './http';
+import type { AIAnalyzeRequest, AIProvider, ModelInfo, TestOptions, TestResult } from '../types';
+import { HttpError, NetworkError, RequestCancelledError, TimeoutError, requestJson, testResultFromError, type FetchLike } from './http';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -50,13 +50,14 @@ export class GeminiProvider implements AIProvider {
   ) {}
 
   /** GET /models → text-generation models, sorted by id (discovery only). */
-  async listModels(key: string): Promise<ModelInfo[]> {
+  async listModels(key: string, signal?: AbortSignal): Promise<ModelInfo[]> {
     const body = await this.guarded(
       requestJson(
         this.fetchImpl,
         `${GEMINI_BASE}/models`,
         { headers: { 'x-goog-api-key': key } },
         this.shortTimeoutMs,
+        signal,
       ),
     );
     const models = (body as { models?: { name?: string; supportedGenerationMethods?: string[] }[] })
@@ -89,25 +90,31 @@ export class GeminiProvider implements AIProvider {
    * model-level rejections — skip to the next suitable model. 401/403/429 and
    * network/timeout failures are key/account-level and stop immediately.
    */
-  async testConnection(key: string): Promise<TestResult> {
+  async testConnection(key: string, options?: TestOptions): Promise<TestResult> {
     let models: ModelInfo[];
     try {
-      models = await this.listModels(key);
+      options?.onStep?.({ phase: 'discovering' });
+      models = await this.listModels(key, options?.signal);
     } catch (err) {
+      if (err instanceof RequestCancelledError) throw err;
       return testResultFromError(err);
     }
     if (models.length === 0) return { ok: false, reason: 'modelUnavailable' };
 
     for (const model of models) {
+      options?.onStep?.({ phase: 'testing', modelId: model.id });
       try {
         await this.generateContent(key, model.id, {
           contents: [{ parts: [{ text: 'ok' }] }],
           generationConfig: { maxOutputTokens: 1 },
-        });
+        }, options?.signal);
         return { ok: true };
       } catch (err) {
+        if (err instanceof RequestCancelledError) throw err;
         if (err instanceof HttpError && (err.status === 400 || err.status === 404)) {
-          continue; // model-level rejection — try the next discovered model
+          // Model-level rejection — report it live, try the next discovered model.
+          options?.onStep?.({ phase: 'unavailable', modelId: model.id });
+          continue;
         }
         return testResultFromError(err);
       }
@@ -145,6 +152,7 @@ export class GeminiProvider implements AIProvider {
     key: string,
     modelId: string,
     payload: unknown,
+    signal?: AbortSignal,
   ): Promise<unknown> {
     return requestJson(
       this.fetchImpl,
@@ -158,14 +166,16 @@ export class GeminiProvider implements AIProvider {
         body: JSON.stringify(payload),
       },
       this.generateTimeoutMs,
+      signal,
     );
   }
 
-  /** Map transport/HTTP failures to the 012 typed taxonomy (AI-4). */
+  /** Map transport/HTTP failures to the 012 typed taxonomy (AI-4); cancellations pass through. */
   private async guarded<T>(promise: Promise<T>): Promise<T> {
     try {
       return await promise;
     } catch (err) {
+      if (err instanceof RequestCancelledError) throw err;
       if (err instanceof HttpError) throw fromHttpStatus(err.status);
       if (err instanceof TimeoutError) throw fromTimeoutError(err);
       if (err instanceof NetworkError) throw fromNetworkError(err);

@@ -29,6 +29,7 @@ import type {
   AIProviderName,
   AIResult,
   ModelInfo,
+  TestOptions,
   TestResult,
 } from './types';
 
@@ -88,7 +89,11 @@ export interface AIService {
   /** The ACTIVE provider including the persisted config choice (null = none configured). */
   getActiveProvider(): Promise<AIProviderName | null>;
   /** Minimal auth/connectivity check against a named provider (AI-7). */
-  testConnection(provider: AIProviderName, key: string): Promise<TestResult>;
+  testConnection(
+    provider: AIProviderName,
+    key: string,
+    options?: TestOptions,
+  ): Promise<TestResult>;
   /** Discovered text-generation models for a named provider (AI-8). */
   listModels(provider: AIProviderName, key: string): Promise<ModelInfo[]>;
   /** Dispatch an analysis to the active provider, returning a validated AIResult. */
@@ -148,8 +153,12 @@ export function createAIService(
       return active;
     },
 
-    async testConnection(provider: AIProviderName, key: string): Promise<TestResult> {
-      return providers[provider].testConnection(key);
+    async testConnection(
+      provider: AIProviderName,
+      key: string,
+      options?: TestOptions,
+    ): Promise<TestResult> {
+      return providers[provider].testConnection(key, options);
     },
 
     async listModels(provider: AIProviderName, key: string): Promise<ModelInfo[]> {

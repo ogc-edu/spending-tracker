@@ -20,8 +20,8 @@
  *    central Zod validation.
  */
 import { AIUnavailableError, fromHttpStatus, fromInvalidResponse, fromNetworkError, fromTimeoutError, fromUnknown } from '../errors';
-import type { AIAnalyzeRequest, AIProvider, ModelInfo, TestResult } from '../types';
-import { HttpError, NetworkError, TimeoutError, extractJson, requestJson, stripFence, testResultFromError, type FetchLike } from './http';
+import type { AIAnalyzeRequest, AIProvider, ModelInfo, TestOptions, TestResult } from '../types';
+import { HttpError, NetworkError, RequestCancelledError, TimeoutError, extractJson, requestJson, stripFence, testResultFromError, type FetchLike } from './http';
 
 const DEEPSEEK_BASE = 'https://api.deepseek.com';
 
@@ -45,13 +45,14 @@ export class DeepSeekProvider implements AIProvider {
   ) {}
 
   /** GET /models → text models (non-vision), used verbatim (plan §Technical Design). */
-  async listModels(key: string): Promise<ModelInfo[]> {
+  async listModels(key: string, signal?: AbortSignal): Promise<ModelInfo[]> {
     const body = await this.guarded(
       requestJson(
         this.fetchImpl,
         `${DEEPSEEK_BASE}/models`,
         { headers: { authorization: `Bearer ${key}` } },
         this.shortTimeoutMs,
+        signal,
       ),
     );
     const data = (body as { data?: { id?: string }[] })?.data;
@@ -65,27 +66,34 @@ export class DeepSeekProvider implements AIProvider {
   }
 
   /** Minimal real request on the FIRST model that accepts one (AI-7). */
-  async testConnection(key: string): Promise<TestResult> {
+  async testConnection(key: string, options?: TestOptions): Promise<TestResult> {
     let models: ModelInfo[];
     try {
-      models = await this.listModels(key);
+      options?.onStep?.({ phase: 'discovering' });
+      models = await this.listModels(key, options?.signal);
     } catch (err) {
+      if (err instanceof RequestCancelledError) throw err;
       return testResultFromError(err);
     }
     if (models.length === 0) return { ok: false, reason: 'modelUnavailable' };
 
     for (const model of models) {
+      options?.onStep?.({ phase: 'testing', modelId: model.id });
       try {
         await this.chatCompletions(key, {
           model: model.id,
           messages: [{ role: 'user', content: 'ping' }],
           max_tokens: 1,
-        });
+        }, options?.signal);
         return { ok: true };
       } catch (err) {
+        if (err instanceof RequestCancelledError) throw err;
         // A retired/unknown model id is a model-level rejection (404) — try
         // the next discovered model; auth/quota/network stop immediately.
-        if (err instanceof HttpError && err.status === 404) continue;
+        if (err instanceof HttpError && err.status === 404) {
+          options?.onStep?.({ phase: 'unavailable', modelId: model.id });
+          continue;
+        }
         return testResultFromError(err);
       }
     }
@@ -164,7 +172,7 @@ export class DeepSeekProvider implements AIProvider {
   }
 
   /** POST /chat/completions — throws classified errors. */
-  private async chatCompletions(key: string, payload: unknown): Promise<unknown> {
+  private async chatCompletions(key: string, payload: unknown, signal?: AbortSignal): Promise<unknown> {
     return requestJson(
       this.fetchImpl,
       `${DEEPSEEK_BASE}/chat/completions`,
@@ -177,14 +185,16 @@ export class DeepSeekProvider implements AIProvider {
         body: JSON.stringify(payload),
       },
       this.generateTimeoutMs,
+      signal,
     );
   }
 
-  /** Map transport/HTTP failures to the 012 typed taxonomy (AI-4). */
+  /** Map transport/HTTP failures to the 012 typed taxonomy (AI-4); cancellations pass through. */
   private async guarded<T>(promise: Promise<T>): Promise<T> {
     try {
       return await promise;
     } catch (err) {
+      if (err instanceof RequestCancelledError) throw err;
       if (err instanceof HttpError) throw fromHttpStatus(err.status);
       if (err instanceof TimeoutError) throw fromTimeoutError(err);
       if (err instanceof NetworkError) throw fromNetworkError(err);

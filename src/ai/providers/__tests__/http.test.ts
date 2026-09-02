@@ -6,6 +6,7 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import {
   NetworkError,
+  RequestCancelledError,
   TimeoutError,
   extractJson,
   parseModelJson,
@@ -117,5 +118,36 @@ describe('requestJson', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('rejects with RequestCancelledError when the external signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const { fetchImpl, calls } = mockFetch({ json: { ok: true } });
+    await expect(
+      requestJson(fetchImpl, 'https://example.test/x', {}, 5_000, controller.signal),
+    ).rejects.toBeInstanceOf(RequestCancelledError);
+    expect(calls).toHaveLength(0); // never reaches the network
+  });
+
+  it('rejects with RequestCancelledError (not TimeoutError) when the signal aborts mid-flight', async () => {
+    const controller = new AbortController();
+    const fetchImpl: Parameters<typeof requestJson>[0] = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        );
+      });
+    const pending = requestJson(
+      fetchImpl,
+      'https://example.test/x',
+      {},
+      60_000,
+      controller.signal,
+    ).catch((e) => e);
+    await new Promise((r) => setTimeout(r, 0));
+    controller.abort();
+    const err = await pending;
+    expect(err).toBeInstanceOf(RequestCancelledError);
   });
 });

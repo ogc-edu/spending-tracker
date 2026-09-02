@@ -4,7 +4,15 @@
  * so provider config (013) and the analysis UIs (013-015) are testable in
  * Jest without any network.
  */
-import type { AIAnalyzeRequest, AIErrorReason, AIProvider, ModelInfo, TestResult } from '../types';
+import type {
+  AIAnalyzeRequest,
+  AIErrorReason,
+  AIProvider,
+  ModelInfo,
+  TestOptions,
+  TestResult,
+} from '../types';
+import { RequestCancelledError } from './http';
 import { AIUnavailableError } from '../errors';
 
 /** Canned outcome configuration. Success is the default. */
@@ -59,9 +67,23 @@ export class FakeProvider implements AIProvider {
     throw new AIUnavailableError(this.failure.reason, 'FakeProvider failure');
   }
 
-  async testConnection(_key: string): Promise<TestResult> {
-    if (this.failure.kind === 'fail') return fakeTestResult(this.failure.reason);
-    return { ok: true };
+  async testConnection(_key: string, options?: TestOptions): Promise<TestResult> {
+    options?.onStep?.({ phase: 'discovering' });
+    options?.onStep?.({ phase: 'testing', modelId: 'fake-text-model' });
+    const result: TestResult =
+      this.failure.kind === 'fail' ? fakeTestResult(this.failure.reason) : { ok: true };
+    if (!options?.signal) return result;
+    if (options.signal.aborted) throw new RequestCancelledError();
+    // Reject if the caller aborts after this double resolved — a Stop pressed
+    // between dispatch and resolution still surfaces as cancellation.
+    return new Promise<TestResult>((resolve, reject) => {
+      options.signal!.addEventListener(
+        'abort',
+        () => reject(new RequestCancelledError()),
+        { once: true },
+      );
+      resolve(result);
+    });
   }
 
   async listModels(_key: string): Promise<ModelInfo[]> {

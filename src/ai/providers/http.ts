@@ -30,6 +30,18 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * The caller aborted the request (Stop button, plan 013 UX). Distinct from
+ * TimeoutError so providers can propagate cancellation unmapped — a cancelled
+ * test must NOT surface as a TestResult failure.
+ */
+export class RequestCancelledError extends Error {
+  constructor() {
+    super('Request cancelled');
+    this.name = 'RequestCancelledError';
+  }
+}
+
 /** The request was aborted by our timeout. */
 export class TimeoutError extends Error {
   constructor() {
@@ -50,20 +62,32 @@ export class NetworkError extends Error {
  * Perform one provider REST call. Resolves with the parsed JSON body (or null
  * for an empty body), throws HttpError / TimeoutError / NetworkError on any
  * failure. `init.body` must already be a JSON string.
+ *
+ * `externalSignal` (optional) lets the caller abort an in-flight request
+ * (Settings Stop button): aborting it rejects with RequestCancelledError and
+ * wins over the internal timeout.
  */
 export async function requestJson(
   fetchImpl: FetchLike,
   url: string,
   init: RequestInit,
   timeoutMs: number,
+  externalSignal?: AbortSignal,
 ): Promise<unknown> {
   const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) throw new RequestCancelledError();
+    externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+  }
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     let res: Response;
     try {
       res = await fetchImpl(url, { ...init, signal: controller.signal });
     } catch (err) {
+      // External cancel wins over the timeout classification.
+      if (externalSignal?.aborted) throw new RequestCancelledError();
       // AbortError (native or RN) means OUR timer fired — a timeout.
       if (controller.signal.aborted) throw new TimeoutError();
       throw new NetworkError(err);
@@ -83,6 +107,7 @@ export async function requestJson(
     return body;
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 }
 

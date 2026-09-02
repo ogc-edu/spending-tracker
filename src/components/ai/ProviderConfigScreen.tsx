@@ -10,11 +10,11 @@
  * SecureStore on save (plan §Requirements). The stored key is held transiently
  * in memory for test/discovery calls — never rendered, never logged.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { AIService } from '@/ai/AIService';
-import type { ModelInfo, TestResult } from '@/ai/types';
+import type { ModelInfo, TestResult, TestStep } from '@/ai/types';
 import type { AiConfigService, ConfigurableAIProvider } from '@/services/AiConfigService';
 import { colors, spacing, typography } from '@/theme';
 import { maskKeySuffix } from './ProviderRow';
@@ -24,6 +24,18 @@ import { TestResultBadge } from './TestResultBadge';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Human label for a live Test Connection step (why it can take a while). */
+function stepLabel(step: TestStep): string {
+  switch (step.phase) {
+    case 'discovering':
+      return 'Discovering available models…';
+    case 'testing':
+      return `Testing ${step.modelId}…`;
+    case 'unavailable':
+      return `${step.modelId} unavailable — trying next…`;
+  }
 }
 
 export function ProviderConfigScreen({
@@ -42,6 +54,9 @@ export function ProviderConfigScreen({
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
+  const [testStep, setTestStep] = useState<TestStep | null>(null);
+  const [testStopped, setTestStopped] = useState(false);
+  const testAbortRef = useRef<AbortController | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [discoveryFailed, setDiscoveryFailed] = useState(false);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
@@ -108,22 +123,44 @@ export function ProviderConfigScreen({
     };
   }, [config, provider, service]);
 
+  // Abort any in-flight test when leaving the screen (unmount).
+  useEffect(() => () => testAbortRef.current?.abort(), []);
+
   const effectiveKey = keyText.trim() || storedKey;
 
   const runTest = async () => {
     if (!effectiveKey) return;
+    const controller = new AbortController();
+    testAbortRef.current = controller;
     setTesting(true);
     setTestResult(null);
+    setTestStopped(false);
+    setTestStep({ phase: 'discovering' });
     try {
-      const result = await service.testConnection(provider, effectiveKey);
+      const result = await service.testConnection(provider, effectiveKey, {
+        signal: controller.signal,
+        onStep: setTestStep,
+      });
+      if (controller.signal.aborted) return; // stopped — no badge, no discovery
       setTestResult(result);
       if (result.ok) await discover(effectiveKey);
     } catch (error: unknown) {
+      if (controller.signal.aborted) return; // stop already handled in finally
       setTestResult({ ok: false, reason: 'unknown' });
       Alert.alert('Test Connection', errMsg(error));
     } finally {
+      if (controller.signal.aborted) {
+        setTestStep(null);
+        setTestStopped(true);
+      }
       setTesting(false);
+      testAbortRef.current = null;
     }
+  };
+
+  /** Stop the in-flight test: aborts the request and ignores its outcome. */
+  const stopTest = () => {
+    testAbortRef.current?.abort();
   };
 
   const saveKey = async () => {
@@ -251,18 +288,42 @@ export function ProviderConfigScreen({
 
       {/* Test Connection */}
       <Text style={styles.sectionTitle}>Connection</Text>
-      <Pressable
-        onPress={runTest}
-        disabled={!effectiveKey || testing}
-        style={({ pressed }) => [styles.button, styles.buttonOutline, (!effectiveKey || testing) && styles.buttonDisabled, pressed && styles.pressed]}
-        accessibilityRole="button"
-        testID="ai-test-button"
-      >
-        {testing ? <ActivityIndicator size="small" color={colors.accent} /> : null}
-        <Text style={styles.buttonOutlineLabel}>
-          {testing ? 'Testing…' : 'Test Connection'}
+      <View style={styles.buttonRow}>
+        <Pressable
+          onPress={runTest}
+          disabled={!effectiveKey || testing}
+          style={({ pressed }) => [styles.button, styles.buttonOutline, styles.buttonFlex, (!effectiveKey || testing) && styles.buttonDisabled, pressed && styles.pressed]}
+          accessibilityRole="button"
+          testID="ai-test-button"
+        >
+          {testing ? <ActivityIndicator size="small" color={colors.accent} /> : null}
+          <Text style={styles.buttonOutlineLabel}>
+            {testing ? 'Testing…' : 'Test Connection'}
+          </Text>
+        </Pressable>
+        {testing ? (
+          <Pressable
+            onPress={stopTest}
+            style={({ pressed }) => [styles.button, styles.buttonStop, pressed && styles.pressed]}
+            accessibilityRole="button"
+            testID="ai-stop-test-button"
+          >
+            <Ionicons name="stop-circle-outline" size={18} color={colors.danger} />
+            <Text style={styles.buttonStopLabel}>Stop</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {testing && testStep ? (
+        <View style={styles.stepRow} testID="ai-test-step">
+          <View style={styles.stepDot} />
+          <Text style={styles.stepText}>{stepLabel(testStep)}</Text>
+        </View>
+      ) : null}
+      {testStopped ? (
+        <Text style={styles.stoppedText} testID="ai-test-stopped">
+          Connection test stopped.
         </Text>
-      </Pressable>
+      ) : null}
       {!effectiveKey ? (
         <Text style={styles.note}>Enter a key to test the connection.</Text>
       ) : null}
@@ -321,6 +382,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
   },
+  buttonFlex: { flex: 1 },
+  buttonStop: { borderWidth: 1, borderColor: colors.danger, backgroundColor: colors.surface },
+  buttonStopLabel: { color: colors.danger, fontSize: typography.emphasis, fontWeight: '600' },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+  stepText: { flex: 1, fontSize: typography.caption, color: colors.muted },
+  stoppedText: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md },
   buttonPrimary: { backgroundColor: colors.accent, flex: 1 },
   buttonPrimaryLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
   buttonDanger: { backgroundColor: colors.danger, paddingHorizontal: spacing.md },
