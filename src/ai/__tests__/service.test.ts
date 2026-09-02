@@ -99,6 +99,15 @@ describe('prompt registry', () => {
       expect(req?.systemPrompt).toBe(SYSTEM_PROMPTS[req!.context]);
     }
   });
+
+  it('spending renders amounts in RM: sen → ringgit is the only allowed conversion', () => {
+    // User decision (2026-09-02): the snapshot is integer sen, but the
+    // analysis must present ringgit — the prompt authorizes that one unit
+    // conversion and nothing else.
+    expect(SYSTEM_PROMPTS.spending).toContain('100 sen = RM 1');
+    expect(SYSTEM_PROMPTS.spending).toContain('RM135.50');
+    expect(SYSTEM_PROMPTS.spending).toMatch(/that unit conversion is the only arithmetic/);
+  });
 });
 
 describe('createAIService factory', () => {

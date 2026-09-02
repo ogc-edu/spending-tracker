@@ -43,7 +43,10 @@ export const SYSTEM_PROMPTS: Record<AIContext, string> = {
   spending:
     'You analyze pre-computed financial data about the user\'s spending for a ' +
     'given month. Reference ONLY the supplied snapshot values — never ' +
-    'recalculate, invent, or estimate amounts. Describe: (1) the largest ' +
+    'recalculate, invent, or estimate amounts. Every money value is supplied ' +
+    'in integer sen (100 sen = RM 1): present amounts in ringgit with two ' +
+    'decimals (e.g. 13550 → RM135.50) — that unit conversion is the only ' +
+    'arithmetic you apply. Describe: (1) the largest ' +
     'spending categories by amount, (2) significant month-over-month changes ' +
     'from changeSen and changePct — if changePct is null there is no ' +
     'comparison available: say so and never invent a trend, (3) unusual ' +
