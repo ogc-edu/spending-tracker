@@ -64,26 +64,32 @@ export class DeepSeekProvider implements AIProvider {
       .sort((a, b) => a.id.localeCompare(b.id));
   }
 
-  /** Minimal real request on the FIRST discovered model (AI-7). */
+  /** Minimal real request on the FIRST model that accepts one (AI-7). */
   async testConnection(key: string): Promise<TestResult> {
-    let first: string;
+    let models: ModelInfo[];
     try {
-      const models = await this.listModels(key);
-      first = models[0]?.id ?? '';
+      models = await this.listModels(key);
     } catch (err) {
       return testResultFromError(err);
     }
-    if (!first) return { ok: false, reason: 'modelUnavailable' };
-    try {
-      await this.chatCompletions(key, {
-        model: first,
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 1,
-      });
-      return { ok: true };
-    } catch (err) {
-      return testResultFromError(err);
+    if (models.length === 0) return { ok: false, reason: 'modelUnavailable' };
+
+    for (const model of models) {
+      try {
+        await this.chatCompletions(key, {
+          model: model.id,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+        });
+        return { ok: true };
+      } catch (err) {
+        // A retired/unknown model id is a model-level rejection (404) — try
+        // the next discovered model; auth/quota/network stop immediately.
+        if (err instanceof HttpError && err.status === 404) continue;
+        return testResultFromError(err);
+      }
     }
+    return { ok: false, reason: 'modelUnavailable' };
   }
 
   /** chat/completions with a JSON object response; returns RAW JSON text. */

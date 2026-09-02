@@ -23,8 +23,18 @@ import { HttpError, NetworkError, TimeoutError, requestJson, testResultFromError
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-/** Discovery filtering (plan §Technical Design): text generation only. */
-const NON_TEXT_MODEL = /embedding|image|audio|video|imagen|tts|speech/i;
+/**
+ * Discovery filtering (plan §Technical Design): text generation only.
+ *
+ * This is a moving-target heuristic — the 2026-09 catalog adds non-text
+ * families beyond the plan's original list (deep-research, robotics,
+ * computer-use, lyria/music, nano-banana/gaming, antigravity, transcribe,
+ * customtools). testConnection additionally SKIPS models that reject
+ * generateContent at runtime (400/404), so a stale exclusion can never break
+ * the Test button.
+ */
+const NON_TEXT_MODEL =
+  /embedding|image|audio|video|imagen|tts|speech|deep-research|computer-use|robotics|customtools|lyria|banana|antigravity|transcribe/i;
 
 /** Default timeouts: test/discovery are small calls; generate can take longer. */
 const SHORT_TIMEOUT_MS = 20_000;
@@ -70,25 +80,39 @@ export class GeminiProvider implements AIProvider {
       .sort((a, b) => a.id.localeCompare(b.id));
   }
 
-  /** Minimal real request on the FIRST discovered model (AI-7). */
+  /**
+   * Minimal real request on the FIRST model that accepts one (AI-7).
+   *
+   * Discovery lists models that are not callable via generateContent: preview
+   * families restricted to the Interactions API (HTTP 400) and retired
+   * generations that 404 with "no longer available to new users". Those are
+   * model-level rejections — skip to the next suitable model. 401/403/429 and
+   * network/timeout failures are key/account-level and stop immediately.
+   */
   async testConnection(key: string): Promise<TestResult> {
-    let first: string;
+    let models: ModelInfo[];
     try {
-      const models = await this.listModels(key);
-      first = models[0]?.id ?? '';
+      models = await this.listModels(key);
     } catch (err) {
       return testResultFromError(err);
     }
-    if (!first) return { ok: false, reason: 'modelUnavailable' };
-    try {
-      await this.generateContent(key, first, {
-        contents: [{ parts: [{ text: 'ok' }] }],
-        generationConfig: { maxOutputTokens: 1 },
-      });
-      return { ok: true };
-    } catch (err) {
-      return testResultFromError(err);
+    if (models.length === 0) return { ok: false, reason: 'modelUnavailable' };
+
+    for (const model of models) {
+      try {
+        await this.generateContent(key, model.id, {
+          contents: [{ parts: [{ text: 'ok' }] }],
+          generationConfig: { maxOutputTokens: 1 },
+        });
+        return { ok: true };
+      } catch (err) {
+        if (err instanceof HttpError && (err.status === 400 || err.status === 404)) {
+          continue; // model-level rejection — try the next discovered model
+        }
+        return testResultFromError(err);
+      }
     }
+    return { ok: false, reason: 'modelUnavailable' };
   }
 
   /** generateContent with a JSON response; returns the RAW JSON text string. */

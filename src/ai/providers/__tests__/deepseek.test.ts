@@ -111,6 +111,21 @@ describe('DeepSeekProvider.testConnection (AI-7 — minimal real request)', () =
       reason: 'modelUnavailable',
     });
   });
+
+  it('skips a retired model id (404) and succeeds on the next', async () => {
+    const { fetchImpl, calls } = mockFetch(
+      { json: MODELS_BODY },
+      { status: 404, json: { error: { message: 'model not found' } } },
+      { json: { choices: [{ message: { content: 'pong' } }] } },
+    );
+    const provider = createDeepseekProvider(fetchImpl);
+
+    await expect(provider.testConnection(KEY)).resolves.toEqual({ ok: true });
+
+    expect(calls).toHaveLength(3);
+    // deepseek-v4-flash 404'd → the next suitable model (pro) is tested.
+    expect((bodyOf(calls[2]!) as { model: string }).model).toBe('deepseek-v4-pro');
+  });
 });
 
 describe('DeepSeekProvider.analyze', () => {

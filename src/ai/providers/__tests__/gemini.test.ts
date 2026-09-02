@@ -22,6 +22,15 @@ const DISCOVERY_BODY = {
     { name: 'models/video-gemini-preview', supportedGenerationMethods: ['generateContent'] },
     { name: 'models/tts-1', supportedGenerationMethods: ['generate'] },
     { name: 'models/audio-gemini', supportedGenerationMethods: ['generateContent'] },
+    // 2026-09 catalog families that list generateContent but are NOT text
+    // models for financial analysis — the filter must drop them:
+    { name: 'models/antigravity-preview-05-2026', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/deep-research-preview-04-2026', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/lyria-3-clip-preview', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/nano-banana-pro-preview', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-2.5-computer-use-preview-10-2025', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-3.5-transcribe', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-robotics-er-2-preview', supportedGenerationMethods: ['generateContent'] },
   ],
 };
 
@@ -116,6 +125,63 @@ describe('GeminiProvider.testConnection (AI-7 — minimal real request)', () => 
       ok: false,
       reason: 'modelUnavailable',
     });
+  });
+
+  it('skips a model that rejects generateContent (400, Interactions-API-only) and tests the next', async () => {
+    const { fetchImpl, calls } = mockFetch(
+      { json: DISCOVERY_BODY },
+      { status: 400, json: { error: { message: 'This model only supports Interactions API.' } } },
+      { json: { candidates: [{ content: { parts: [{ text: 'ok' }] } }] } },
+    );
+    const provider = createGeminiProvider(fetchImpl);
+
+    await expect(provider.testConnection(KEY)).resolves.toEqual({ ok: true });
+
+    // discovery + gemini-2.5-pro (400) + gemini-3.6-flash (ok) — no further calls.
+    expect(calls).toHaveLength(3);
+    expect(calls[2]?.url).toContain('gemini-3.6-flash:generateContent');
+  });
+
+  it('skips a retired model (404) and succeeds on the next', async () => {
+    const { fetchImpl, calls } = mockFetch(
+      { json: DISCOVERY_BODY },
+      { status: 404, json: { error: { message: 'no longer available to new users' } } },
+      { json: { candidates: [] } },
+    );
+    const provider = createGeminiProvider(fetchImpl);
+
+    await expect(provider.testConnection(KEY)).resolves.toEqual({ ok: true });
+    expect(calls).toHaveLength(3);
+    expect(calls[2]?.url).toContain('gemini-3.6-flash:generateContent');
+  });
+
+  it('returns modelUnavailable when EVERY discovered model rejects the call', async () => {
+    const { fetchImpl, calls } = mockFetch(
+      { json: DISCOVERY_BODY },
+      { status: 404, json: { error: {} } },
+    );
+    const provider = createGeminiProvider(fetchImpl);
+
+    await expect(provider.testConnection(KEY)).resolves.toEqual({
+      ok: false,
+      reason: 'modelUnavailable',
+    });
+    // discovery + one generate per suitable model, never more.
+    expect(calls).toHaveLength(4);
+  });
+
+  it('stops immediately on an auth failure — later models are NOT tried', async () => {
+    const { fetchImpl, calls } = mockFetch(
+      { json: DISCOVERY_BODY },
+      { status: 401, json: { error: {} } },
+    );
+    const provider = createGeminiProvider(fetchImpl);
+
+    await expect(provider.testConnection(KEY)).resolves.toEqual({
+      ok: false,
+      reason: 'invalidKey',
+    });
+    expect(calls).toHaveLength(2); // discovery + ONE generate attempt
   });
 });
 
