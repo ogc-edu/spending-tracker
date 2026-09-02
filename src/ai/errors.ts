@@ -35,13 +35,21 @@ export function fromTimeoutError(cause?: unknown): AIUnavailableError {
 
 /**
  * Map an HTTP status to a typed reason (AI-7):
- * 401/403 → invalidKey; anything else (429/5xx) → http.
+ * 401/403 → invalidKey; 404 → modelUnavailable (the selected model is gone —
+ * PRD AI-10 directs the user to re-pick); anything else (429/5xx) → http.
  */
 export function fromHttpStatus(status: number): AIUnavailableError {
   if (status === 401 || status === 403) {
     return new AIUnavailableError(
       'invalidKey',
       `Provider rejected the API key (HTTP ${status})`,
+      status,
+    );
+  }
+  if (status === 404) {
+    return new AIUnavailableError(
+      'modelUnavailable',
+      `Provider model was not found (HTTP ${status})`,
       status,
     );
   }

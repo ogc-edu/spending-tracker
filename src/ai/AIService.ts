@@ -28,6 +28,8 @@ import type {
   AIProvider,
   AIProviderName,
   AIResult,
+  ModelInfo,
+  TestResult,
 } from './types';
 
 /** Fixed system instructions per context — never interpolates user input. */
@@ -62,14 +64,33 @@ function isKnownProvider(name: string): name is AIProviderName {
 /** Optional provider overrides — the dependency-injection point for tests. */
 export type AIProviderRegistry = Partial<Record<AIProviderName, AIProvider>>;
 
+/**
+ * Plan 013 — config-layer resolvers (AIService stays storage-free; the app
+ * wires these to AiConfigService). Each returns null when unset:
+ *  - getActiveProvider: the PERSISTED active provider (settings table). When
+ *    absent (or the resolver returns null) analyze falls back to the
+ *    in-memory selection from `createAIService(name)` / setActiveProvider —
+ *    preserving the 012 behavior for tests that wire no config layer.
+ *  - getKey / getModelId: resolved per provider at analyze time. `fake` skips
+ *    both; real providers reject an absent key (invalidKey) or model
+ *    (modelUnavailable) with typed errors.
+ */
+export interface AIServiceOptions {
+  getActiveProvider?(): AIProviderName | null | Promise<AIProviderName | null>;
+  getKey?(provider: AIProviderName): string | null | Promise<string | null>;
+  getModelId?(provider: AIProviderName): string | null | Promise<string | null>;
+}
+
 export interface AIService {
-  /** The provider analyze() dispatches to (AI-9). */
+  /** The in-memory default analyze() dispatches to when no config resolver is wired. */
   readonly activeProvider: AIProviderName;
   setActiveProvider(provider: AIProviderName): void;
+  /** The ACTIVE provider including the persisted config choice (null = none configured). */
+  getActiveProvider(): Promise<AIProviderName | null>;
   /** Minimal auth/connectivity check against a named provider (AI-7). */
-  testConnection(provider: AIProviderName, key: string): Promise<void>;
+  testConnection(provider: AIProviderName, key: string): Promise<TestResult>;
   /** Discovered text-generation models for a named provider (AI-8). */
-  listModels(provider: AIProviderName, key: string): Promise<string[]>;
+  listModels(provider: AIProviderName, key: string): Promise<ModelInfo[]>;
   /** Dispatch an analysis to the active provider, returning a validated AIResult. */
   analyze<C extends AIContext>(
     context: C,
@@ -78,13 +99,14 @@ export interface AIService {
 }
 
 /**
- * Build an AIService configured with `providerName` as its active provider.
- * Defaults to `fake` (the only real provider in plan 012; 013 adds Gemini/
- * DeepSeek). Unknown names throw a typed error (future-proofing).
+ * Build an AIService configured with `providerName` as its in-memory active
+ * provider. Defaults to `fake` (plan 012; 013 wires real providers via the
+ * config resolvers). Unknown names throw a typed error (future-proofing).
  */
 export function createAIService(
   providerName: AIProviderName = 'fake',
   overrides: AIProviderRegistry = {},
+  options: AIServiceOptions = {},
 ): AIService {
   if (!isKnownProvider(providerName)) {
     throw new AIUnavailableError('unknown', `Unknown AI provider: ${providerName}`);
@@ -98,6 +120,17 @@ export function createAIService(
 
   let active: AIProviderName = providerName;
 
+  /** Resolve the dispatch target: persisted config first, in-memory as fallback. */
+  async function resolveActive(): Promise<AIProviderName> {
+    if (options.getActiveProvider) {
+      const configured = await options.getActiveProvider();
+      if (configured !== null) return configured;
+      // A config layer is wired but nothing is configured → no provider.
+      throw new AIUnavailableError('unknown', 'No AI provider configured');
+    }
+    return active;
+  }
+
   return {
     get activeProvider() {
       return active;
@@ -110,11 +143,16 @@ export function createAIService(
       active = provider;
     },
 
-    async testConnection(provider: AIProviderName, key: string): Promise<void> {
-      await providers[provider].testConnection(key);
+    async getActiveProvider(): Promise<AIProviderName | null> {
+      if (options.getActiveProvider) return options.getActiveProvider();
+      return active;
     },
 
-    async listModels(provider: AIProviderName, key: string): Promise<string[]> {
+    async testConnection(provider: AIProviderName, key: string): Promise<TestResult> {
+      return providers[provider].testConnection(key);
+    },
+
+    async listModels(provider: AIProviderName, key: string): Promise<ModelInfo[]> {
       return providers[provider].listModels(key);
     },
 
@@ -127,12 +165,41 @@ export function createAIService(
         throw new TypeError(`Invalid ${context} snapshot passed to analyze()`);
       }
 
+      const target = await resolveActive();
+      const provider = providers[target];
+
+      // Credentials and model selection come from the config layer (BYOK,
+      // plan 013): SecureStore key + settings-table model. The fake provider
+      // needs neither, so only real providers resolve them.
+      let key = '';
+      let modelId: string | undefined;
+      if (target !== 'fake') {
+        const resolvedKey = (await options.getKey?.(target)) ?? '';
+        if (!resolvedKey) {
+          throw new AIUnavailableError(
+            'invalidKey',
+            'No API key configured for this provider — add one in Settings',
+          );
+        }
+        key = resolvedKey;
+        const resolvedModel = (await options.getModelId?.(target)) ?? '';
+        if (!resolvedModel) {
+          throw new AIUnavailableError(
+            'modelUnavailable',
+            'No model selected for this provider — pick one in Settings',
+          );
+        }
+        modelId = resolvedModel;
+      }
+
       let raw: string;
       try {
-        raw = await providers[active].analyze({
+        raw = await provider.analyze({
           context,
           systemPrompt: SYSTEM_PROMPTS[context],
           snapshot: JSON.stringify(snapshot),
+          key,
+          modelId,
         });
       } catch (err) {
         throw toAIError(err);

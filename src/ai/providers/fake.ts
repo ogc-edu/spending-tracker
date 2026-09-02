@@ -4,7 +4,7 @@
  * so provider config (013) and the analysis UIs (013-015) are testable in
  * Jest without any network.
  */
-import type { AIAnalyzeRequest, AIErrorReason, AIProvider } from '../types';
+import type { AIAnalyzeRequest, AIErrorReason, AIProvider, ModelInfo, TestResult } from '../types';
 import { AIUnavailableError } from '../errors';
 
 /** Canned outcome configuration. Success is the default. */
@@ -13,6 +13,19 @@ export type FakeFailure =
   | { kind: 'fail'; reason: AIErrorReason }
   | { kind: 'invalid-json' } // response is not JSON
   | { kind: 'invalid-shape' }; // JSON but wrong shape (facade should reject)
+
+/** Map a 012 AIErrorReason onto the plan 013 TestResult vocabulary for testConnection. */
+export function fakeTestResult(reason: AIErrorReason): TestResult {
+  switch (reason) {
+    case 'invalidKey':
+      return { ok: false, reason: 'invalidKey' };
+    case 'offline':
+    case 'timeout':
+      return { ok: false, reason: 'network' };
+    default:
+      return { ok: false, reason: 'unknown' };
+  }
+}
 
 export interface FakeResult {
   summary: string;
@@ -46,13 +59,14 @@ export class FakeProvider implements AIProvider {
     throw new AIUnavailableError(this.failure.reason, 'FakeProvider failure');
   }
 
-  async testConnection(_key: string): Promise<void> {
-    if (this.failure.kind === 'fail') this.throwFail();
+  async testConnection(_key: string): Promise<TestResult> {
+    if (this.failure.kind === 'fail') return fakeTestResult(this.failure.reason);
+    return { ok: true };
   }
 
-  async listModels(_key: string): Promise<string[]> {
+  async listModels(_key: string): Promise<ModelInfo[]> {
     if (this.failure.kind === 'fail') this.throwFail();
-    return ['fake-text-model'];
+    return [{ id: 'fake-text-model' }];
   }
 
   async analyze(request: AIAnalyzeRequest): Promise<string> {

@@ -1,23 +1,30 @@
 /**
- * Settings screen (plans 003 + 004). 003: signed-in user + logout.
+ * Settings screen (plans 003 + 004 + 013). 003: signed-in user + logout.
  * 004: the ACCOUNTS section (list with credit-card "Owed", add-at-form via
  * AccountForm, FK-protected delete) plus a read-only CATEGORIES preview that
  * proves the seeded-repository path (the real consumer is the 005 expense form).
+ * 013: the AI Providers section — Gemini/DeepSeek BYOK rows (Not configured /
+ * masked key suffix) and the Active AI Provider selector (configured only;
+ * no automatic fallback).
  *
  * Balances are NOT editable here (D1 — they change only through expenses).
  */
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
 import type { Account, Category } from '@/db/schema';
 import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
+import { AiConfigService, type ConfigurableAIProvider } from '@/services/AiConfigService';
 import type { AccountInput } from '@/repositories/types';
+import type { AIProviderName } from '@/ai/types';
 import { AccountForm } from '@/components/AccountForm';
 import { AccountRow } from '@/components/AccountRow';
+import { ProviderRow, maskKeySuffix } from '@/components/ai/ProviderRow';
+import { ActiveProviderSelector } from '@/components/ai/ActiveProviderSelector';
 import { colors, spacing, typography } from '@/theme';
 
 function errMsg(error: unknown): string {
@@ -25,6 +32,7 @@ function errMsg(error: unknown): string {
 }
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { user, logout, authService } = useAuth();
 
   // Services built once auth is available; repositories() needs the initialized DB.
@@ -33,6 +41,7 @@ export default function SettingsScreen() {
     return {
       accounts: new AccountService(repos.accounts, authService),
       categories: new CategoryService(repos.categories),
+      ai: new AiConfigService(repos.settings, authService),
     };
   }, [authService]);
 
@@ -41,6 +50,10 @@ export default function SettingsScreen() {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+
+  // Plan 013: masked key suffix per provider (null = not configured) + active choice.
+  const [aiSuffixes, setAiSuffixes] = useState<Partial<Record<ConfigurableAIProvider, string | null>>>({});
+  const [aiActive, setAiActive] = useState<AIProviderName | null>(null);
 
   const loadAccounts = useCallback(async () => {
     try {
@@ -59,6 +72,37 @@ export default function SettingsScreen() {
     }
   }, [services.categories]);
 
+  const loadAi = useCallback(async () => {
+    try {
+      const [geminiKey, deepseekKey, active] = await Promise.all([
+        services.ai.getKey('gemini'),
+        services.ai.getKey('deepseek'),
+        services.ai.getActiveProvider(),
+      ]);
+      setAiSuffixes({
+        gemini: geminiKey ? maskKeySuffix(geminiKey) : null,
+        deepseek: deepseekKey ? maskKeySuffix(deepseekKey) : null,
+      });
+      setAiActive(active);
+    } catch {
+      // Keep the previous state; non-fatal.
+    }
+  }, [services.ai]);
+
+  /** The active selector lists CONFIGURED providers only (no automatic fallback). */
+  const configuredProviders: ConfigurableAIProvider[] = (['gemini', 'deepseek'] as const).filter(
+    (p) => aiSuffixes[p] !== null,
+  );
+
+  const handleSelectActive = async (provider: ConfigurableAIProvider) => {
+    try {
+      await services.ai.setActiveProvider(provider);
+      setAiActive(provider);
+    } catch (error: unknown) {
+      Alert.alert('Active AI provider', errMsg(error));
+    }
+  };
+
   // Re-read on focus (ARCHITECTURE §5 — SQLite is the source of truth, no cache).
   useFocusEffect(
     useCallback(() => {
@@ -70,6 +114,12 @@ export default function SettingsScreen() {
     useCallback(() => {
       void loadCategories();
     }, [loadCategories]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadAi();
+    }, [loadAi]),
   );
 
   const handleAdd = async (input: AccountInput) => {
@@ -168,6 +218,34 @@ export default function SettingsScreen() {
         ))}
       </View>
 
+      {/* Plan 013: AI Providers (BYOK — Gemini + DeepSeek). */}
+      <Text style={styles.sectionTitle}>AI Provider</Text>
+      <Text style={styles.note}>
+        Bring your own API key to analyze your finances with AI. Keys are stored securely on this
+        device and sent only to the provider.
+      </Text>
+      <ProviderRow
+        provider="gemini"
+        configured={aiSuffixes.gemini !== null}
+        suffix={aiSuffixes.gemini ?? null}
+        onPress={() => router.push('/settings/ai/gemini' as never)}
+      />
+      <ProviderRow
+        provider="deepseek"
+        configured={aiSuffixes.deepseek !== null}
+        suffix={aiSuffixes.deepseek ?? null}
+        onPress={() => router.push('/settings/ai/deepseek' as never)}
+      />
+      <Text style={styles.activeLabel}>Active AI provider</Text>
+      <ActiveProviderSelector
+        configured={configuredProviders}
+        active={aiActive}
+        onSelect={handleSelectActive}
+      />
+      <Text style={styles.note}>
+        Analysis actions use the active provider only — there is no automatic fallback.
+      </Text>
+
       <Pressable
         onPress={logout}
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
@@ -177,7 +255,7 @@ export default function SettingsScreen() {
         <Text style={styles.buttonLabel}>Log out</Text>
       </Pressable>
 
-      <Text style={styles.footNote}>Safety buffer and AI keys land in later plans.</Text>
+      <Text style={styles.footNote}>AI analysis through your own provider keys.</Text>
     </ScrollView>
   );
 }
@@ -219,6 +297,13 @@ const styles = StyleSheet.create({
   },
   addButtonLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '600' },
   note: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.lg },
+  activeLabel: {
+    fontSize: typography.caption,
+    color: colors.muted,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.xl },
   chip: {
     flexDirection: 'row',

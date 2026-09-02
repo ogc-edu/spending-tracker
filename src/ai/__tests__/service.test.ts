@@ -11,6 +11,7 @@ import { FakeProvider } from '../providers/fake';
 import { AIUnavailableError } from '../errors';
 import type {
   AIErrorReason,
+  AIProviderName,
   AllowanceSnapshot,
   AIContext,
   DebtSnapshot,
@@ -125,12 +126,15 @@ describe('createAIService factory', () => {
 
   it('setActiveProvider switches the dispatch target', async () => {
     const fake = new FakeProvider();
-    const svc = createAIService('fake', { fake });
+    const other = new FakeProvider();
+    other.setResult({ summary: 'From gemini slot.', points: [] });
+    const svc = createAIService('fake', { fake, gemini: other });
     svc.setActiveProvider('gemini');
     expect(svc.activeProvider).toBe('gemini');
-    // Gemini is a stub in plan 012 — typed, clear error.
+    // With no config layer wired, the facade refuses to dispatch a real
+    // provider without a key (plan 013 — BYOK enforcement).
     await expect(svc.analyze('debt', debtSnapshot)).rejects.toMatchObject({
-      reason: 'unknown',
+      reason: 'invalidKey',
     });
   });
 });
@@ -213,26 +217,27 @@ describe('AIService.analyze — FakeProvider failure modes', () => {
 });
 
 describe('provider-config capabilities (AI-7/AI-8)', () => {
-  it('testConnection resolves on the fake in success mode', async () => {
+  it('testConnection resolves ok on the fake in success mode', async () => {
     const fake = new FakeProvider();
     const svc = createAIService('fake', { fake });
-    await expect(svc.testConnection('fake', 'test-key')).resolves.toBeUndefined();
+    await expect(svc.testConnection('fake', 'test-key')).resolves.toEqual({ ok: true });
   });
 
-  it('testConnection rejects with the configured reason', async () => {
+  it('testConnection maps the configured failure to a TestResult reason', async () => {
     const fake = new FakeProvider();
     fake.setMode({ kind: 'fail', reason: 'invalidKey' });
     const svc = createAIService('fake', { fake });
-    await expect(svc.testConnection('fake', 'bad-key')).rejects.toMatchObject({
+    await expect(svc.testConnection('fake', 'bad-key')).resolves.toEqual({
+      ok: false,
       reason: 'invalidKey',
     });
   });
 
-  it('listModels returns the canned model list', async () => {
+  it('listModels returns the canned ModelInfo list', async () => {
     const fake = new FakeProvider();
     const svc = createAIService('fake', { fake });
     await expect(svc.listModels('fake', 'test-key')).resolves.toEqual([
-      'fake-text-model',
+      { id: 'fake-text-model' },
     ]);
   });
 
@@ -243,5 +248,81 @@ describe('provider-config capabilities (AI-7/AI-8)', () => {
     await expect(svc.listModels('fake', 'test-key')).rejects.toMatchObject({
       reason: 'offline',
     });
+  });
+});
+
+describe('AIService config resolvers (plan 013 BYOK wiring)', () => {
+  it('analyze dispatches to the persisted active provider with its key + model', async () => {
+    const fake = new FakeProvider(); // injected into the gemini slot
+    const svc = createAIService(
+      'fake',
+      { gemini: fake },
+      {
+        getActiveProvider: async (): Promise<AIProviderName | null> => 'gemini',
+        getKey: async (p) => (p === 'gemini' ? 'sk-gemini-1234' : null),
+        getModelId: async (p) => (p === 'gemini' ? 'gemini-3.6-flash' : null),
+      },
+    );
+
+    const result = await svc.analyze('debt', debtSnapshot);
+    expect(fake.lastRequest?.key).toBe('sk-gemini-1234');
+    expect(fake.lastRequest?.modelId).toBe('gemini-3.6-flash');
+    expect(result.summary).toBe('Fake analysis summary.');
+  });
+
+  it('throws a typed error instead of dispatching when no provider is configured', async () => {
+    const fake = new FakeProvider();
+    const svc = createAIService('fake', { fake }, {
+      getActiveProvider: async (): Promise<AIProviderName | null> => null,
+    });
+
+    await expect(svc.analyze('debt', debtSnapshot)).rejects.toMatchObject({
+      reason: 'unknown',
+      message: 'No AI provider configured',
+    });
+    expect(fake.lastRequest).toBeUndefined();
+  });
+
+  it('rejects with invalidKey when the active provider has no stored key', async () => {
+    const fake = new FakeProvider();
+    const svc = createAIService(
+      'fake',
+      { gemini: fake },
+      {
+        getActiveProvider: async (): Promise<AIProviderName | null> => 'gemini',
+        getKey: async () => null,
+        getModelId: async () => 'gemini-3.6-flash',
+      },
+    );
+
+    await expect(svc.analyze('debt', debtSnapshot)).rejects.toMatchObject({
+      reason: 'invalidKey',
+    });
+    expect(fake.lastRequest).toBeUndefined();
+  });
+
+  it('rejects with modelUnavailable when the active provider has no selected model', async () => {
+    const fake = new FakeProvider();
+    const svc = createAIService(
+      'fake',
+      { gemini: fake },
+      {
+        getActiveProvider: async (): Promise<AIProviderName | null> => 'deepseek',
+        getKey: async () => 'sk-ds-1',
+        getModelId: async () => null,
+      },
+    );
+
+    await expect(svc.analyze('debt', debtSnapshot)).rejects.toMatchObject({
+      reason: 'modelUnavailable',
+    });
+    expect(fake.lastRequest).toBeUndefined();
+  });
+
+  it('getActiveProvider surfaces the persisted choice when a resolver is wired', async () => {
+    const svc = createAIService('fake', {}, {
+      getActiveProvider: async (): Promise<AIProviderName | null> => 'deepseek',
+    });
+    await expect(svc.getActiveProvider()).resolves.toBe('deepseek');
   });
 });

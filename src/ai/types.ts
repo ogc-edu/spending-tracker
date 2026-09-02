@@ -23,6 +23,7 @@ export type AIErrorReason =
   | 'timeout'
   | 'http'
   | 'invalidKey'
+  | 'modelUnavailable'
   | 'invalidResponse'
   | 'unknown';
 
@@ -114,19 +115,62 @@ export interface AIAnalyzeRequest {
   systemPrompt: string;
   /** Snapshot serialized as JSON — pure data, never raw rows (A6). */
   snapshot: string;
+  /**
+   * The credential to authenticate with (BYOK / AI-6). Held transiently in the
+   * request object only — never logged, committed, or included in errors.
+   */
+  key: string;
+  /**
+   * The selected model id (plan 013 — discovery or manual entry). Optional in
+   * the transport so the fake provider (and 012-era callers) stay simple; the
+   * real providers reject its absence at generate time.
+   */
+  modelId?: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Plan 013 — provider-configuration capability types (PRD AI-5/AI-7/AI-8)
+ * ------------------------------------------------------------------ */
+
+/** Distinct Test Connection outcomes (AI-7) — never the raw credential. */
+export type TestResultReason =
+  | 'invalidKey'
+  | 'quota'
+  | 'modelUnavailable'
+  | 'network'
+  | 'unknown';
+
+/** `testConnection` result: ok, or a UI-able failure reason. */
+export type TestResult = { ok: true } | { ok: false; reason: TestResultReason };
+
+/** One discovered model (AI-8). `label` is optional — the UI shows id otherwise. */
+export interface ModelInfo {
+  id: string;
+  label?: string;
 }
 
 /**
  * Implemented by every provider. The facade dispatches to the ACTIVE provider
  * only. Providers own their credentials (BYOK, plan 013); keys never touch the
  * AIService layer.
+ *
+ * Plan 013 extends the 012 interface: `testConnection` now RETURNS a TestResult
+ * (ok / distinguishable failure) instead of throwing, and `listModels` returns
+ * ModelInfo list entries — the capabilities the Settings config UI drives.
  */
 export interface AIProvider {
   readonly name: AIProviderName;
-  /** Minimal real request; throws AIUnavailableError on failure (AI-7). */
-  testConnection(key: string): Promise<void>;
-  /** Official listing filtered to text-generation models (AI-8); no hardcoding. */
-  listModels(key: string): Promise<string[]>;
+  /**
+   * Minimal real request (AI-7): the first discovered suitable model. Returns
+   * a typed TestResult rather than throwing — the config UI renders it inline.
+   */
+  testConnection(key: string): Promise<TestResult>;
+  /**
+   * Official listing filtered to text-generation models suitable for financial
+   * analysis (AI-8); no hardcoded model lists anywhere. Throws a typed
+   * AIUnavailableError on failure (the UI falls back to manual model entry).
+   */
+  listModels(key: string): Promise<ModelInfo[]>;
   /** Return the RAW JSON text; the facade parses + Zod-validates it. */
   analyze(request: AIAnalyzeRequest): Promise<string>;
 }

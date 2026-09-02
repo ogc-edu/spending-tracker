@@ -376,4 +376,27 @@ export interface SettingsRepository {
   buffer(userId: number): Promise<number>;
   /** Insert or REPLACE the user's settings row (PK = user_id). Returns the row. */
   setBuffer(userId: number, safetyBufferSen: number): Promise<Settings>;
+  /**
+   * The user's AI prefs (plan 013 / AI-6, AI-9) — the active-provider choice
+   * and each provider's selected model id. All-null defaults for a rowless
+   * user ("No AI provider configured"). NOTHING here is a secret: keys live
+   * in SecureStore (`key:{provider}:{userId}`), never in this table.
+   */
+  aiPrefs(userId: number): Promise<AiPrefs>;
+  /**
+   * Upsert the given AI pref fields (undefined fields are left untouched —
+   * pass null explicitly to clear); creates the user's settings row on first
+   * write. Returns the row.
+   */
+  setAiPrefs(userId: number, patch: Partial<AiPrefs>): Promise<Settings>;
+}
+
+/* ── Plan 013: AI provider prefs (non-secret) ────────────────────────────── */
+
+/** Non-secret AI configuration (plan 013). Keys NEVER live here. */
+export interface AiPrefs {
+  /** The user-selected active provider among CONFIGURED ones; null = "No AI provider configured" (no fallback). */
+  aiActiveProvider: 'gemini' | 'deepseek' | null;
+  aiModelGemini: string | null;
+  aiModelDeepseek: string | null;
 }
