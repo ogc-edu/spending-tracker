@@ -14,10 +14,9 @@
  * (Settings/004); no overall budget → "—" + "Set a budget" prompt; deficit
  * (safe < 0) → the SafeToSpendCard's danger state + warning copy.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -32,6 +31,11 @@ import { repositories } from '@/db';
 import type { Category } from '@/db/schema';
 import { CashFlowService, type CashFlowSnapshot } from '@/services/CashFlowService';
 import { CategoryService } from '@/services/CategoryService';
+import { AiConfigService, aiServiceOptions } from '@/services/AiConfigService';
+import { toAllowanceSnapshot } from '@/services/toAllowanceSnapshot';
+import { createAIService } from '@/ai/AIService';
+import { AIUnavailableError, toAIError } from '@/ai/errors';
+import type { AIResult } from '@/ai/types';
 import { formatDayLabel, nextMonthStartDate } from '@/utils/dates';
 import { colors, spacing, typography } from '@/theme';
 import { HeroCard } from '@/components/dashboard/HeroCard';
@@ -60,22 +64,44 @@ export default function DashboardScreen() {
         authService,
       ),
       categories: new CategoryService(repos.categories),
+      aiConfig: new AiConfigService(repos.settings, authService),
     };
   }, [authService]);
 
+  // The ACTIVE provider (013): persisted choice + key + model via the config
+  // layer; with nothing configured, analyze() throws a typed error and the
+  // card shows "No AI provider configured" — the app works fully (DoD 16).
+  const aiService = useMemo(
+    () => createAIService('fake', {}, aiServiceOptions(services.aiConfig)),
+    [services.aiConfig],
+  );
+
   const [snapshot, setSnapshot] = useState<CashFlowSnapshot | null>(null);
+  // The reference date the current snapshot was built with — the AI payload's
+  // daysRemaining must agree with the snapshot's dailyAllowanceSen (015).
+  const [snapshotAt, setSnapshotAt] = useState<Date | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // "Explain my allowance" UI state (015) — pending / typed error / result.
+  const [aiPending, setAiPending] = useState(false);
+  const [aiError, setAiError] = useState<AIUnavailableError | null>(null);
+  const [aiResult, setAiResult] = useState<AIResult | null>(null);
+  // Pending guard for rapid taps: one request in flight per snapshot (013/015
+  // behaviour — a double-tap must never fire a second analyze).
+  const aiBusyRef = useRef(false);
+
   const load = useCallback(async () => {
     try {
+      const now = new Date();
       const [snap, cats] = await Promise.all([
-        services.cashflow.snapshot(new Date()),
+        services.cashflow.snapshot(now),
         services.categories.list(),
       ]);
       setSnapshot(snap);
+      setSnapshotAt(now);
       setCategories(cats);
       setError(null);
     } catch (loadError: unknown) {
@@ -101,11 +127,32 @@ export default function DashboardScreen() {
     }
   }, [load]);
 
-  const explainStub = useCallback(() => {
-    // Plan 015 wires "Explain my allowance" to the AI provider; this plan
-    // renders the entry point only.
-    Alert.alert('Explain my allowance', 'AI explanation lands in a later update.');
-  }, []);
+  /**
+   * "Explain my allowance" (015 / DASH-4): map the CURRENT snapshot (010) to
+   * the allowance payload — no recomputation — and dispatch to the active
+   * provider via AIService (012/013). The pending guard drops rapid
+   * double-taps: only one request may be in flight at a time.
+   */
+  const explainAllowance = useCallback(async () => {
+    if (aiBusyRef.current) return;
+    if (!snapshot || !snapshotAt) return;
+    aiBusyRef.current = true;
+    setAiPending(true);
+    setAiError(null);
+    setAiResult(null);
+    try {
+      const allowance = toAllowanceSnapshot(snapshot, snapshotAt);
+      const result = await aiService.analyze('allowance', allowance);
+      setAiResult(result);
+    } catch (err: unknown) {
+      // analyze() already throws typed AIUnavailableError; toAIError keeps it
+      // typed if anything unexpected slips through (012 contract).
+      setAiError(toAIError(err));
+    } finally {
+      aiBusyRef.current = false;
+      setAiPending(false);
+    }
+  }, [aiService, snapshot, snapshotAt]);
 
   const refreshControl = (
     <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />
@@ -175,7 +222,8 @@ export default function DashboardScreen() {
       <FormulaCard
         breakdown={snapshot.breakdown}
         safeSen={snapshot.safeSen}
-        onExplain={explainStub}
+        onExplain={() => void explainAllowance()}
+        ai={{ pending: aiPending, error: aiError, result: aiResult, onRetry: () => void explainAllowance() }}
       />
 
       <BudgetBar

@@ -7,8 +7,10 @@
  * card data sums back to safe" acceptance criterion. Tapping the header
  * toggles the breakdown; the arithmetic is never performed here.
  *
- * "Explain my allowance" is the 015 entry point — the button renders now,
- * stubbed (opens 015's AI explanation surface later).
+ * "Explain my allowance" (015 / DASH-4) sits below the card, always visible
+ * while the card is; tapping it expands the breakdown and the shared
+ * AIAnalysisCard (pending / typed error + Retry / validated result) renders
+ * inside the expanded body.
  */
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -16,17 +18,21 @@ import { Ionicons } from '@expo/vector-icons';
 import type { CashFlowBreakdownItem } from '@/engine/cashflow';
 import { formatSen } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
+import { AIAnalysisCard, type AIAnalysisState } from '@/components/AIAnalysisCard';
 
 export function FormulaCard({
   breakdown,
   safeSen,
   onExplain,
+  ai,
 }: {
   /** Signed labelled terms from engine.cashFlowBreakdown (Σ = safeSen). */
   breakdown: CashFlowBreakdownItem[];
   safeSen: number;
-  /** "Explain my allowance" → 015 (stubbed this plan). */
+  /** "Explain my allowance" → 015: start a fresh analysis (guarded upstream). */
   onExplain(): void;
+  /** The analysis UI state (015) — rendered inside the expanded card. */
+  ai: AIAnalysisState;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -70,11 +76,17 @@ export function FormulaCard({
             <Text style={styles.equalsLabel}>Safe to spend</Text>
             <Text style={styles.equalsAmount}>{formatSen(safeSen)}</Text>
           </View>
+
+          <AIAnalysisCard {...ai} />
         </View>
       ) : null}
 
       <Pressable
-        onPress={onExplain}
+        onPress={() => {
+          // The analysis lives inside the expanded card — reveal it (015).
+          setExpanded(true);
+          onExplain();
+        }}
         style={({ pressed }) => [styles.explainButton, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel="Explain my allowance"
