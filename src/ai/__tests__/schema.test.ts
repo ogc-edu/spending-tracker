@@ -75,11 +75,14 @@ const debt = {
 /** Hand-computed spending snapshot fixture (sen, changePct one decimal / null). */
 const spending = {
   month: '2026-08',
+  monthLabel: 'August 2026',
   totalSen: 300_000,
   previousTotalSen: 320_000,
   changeSen: -20_000,
   changePct: -6.25,
   avgDailySen: 9_677,
+  projectionSen: 300_000,
+  utilization: { pct: 10.0, overBudget: false },
   topCategories: [
     { name: 'Food', amountSen: 120_000 },
     { name: 'Transport', amountSen: 50_000 },
@@ -99,6 +102,8 @@ const allowance = {
   safeSen: 250_000,
   dailyAllowanceSen: 8_333,
   daysRemaining: 30,
+  // Plan 015 — the no-budget signal is part of the allowance shape.
+  hasBudget: true,
 };
 
 describe('DebtSnapshotSchema', () => {
@@ -156,6 +161,26 @@ describe('SpendingSnapshotSchema', () => {
       'description' in (result.success ? result.data.topCategories[0] : {}),
     ).toBe(false);
   });
+
+  it('accepts a null utilization (no overall budget set — plan 014)', () => {
+    expect(
+      SpendingSnapshotSchema.safeParse({ ...spending, utilization: null }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a missing projectionSen (pace context is part of the shape)', () => {
+    const { projectionSen: _omit, ...rest } = spending;
+    expect(SpendingSnapshotSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it('rejects an overBudget that is not a boolean', () => {
+    expect(
+      SpendingSnapshotSchema.safeParse({
+        ...spending,
+        utilization: { pct: 10.0, overBudget: 'yes' },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('AllowanceSnapshotSchema', () => {
@@ -174,5 +199,22 @@ describe('AllowanceSnapshotSchema', () => {
     expect(
       AllowanceSnapshotSchema.safeParse({ ...allowance, bufferSen: 49.9 }).success,
     ).toBe(false);
+  });
+
+  it('rejects a missing hasBudget (the AI must never guess at a budget)', () => {
+    const { hasBudget: _omit, ...rest } = allowance;
+    expect(AllowanceSnapshotSchema.safeParse({ ...rest, safeSen: -10_000 }).success).toBe(
+      false,
+    );
+  });
+
+  it('accepts hasBudget false (the no-budget state)', () => {
+    expect(
+      AllowanceSnapshotSchema.safeParse({
+        ...allowance,
+        hasBudget: false,
+        remainingBudgetSen: 0,
+      }).success,
+    ).toBe(true);
   });
 });

@@ -42,14 +42,36 @@ export const SYSTEM_PROMPTS: Record<AIContext, string> = {
     'this shape: {"summary": string, "points": string[]}.',
   spending:
     'You analyze pre-computed financial data about the user\'s spending for a ' +
-    'given month. Never recalculate or invent numbers; reference only the ' +
-    'supplied snapshot values. Answer in plain, helpful language. Output JSON ' +
-    'in exactly this shape: {"summary": string, "points": string[]}.',
+    'given month. Reference ONLY the supplied snapshot values — never ' +
+    'recalculate, invent, or estimate amounts. Describe: (1) the largest ' +
+    'spending categories by amount, (2) significant month-over-month changes ' +
+    'from changeSen and changePct — if changePct is null there is no ' +
+    'comparison available: say so and never invent a trend, (3) unusual ' +
+    'shifts or patterns visible in the data, (4) budget pressure using ' +
+    'utilization (pct and overBudget) — if utilization is null there is no ' +
+    'budget set, say nothing about budget, (5) the current pace versus the ' +
+    'end-of-month projection: compare avgDailySen (daily pace) with ' +
+    'projectionSen (projected month total). Answer in plain, helpful ' +
+    'language. Output JSON in exactly this shape: {"summary": string, ' +
+    '"points": string[]}.',
   allowance:
-    'You analyze pre-computed financial data about the user\'s allowance for ' +
-    'the current month. Never recalculate or invent numbers; reference only ' +
-    'the supplied snapshot values. Answer in plain, helpful language. Output ' +
-    'JSON in exactly this shape: {"summary": string, "points": string[]}.',
+    'You explain the user\'s pre-computed cash-flow allowance for the current ' +
+    'month. The supplied snapshot contains ONLY these engine-computed values: ' +
+    'availableSen (money available now), upcomingSen (unpaid commitments due ' +
+    'before next month), remainingBudgetSen (budget left this month), ' +
+    'bufferSen (safety buffer), safeSen (available minus upcoming minus ' +
+    'remaining budget minus buffer), dailyAllowanceSen (safe divided by the ' +
+    'days remaining) and daysRemaining. Explain EACH supplied component in ' +
+    'plain language and what the daily allowance implies for day-to-day ' +
+    'spending. Never recalculate, round, or introduce numbers — reference ' +
+    'only the supplied snapshot values. A hasBudget false flag means no ' +
+    'budget is set (the app displays a dash); say so plainly and do NOT ' +
+    'invent or assume a budget. A negative safeSen is a deficit: state it ' +
+    'plainly, that available money does not cover upcoming commitments plus ' +
+    'budget plus buffer, and that commitments and the buffer must be covered ' +
+    'before any discretionary spending — no sugarcoating, no suggestions that ' +
+    'change or fix the numbers. Answer in plain, helpful language. Output JSON ' +
+    'in exactly this shape: {"summary": string, "points": string[]}.',
 };
 
 const KNOWN_PROVIDERS: readonly AIProviderName[] = [

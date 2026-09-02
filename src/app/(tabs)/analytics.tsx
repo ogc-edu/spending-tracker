@@ -5,15 +5,34 @@
  * has no SQL and no money math, ARCH §1). The SHARED uiStore month selection
  * (007) drives a re-read on focus AND on month change (ARCH §5, A4 no cache).
  * Decision A3: category proportions are plain View bars (zero chart deps).
- * The "Analyze my spending" action is rendered but stubbed — wired in 014.
+ *
+ * Plan 014 (AN-5) — "Analyze my spending": the action button sits next to the
+ * MoM chip and sends the RENDERED month's snapshot (tap-time mapping, no
+ * drift mid-flight) through AIService.analyze('spending', …) — no provider
+ * logic here (BYOK/config lives in AiConfigService, 013). The shared
+ * AIAnalysisCard renders under the chip: pending / typed error + Retry /
+ * Zod-validated result, labelled with the analyzed month (a month change
+ * mid-flight never re-labels a stale result). Previous-month-zero baseline →
+ * changePct null → the prompt covers "no comparison available" (no invented
+ * trends, AI-3). Empty month → button hidden, not an error.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
 import { AnalyticsService, type SpendingSnapshot } from '@/services/AnalyticsService';
+import { AiConfigService, aiServiceOptions } from '@/services/AiConfigService';
+import { toSpendingSnapshot } from '@/services/toSpendingSnapshot';
+import { createAIService } from '@/ai/AIService';
+import { toAIError } from '@/ai/errors';
+import type { AIUnavailableError } from '@/ai/errors';
+import type { AIResult, SpendingSnapshot as AISpendingSnapshot } from '@/ai/types';
+import {
+  AIAnalysisCard,
+  type AIAnalysisState,
+} from '@/components/AIAnalysisCard';
 import { useUiStore } from '@/store/uiStore';
 import { MonthSelector } from '@/components/analytics/MonthSelector';
 import { MoMChip } from '@/components/analytics/MoMChip';
@@ -28,11 +47,19 @@ function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** A no-op retry while there is nothing to retry (idle/pending/result). */
+const NOOP_RETRY = (): void => {};
+
 export default function AnalyticsScreen() {
   const { authService } = useAuth();
-  const service = useMemo(() => {
+
+  const { service, aiService } = useMemo(() => {
     const repos = repositories();
-    return new AnalyticsService(repos.expenses, repos.budgets, repos.categories, authService);
+    const cfg = new AiConfigService(repos.settings, authService);
+    return {
+      service: new AnalyticsService(repos.expenses, repos.budgets, repos.categories, authService),
+      aiService: createAIService('fake', {}, aiServiceOptions(cfg)),
+    };
   }, [authService]);
 
   const selectedMonth = useUiStore((s) => s.selectedMonth);
@@ -41,6 +68,15 @@ export default function AnalyticsScreen() {
   const [snapshot, setSnapshot] = useState<SpendingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Plan 014 — the AI analysis drive state (tap-time capture). ----
+  const [aiPending, setAiPending] = useState(false);
+  const [aiError, setAiError] = useState<AIUnavailableError | null>(null);
+  const [aiResult, setAiResult] = useState<AIResult | null>(null);
+  /** The month label captured at tap time — never re-labelled mid-flight. */
+  const [aiLabel, setAiLabel] = useState<string | null>(null);
+  /** The exact payload captured at tap time — used for Retry, no drift. */
+  const [aiPayload, setAiPayload] = useState<AISpendingSnapshot | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -59,6 +95,50 @@ export default function AnalyticsScreen() {
     useCallback(() => {
       void load();
     }, [load]),
+  );
+
+  /**
+   * Run one analysis against the TAP-TIME payload. Both `label` and `payload`
+   * are captured by the caller (the state the screen renders at tap time), so
+   * a month change mid-flight only affects the next tap, never this request.
+   */
+  const runAnalysis = useCallback(
+    async (label: string, payload: AISpendingSnapshot) => {
+      setAiPending(true);
+      setAiError(null);
+      setAiResult(null);
+      setAiLabel(label);
+      setAiPayload(payload);
+      try {
+        const result = await aiService.analyze('spending', payload);
+        setAiResult(result);
+      } catch (runError: unknown) {
+        setAiError(toAIError(runError));
+      } finally {
+        setAiPending(false);
+      }
+    },
+    [aiService],
+  );
+
+  const onAnalyzePress = useCallback(() => {
+    if (!snapshot || aiPending) return;
+    void runAnalysis(snapshot.monthLabel, toSpendingSnapshot(snapshot));
+  }, [snapshot, aiPending, runAnalysis]);
+
+  const onRetry = useCallback(() => {
+    if (aiPayload && aiLabel) void runAnalysis(aiLabel, aiPayload);
+  }, [aiPayload, aiLabel, runAnalysis]);
+
+  /** The card's state bundle — the shared contract (015 uses the same shape). */
+  const aiState: AIAnalysisState = useMemo(
+    () => ({
+      pending: aiPending,
+      error: aiError,
+      result: aiResult,
+      onRetry: aiError ? onRetry : NOOP_RETRY,
+    }),
+    [aiPending, aiError, aiResult, onRetry],
   );
 
   const isEmpty = snapshot !== null && snapshot.totalSen === 0;
@@ -82,13 +162,37 @@ export default function AnalyticsScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          {/* Header card: month total + MoM change. */}
+          {/* Header card: month total + MoM change + the 014 action. */}
           <View style={styles.totalCard} testID="analytics-total-card">
             <Text style={styles.totalLabel}>Total spent</Text>
             <Text style={styles.totalAmount} testID="analytics-total">
               {formatSen(snapshot.totalSen)}
             </Text>
-            <MoMChip changeSen={snapshot.changeSen} changePct={snapshot.changePct} />
+            <View style={styles.momRow}>
+              <MoMChip changeSen={snapshot.changeSen} changePct={snapshot.changePct} />
+              <Pressable
+                onPress={onAnalyzePress}
+                disabled={aiPending}
+                accessibilityRole="button"
+                accessibilityLabel="Analyze my spending"
+                testID="analytics-analyze-button"
+                style={({ pressed }) => [
+                  styles.analyzeButton,
+                  pressed && styles.analyzeButtonPressed,
+                  aiPending && styles.analyzeButtonDisabled,
+                ]}
+              >
+                {aiPending ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
+                )}
+                <Text style={styles.analyzeLabel}>Analyze my spending</Text>
+              </Pressable>
+            </View>
+
+            {/* Shared AI card — renders nothing until an analysis starts. */}
+            <AIAnalysisCard label={aiLabel ?? undefined} {...aiState} />
           </View>
 
           <CategoryBreakdown breakdown={snapshot.breakdown} totalSen={snapshot.totalSen} />
@@ -108,17 +212,6 @@ export default function AnalyticsScreen() {
             ))}
           </View>
 
-          <Pressable
-            onPress={() => Alert.alert('Analyze my spending', 'Coming in 014')}
-            accessibilityRole="button"
-            testID="analytics-analyze-button"
-            style={({ pressed }) => [styles.analyzeButton, pressed && styles.analyzeButtonPressed]}
-          >
-            <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
-            <Text style={styles.analyzeLabel}>Analyze my spending</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-          </Pressable>
-          <Text style={styles.analyzeNote}>AI analysis of your trends, pace and budget pressure — coming in 014.</Text>
           <View style={styles.spacer} />
         </ScrollView>
       )}
@@ -146,6 +239,24 @@ const styles = StyleSheet.create({
   },
   totalLabel: { fontSize: typography.caption, color: colors.muted },
   totalAmount: { fontSize: typography.money, fontWeight: '700', color: colors.text, marginVertical: spacing.xs },
+  momRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+  },
+  analyzeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.accentSoft,
+    borderRadius: 999,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  analyzeButtonPressed: { opacity: 0.7 },
+  analyzeButtonDisabled: { opacity: 0.5 },
+  analyzeLabel: { fontSize: typography.caption, fontWeight: '700', color: colors.accent },
   section: {
     backgroundColor: colors.surface,
     marginHorizontal: spacing.xl,
@@ -167,25 +278,5 @@ const styles = StyleSheet.create({
   },
   expenseAmount: { fontSize: typography.body, color: colors.text, fontWeight: '600' },
   expenseMeta: { fontSize: typography.caption, color: colors.muted },
-  analyzeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.accentSoft,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    borderRadius: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  analyzeButtonPressed: { opacity: 0.7 },
-  analyzeLabel: { fontSize: typography.body, fontWeight: '700', color: colors.accent },
-  analyzeNote: {
-    fontSize: typography.caption,
-    color: colors.muted,
-    textAlign: 'center',
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.xs,
-  },
   spacer: { height: spacing.lg },
 });

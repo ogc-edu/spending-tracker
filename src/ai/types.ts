@@ -73,11 +73,17 @@ export interface TopCategory {
 export interface SpendingSnapshot {
   /** `YYYY-MM` of the analyzed month. */
   month: string;
+  /** Display label for the analyzed month, e.g. "September 2026" (plan 014). */
+  monthLabel: string;
   totalSen: number;
   previousTotalSen: number;
   changeSen: number;
   changePct: number | null;
   avgDailySen: number;
+  /** End-of-month projection, floored sen (AN-3) — pace context (plan 014). */
+  projectionSen: number;
+  /** Budget pressure: null = no OVERALL budget set for the month (plan 014). */
+  utilization: { pct: number | null; overBudget: boolean } | null;
   topCategories: TopCategory[];
   /** Category-level "largest" breakdown — NO free-text descriptions (A6). */
   largest?: TopCategory[];
@@ -95,6 +101,12 @@ export interface AllowanceSnapshot {
   safeSen: number;
   dailyAllowanceSen: number;
   daysRemaining: number;
+  /**
+   * Whether an overall budget is set (plan 015). `false` when the UI shows
+   * "—" for the remaining budget — the AI must never invent one. Present on
+   * every allowance payload, so a missing flag is a shape error, not a gap.
+   */
+  hasBudget: boolean;
 }
 
 /** Snapshot associated with each context. */

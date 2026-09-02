@@ -47,11 +47,19 @@ export const DebtSnapshotSchema = z.object({
 
 export const SpendingSnapshotSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/),
+  monthLabel: z.string(),
   totalSen: sen,
   previousTotalSen: sen,
   changeSen: sen,
   changePct: z.number().nullable(),
   avgDailySen: sen,
+  projectionSen: sen,
+  utilization: z
+    .object({
+      pct: z.number().nullable(),
+      overBudget: z.boolean(),
+    })
+    .nullable(),
   topCategories: z.array(z.object({ name: z.string(), amountSen: sen })),
   // Category-level only — no free-text descriptions (A6).
   largest: z.array(z.object({ name: z.string(), amountSen: sen })).optional(),
@@ -65,6 +73,9 @@ export const AllowanceSnapshotSchema = z.object({
   safeSen: sen,
   dailyAllowanceSen: sen,
   daysRemaining: z.number().int(),
+  // Plan 015 — the no-budget signal (`false` = UI shows "—"). Required: the
+  // AI must never guess at a budget the app does not have.
+  hasBudget: z.boolean(),
 });
 
 /** Snapshot schema for each context. */

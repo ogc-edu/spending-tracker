@@ -30,11 +30,14 @@ const debtSnapshot: DebtSnapshot = {
 
 const spendingSnapshot: SpendingSnapshot = {
   month: '2026-08',
+  monthLabel: 'August 2026',
   totalSen: 300_000,
   previousTotalSen: 320_000,
   changeSen: -20_000,
   changePct: -6.25,
   avgDailySen: 9_677,
+  projectionSen: 300_000,
+  utilization: { pct: 10.0, overBudget: false },
   topCategories: [
     { name: 'Food', amountSen: 120_000 },
     { name: 'Transport', amountSen: 50_000 },
@@ -49,6 +52,8 @@ const allowanceSnapshot: AllowanceSnapshot = {
   safeSen: 250_000,
   dailyAllowanceSen: 8_333,
   daysRemaining: 30,
+  // Plan 015 — the no-budget signal is part of the allowance payload.
+  hasBudget: true,
 };
 
 const SNAPSHOTS: Record<AIContext, unknown> = {
