@@ -32,8 +32,9 @@ describe('AiConfigService — SecureStore keys (per-user, BYOK)', () => {
 
     expect(await config.getKey('gemini')).toBe('AQ-1234');
     expect(await config.getKey('deepseek')).toBe('sk-ds-5678');
-    expect(store.map.get('key:gemini:1')).toBe('AQ-1234');
-    expect(store.map.get('key:deepseek:1')).toBe('sk-ds-5678');
+    // Underscore separators only — expo-secure-store rejects ':' in key names.
+    expect(store.map.get('key_gemini_1')).toBe('AQ-1234');
+    expect(store.map.get('key_deepseek_1')).toBe('sk-ds-5678');
     // Settings repo saw ONLY ai-pref writes (active/model) — zero key material.
     for (const write of repo.writes) {
       expect(JSON.stringify(write.patch)).not.toMatch(/AQ-|sk-ds/);

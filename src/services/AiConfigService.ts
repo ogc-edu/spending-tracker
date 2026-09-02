@@ -2,8 +2,9 @@
  * Plan 013 — AiConfigService (BYOK configuration, PRD AI-6/AI-9/SET-2).
  *
  * The ONLY owner of provider credentials in the app:
- *  - Keys live in SecureStore scoped per local user — `key:{provider}:{userId}`
- *    (A10 per-user isolation) — NEVER SQLite/Zustand/AsyncStorage, never
+ *  - Keys live in SecureStore scoped per local user — `key_{provider}_{userId}`
+ *    (A10 per-user isolation; underscore separators because expo-secure-store
+ *    rejects ':' in key names) — NEVER SQLite/Zustand/AsyncStorage, never
  *    logged, committed, or included in errors.
  *  - Non-secret prefs (selected model per provider, active-provider choice)
  *    persist in the `settings` table (plan 010), never in SecureStore.
@@ -32,9 +33,17 @@ export interface SecureStoreLike {
   deleteItemAsync(key: string): Promise<void>;
 }
 
-/** SecureStore key for one user's provider credential. */
+/**
+ * SecureStore key for one user's provider credential.
+ *
+ * Format is `key_{provider}_{userId}` — expo-secure-store REJECTS colons
+ * ("keys must contain only alphanumeric characters, '.', '-' and '_'"), so
+ * the plan's `key:{provider}:{userId}` notation maps to underscore separators
+ * on the real platform (the in-memory test store is lenient — this constraint
+ * is on-device only).
+ */
 export function aiKeyStoreKey(provider: ConfigurableAIProvider, userId: number): string {
-  return `key:${provider}:${userId}`;
+  return `key_${provider}_${userId}`;
 }
 
 /** The settings-row field holding a provider's selected model (non-secret). */

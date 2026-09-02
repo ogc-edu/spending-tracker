@@ -255,7 +255,7 @@ describe('ProviderConfigScreen — state flows', () => {
     const rendered = JSON.stringify(tree.toJSON());
     expect(rendered).not.toContain(RAW_KEY);
     expect(rendered).toContain(maskKeySuffix(RAW_KEY));
-    expect(store.map.get('key:gemini:1')).toBe(RAW_KEY);
+    expect(store.map.get('key_gemini_1')).toBe(RAW_KEY);
   });
 
   it('saving also populates the model picker (discovery on the saved key)', async () => {
