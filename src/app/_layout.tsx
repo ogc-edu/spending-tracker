@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initDb } from '@/db';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
@@ -46,6 +48,10 @@ function RootStack() {
 
 export default function RootLayout() {
   const [dbState, setDbState] = useState<DbState>({ status: 'loading' });
+  // Preload Ionicons so the tab bar glyphs render on first mount (New
+  // Architecture + bottom-tabs race: without this, icon codepoints show as
+  // blank boxes on cold start). Gate the tree until ready.
+  const [fontsLoaded] = useFonts({ ...Ionicons.font });
 
   const runInit = useCallback(() => {
     initDb().then(
@@ -66,7 +72,7 @@ export default function RootLayout() {
     runInit();
   }, [runInit]);
 
-  if (dbState.status === 'loading') {
+  if (!fontsLoaded || dbState.status === 'loading') {
     return <DbLoadingScreen />;
   }
 
