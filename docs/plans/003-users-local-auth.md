@@ -11,22 +11,22 @@
 
 ## Objective
 
-Local user accounts: **register, login, logout**, and an **auto-login session**, with **Argon2id** password hashing and a **seeded default user** (ooiguancheng18@gmail.com / 1234, confirmed by the user). The app is gated behind login, and every user's financial data is isolated via `user_id` — the exact separation a future cloud database + web client will need.
+Local user accounts: **register, login, logout**, and an **auto-login session**, with **PBKDF2-SHA256** password hashing (A7 rev 2026-09-03) and a **seeded default user** (ooiguancheng18@gmail.com / 1234, confirmed by the user). The app is gated behind login, and every user's financial data is isolated via `user_id` — the exact separation a future cloud database + web client will need.
 
 ## Context
 
-Scope change (user request, 2026-09-01): the PRD originally listed "no authentication" as a non-goal; that is now an MVP feature. This is a **local, offline** auth — there is no server. The user has separately built a production-grade AWS auth system (Argon2id, refresh tokens, etc.); the choices here are deliberately ported where sensible (Argon2id parameters) and documented as non-production where the local context demands it.
+Scope change (user request, 2026-09-01): the PRD originally listed "no authentication" as a non-goal; that is now an MVP feature. This is a **local, offline** auth — there is no server. The user has separately built a production-grade AWS auth system (Argon2id, refresh tokens, etc.); the choices here are deliberately ported where sensible (hashing was Argon2id until the **A7 rev 2026-09-03** on-device WASM failure forced PBKDF2-SHA256) and documented as non-production where the local context demands it.
 
 Confirmed decisions (2026-09-01):
 
-- **A7 — Hashing: Argon2id** via `hash-wasm` (pure WASM — **amended 2026-09-01, A16, cross-platform**: replaces `react-native-argon2`; **same algorithm and params**: Argon2id v1.3, time cost 2, 64 MiB memory, parallelism 1, 32-byte salt & hash), so **Expo Go works on both platforms** — no native module, no dev-build requirement. Swap verification (delegated session): a hash produced by the native lib (captured from the emulator) must verify under hash-wasm, plus a known-vector test.
+- **A7 (rev 2026-09-03) — Hashing: PBKDF2-SHA256** via `@noble/hashes` (pure JS, no WASM, no native module): 600,000 iterations, 16-byte random salt, 32-byte key. **Why (recorded):** Argon2id was the original A7 (mirroring the user's auth-system). The A16 cross-platform swap (hash-wasm, 2026-09-01) **failed on-device on 2026-09-03** — Hermes has no WebAssembly, so every Argon2 JS implementation throws ("WebAssembly is not supported in this environment!") and neither Expo Go nor any dev build with Hermes can run it. Stored format `$pbkdf2-sha256$i=600000$<salt-b64>$<hash-b64>`; verify() re-derives with the stored iteration count and compares in constant time; malformed/legacy `$argon2id$` hashes return false (dev DBs with them must clear `users`).
 - **A8 — Session: auto-login across launches; explicit logout.** Current user id in `expo-secure-store`; boot validates the id still exists.
 - **A9 — Password policy: none.** Any non-empty password; the seeded `1234` is a deliberate exception (test convenience).
 - **A10 — Data scoping: user-scoped financial data, global categories.** `user_id` FK on accounts/expenses/budgets/commitments/commitment_payments; the 12 default categories are a global seed shared by all local users.
 
 ## Requirements
 
-- **Register**: email (valid format) + password (any non-empty) → creates a user (Argon2id hash), auto-signs in.
+- **Register**: email (valid format) + password (any non-empty) → creates a user (PBKDF2-SHA256 hash), auto-signs in.
 - **Login**: verify password against stored hash; wrong password → clear error; duplicate email → clear error (register).
 - **Logout**: clears the session → login screen.
 - **Auto-login**: session survives app restarts (SecureStore); stale id (user deleted) → treated as signed out.
@@ -41,11 +41,11 @@ Confirmed decisions (2026-09-01):
 
 ```ts
 interface PasswordHasher { hash(password: string): Promise<string>; verify(password: string, encoded: string): Promise<boolean>; }
-class Argon2IdHasher implements PasswordHasher { /* hash-wasm argon2id (A16): timeCost 2, memoryCost 65536, parallelism 1, hashLength 32 */ }
+class Pbkdf2Hasher implements PasswordHasher { /* @noble/hashes pbkdf2Async(sha256, …): c=600000, dkLen=32, asyncTick=5 (A7 rev) */ }
 class FakeHasher implements PasswordHasher { /* deterministic, for Jest */ }
 ```
 
-Encoded format: the `$argon2id$...` string produced by the module (store as-is in `users.password_hash`). The hasher is injected into AuthService so Jest runs on `FakeHasher` while devices run Argon2id. The real module is verified manually on-device.
+Encoded format: `$pbkdf2-sha256$i=600000$<salt-b64>$<hash-b64>` (stored as-is in `users.password_hash`). The hasher is injected into AuthService so Jest runs on `FakeHasher` while devices run PBKDF2. **On-device verification is mandatory** — the A16 hash-wasm swap passed Jest but failed on a real phone (Hermes/WASM); the A7-rev hasher is verified on-device (2026-09-03: seed + login on the user's phone).
 
 ### AuthService
 

@@ -39,8 +39,8 @@ Non-negotiable rules:
 | **Drizzle + expo-sqlite** | Schema, migrations, SQLite storage | — |
 | **AIService** (`ai/`) | Abstraction over AI providers; prompt assembly from structured data; response validation | GeminiProvider → Gemini API |
 | **Store** (Zustand) | Non-persistent UI state: selected month, active filters, last-used category/account | — |
-| **AuthService** (`services/`) | Register/login/logout; Argon2id verification; session persistence (SecureStore); exposes the current user to services/repositories | UserRepository, PasswordHasher |
-| **PasswordHasher** (`auth/`) | `hash`/`verify` contract; Argon2IdHasher (hash-wasm pure WASM — A16) for devices, FakeHasher for Jest | hash-wasm |
+| **AuthService** (`services/`) | Register/login/logout; PBKDF2-SHA256 verification; session persistence (SecureStore); exposes the current user to services/repositories | UserRepository, PasswordHasher |
+| **PasswordHasher** (`auth/`) | `hash`/`verify` contract; Pbkdf2Hasher (@noble/hashes pure JS — **A7 rev 2026-09-03**) for devices, FakeHasher for Jest | @noble/hashes |
 | **Utils** | Money (sen ↔ display), local-date handling, formatting | — |
 
 ## 3. Project Structure
@@ -58,7 +58,7 @@ spending-tracker/
 │   │   ├── schema.ts             # Drizzle schema — single source of truth
 │   │   ├── client.ts             # expo-sqlite + drizzle init
 │   │   └── seed.ts               # 12 default categories (users seeded in 003)
-│   ├── auth/                     # passwordHasher.ts (contract + fake), argon2Hasher.ts, AuthProvider.tsx
+│   ├── auth/                     # passwordHasher.ts (contract + fake), pbkdf2Hasher.ts, AuthProvider.tsx
 │   ├── repositories/
 │   │   ├── types.ts              # interfaces (future cloud impls implement the same)
 │   │   └── drizzle/              # Drizzle implementations, one file per entity
@@ -82,7 +82,7 @@ Refined from the spec schema (money columns suffixed `_sen`; two structural addi
 
 | Table | Columns (key additions bolded) | Notes |
 |---|---|---|
-| `users` | id, email (**UNIQUE, COLLATE NOCASE**), password_hash (Argon2id encoded), created_at | seeded with the default user in feature 003 |
+| `users` | id, email (**UNIQUE, COLLATE NOCASE**), password_hash (PBKDF2-SHA256 encoded, A7 rev), created_at | seeded with the default user in feature 003 |
 | `categories` | id, name, icon, type, created_at | seeded with the 12 defaults; **global** (shared by all users); editable in a future version |
 | `accounts` | id, **user_id FK**, name, type (`cash`\|`bank`\|`ewallet`\|`credit_card`), balance_sen, created_at, updated_at | balance_sen on a credit card = **amount owed** (positive); counted negatively in "available" |
 | `expenses` | id, **user_id FK**, amount_sen, category_id FK, description, date (TEXT `YYYY-MM-DD`, local), account_id FK **nullable**, **commitment_payment_id FK nullable UNIQUE**, created_at, updated_at | unique link enforces D3 idempotency (a payment's expense is created exactly once) |
@@ -161,7 +161,7 @@ interface AIService {
 
 | Flow | Path |
 |---|---|
-| Register | Login screen → AuthService.register → hash (Argon2id) + insert + session → Redirect to (tabs) |
+| Register | Login screen → AuthService.register → hash (PBKDF2-SHA256) + insert + session → Redirect to (tabs) |
 | Login / logout | Login screen → AuthService.login → verify → session / logout clears → Redirect; root gate blocks tabs while signed out |
 | Add/edit/delete expense | Screen (Zod form) → ExpenseService → drizzle **transaction** {expense row ± account balance} → screen refetch on focus |
 | Set budget | Screen → BudgetService.upsert (unique-key replace) |
@@ -181,8 +181,8 @@ interface AIService {
 
 ## 12. Security Boundaries
 
-- Single-user-per-session local auth: Argon2id (`hash-wasm`, time=2, 64 MiB, par=1, 32-byte salt/hash), per-user random salt; SQLite at rest is unencrypted inside the device sandbox. This is a **local gate, not production auth** — superseded by a future web backend (the user's own AWS auth system applies there).
-- Hashing is pure WASM (`hash-wasm` Argon2id — no native module): **Expo Go works on both platforms**; dev builds only for optional native tooling (amended 2026-09-01, A16; implementation swap session pending — plan 003).
+- Single-user-per-session local auth: PBKDF2-SHA256 (`@noble/hashes`, 600,000 iterations, 16-byte salt, 32-byte key — **A7 rev 2026-09-03**), per-user random salt; SQLite at rest is unencrypted inside the device sandbox. This is a **local gate, not production auth** — superseded by a future web backend (the user's own AWS auth system applies there).
+- Hashing is pure JS (`@noble/hashes` PBKDF2-SHA256 — A7 rev 2026-09-03): **Expo Go works on both platforms**; dev builds only for optional native tooling. (Argon2 JS libs require WASM, which Hermes does not support — observed on-device 2026-09-03.)
 - Session: current user id in SecureStore; validated at boot; logout clears it.
 - SQLite lives in app-private storage per platform (Android app-private dir; iOS Library/) — same driver (`expo-sqlite`), same schema.
 - Gemini key in SecureStore (obfuscation only — not a real secret store; explicitly documented insecure for distribution).
@@ -214,7 +214,7 @@ Dev: `drizzle-kit`, `jest`, `jest-expo`, `typescript`.
 | A4 | Zustand role | UI state only; SQLite is the source of truth (no data cache) | Confirmed |
 | A5 | Auto-created Debt expense (D3) | Account optional; UI prefills last-used account; balance adjusts when an account is chosen; unique `commitment_payment_id` = exactly-once | Confirmed |
 | A6 | AI input hygiene | Aggregates + category names only; raw descriptions never sent; responses Zod-validated; key in SecureStore | Confirmed |
-| A7 | Local login hashing | **Argon2id** via `react-native-argon2` (time=2, memory=64 MiB, parallelism=1, 32-byte) — mirrors the user's auth-system params; dev-build requirement documented | Confirmed |
+| A7 | Local login hashing (**REV 2026-09-03**) | **PBKDF2-SHA256** via `@noble/hashes` (600,000 iterations, 16-byte salt, 32-byte key; format `$pbkdf2-sha256$i=…$salt$hash`). Originally Argon2id (mirroring the user's auth-system); **reverted 2026-09-03 after on-device failure** — Hermes has no WASM, so every Argon2 JS implementation throws "WebAssembly is not supported in this environment!". PBKDF2 is a weaker KDF than Argon2id — accepted trade-off for a pure-JS, no-native, Expo-Go-safe hasher | Confirmed (rev.) |
 | A8 | Session | Auto-login (current user id in SecureStore, validated at boot); explicit logout; stale id → signed out | Confirmed |
 | A9 | Password policy | **None** — any non-empty password; seeded `1234` is a deliberate exception | Confirmed |
 | A10 | Data scoping | Financial tables carry `user_id`; categories global; every repository query user-scoped | Confirmed |
@@ -223,7 +223,7 @@ Dev: `drizzle-kit`, `jest`, `jest-expo`, `typescript`.
 | A13 | Gemini auth (G1, rev. 2026-09-01) | API-key auth (`x-goog-api-key` / `GEMINI_API_KEY`), never OAuth — AQ-format key live-verified 2026-09-01; **no pinned model — discovery only** (catalogs churn: 2.0-flash retired, DeepSeek chat → v4-*) | Confirmed |
 | A14 | AI BYOK (rev. 2026-09-01) | Gemini + DeepSeek providers, user-supplied keys (SecureStore, per local user); test connection; model discovery + manual entry fallback; explicit active provider, **no automatic fallback**; hardcoded endpoints; keys never in SQLite/logs/git | Confirmed |
 | A15 | Account-required (deviation 2026-09-01) | **Manual expenses require an account** (ACC-2 determinism; closes the spent-without-available hole; account deletion stays safe — no unlinked orphans). DB column remains nullable **only** for plan-008 auto-created repayment expenses with no paying account (balance adjustment skipped); form uses last-used default so it costs one tap | Confirmed |
-| A16 | Cross-platform & hasher (2026-09-01) | **iOS + Android** in MVP (web out). Argon2id implementation swapped `react-native-argon2` → **`hash-wasm`** (same Argon2id v1.3 params, A7 intact) → no native module: **Expo Go works**, dev-build constraint removed. `ios.bundleIdentifier` already in app.json. Swap verification: known-vector test + a hash captured from a native build. iOS Keychain note: SecureStore entries survive app reinstall on iOS — handle explicitly in 016 | Confirmed |
+| A16 | Cross-platform & hasher (2026-09-01, hasher rev. 2026-09-03) | **iOS + Android** in MVP (web out). Hasher: `react-native-argon2` → `hash-wasm` (A16, 2026-09-01) → **`@noble/hashes` PBKDF2-SHA256 (A7 rev, 2026-09-03)** — the hash-wasm step failed on-device (Hermes lacks WASM); final state is pure JS with **no native module: Expo Go works**, dev-build constraint removed, A7 intact-as-revised. `ios.bundleIdentifier` already in app.json. Known-vector + RFC tests in Jest; on-device seed/login verified 2026-09-03. iOS Keychain note: SecureStore entries survive app reinstall on iOS — handle explicitly in 016 | Confirmed |
 
 Alternatives considered: raw SQL + hand-rolled migration runner (my original recommendation — zero deps, more explicit SQL) and Kysely (typed builder, smaller expo-sqlite ecosystem); user chose Drizzle. Materialized payment rows rejected (A3); Zustand-as-cache rejected (A4); Gemini without SDK (raw fetch) rejected for MVP simplicity.
 

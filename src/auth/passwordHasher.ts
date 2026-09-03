@@ -1,11 +1,12 @@
 /**
  * PasswordHasher contract + FakeHasher (plan 003 / ARCHITECTURE §2, A7).
  *
- * The real hasher on-device is Argon2IdHasher (src/auth/argon2Hasher.ts)
- * which wraps hash-wasm Argon2id (pure WASM — decision A16: time=2,
- * memory=65536 KiB, parallelism=1, hashLength=32, mode argon2id). No native
- * module — Expo Go works on both platforms. Jest uses FakeHasher so tests
- * never pay the 64 MiB Argon2 cost.
+ * The real hasher on-device is Pbkdf2Hasher (src/auth/pbkdf2Hasher.ts):
+ * PBKDF2-HMAC-SHA256 via @noble/hashes — pure JS (no WASM, no native module),
+ * Hermes/Expo Go-safe on both platforms (decision A7 rev 2026-09-03:
+ * Argon2id → PBKDF2-SHA256 because Hermes cannot run WASM; 600,000
+ * iterations, 16-byte salt, 32-byte key). Jest uses FakeHasher so tests
+ * never pay the hashing cost.
  */
 
 export interface PasswordHasher {

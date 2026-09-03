@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
+import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initDb } from '@/db';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { DbErrorScreen } from '@/components/DbErrorScreen';
 import { DbLoadingScreen } from '@/components/DbLoadingScreen';
+import { ToastProvider } from '@/components/ToastProvider';
+
+// TEMP (QA sweep only): dev-build LogBox strips block bottom taps while
+// offline (dev-tools websocket failures). REVERT BEFORE COMMIT.
+LogBox.ignoreAllLogs();
 
 /**
- * Root layout — plan 002 init gate + plan 003 AuthProvider gate.
+ * Root layout — plan 002 init gate + plan 003 AuthProvider gate,
+ * plan 016: ToastProvider (write-failure toasts) + SafeAreaProvider
+ * (safe-area insets for the toast and keyboard-avoiding screens;
+ * react-native-safe-area-context's hooks throw outside a provider).
  * Flow: initDb() (migrations + category seed + user seed) → AuthProvider
  * (validates SecureStore session) → Stack. Tabs are gated by AuthProvider
  * status; login/register redirect to (tabs) when signed in and vice-versa
@@ -40,7 +50,10 @@ export default function RootLayout() {
   const runInit = useCallback(() => {
     initDb().then(
       () => setDbState({ status: 'ready' }),
-      (error: unknown) => setDbState({ status: 'error', error }),
+      (error: unknown) => {
+        console.error('[initDb] failed:', error);
+        setDbState({ status: 'error', error });
+      },
     );
   }, []);
 
@@ -62,8 +75,12 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <RootStack />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <RootStack />
+        </ToastProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

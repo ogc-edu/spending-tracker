@@ -19,7 +19,7 @@ import * as schema from './schema';
 import { runMigrations } from './migrate';
 import { insertDefaultCategoriesIfEmpty } from './seed';
 import { seedDefaultUserIfEmpty } from './seedUser';
-import { Argon2IdHasher } from '@/auth/argon2Hasher';
+import { Pbkdf2Hasher } from '@/auth/pbkdf2Hasher';
 
 export type AppDatabase = ExpoSQLiteDatabase<typeof schema>;
 
@@ -33,9 +33,10 @@ async function openAndInit(): Promise<AppDatabase> {
   const client = drizzle(sqlite, { schema });
   await runMigrations(client);
   await insertDefaultCategoriesIfEmpty(client);
-  // Default user seed — Argon2id via hash-wasm (pure WASM, decision A16).
+  // Default user seed — PBKDF2-SHA256 via @noble/hashes (pure JS, Hermes-safe;
+  // decision A7 rev 2026-09-03 — Argon2 JS libs need WASM, which Hermes lacks).
   // If it fails the init gate shows the retry screen (same path as migration failure).
-  await seedDefaultUserIfEmpty(client, new Argon2IdHasher());
+  await seedDefaultUserIfEmpty(client, new Pbkdf2Hasher());
   return client;
 }
 

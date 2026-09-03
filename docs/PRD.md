@@ -68,7 +68,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | D3 | Paid commitment payments | **Auto-create linked expense**: marking a payment paid creates an Expense (category **Debt / Repayment**) linked to that payment. Paid payments are excluded from upcoming totals; the expense counts exactly once in spending. |
 | D4 | Commitment frequencies | **Monthly + one-time** only. Weekly/yearly are future. Installments define a payment count or end date; recurring monthly commitments (rent, subscriptions) have no end date. |
 | D5 | Project & docs location | `~/Documents/projects/spending-tracker/`, docs in `docs/` per auth-system convention (PRD / ARCHITECTURE / IMPLEMENTATION_PLAN / plans/NNN-*). |
-| D6 | Local user accounts (user request 2026-09-01) | Register/login/logout on the local DB. **Argon2id** hashing via `hash-wasm` (pure WASM — no native module; params mirroring the user's auth-system: time=2, 64 MiB, par=1); **auto-login** session (SecureStore) with explicit logout; **no password policy**; seeded default user `ooiguancheng18@gmail.com` / `1234`; financial data **user-scoped** (`user_id`), categories global; login gates the whole app. |
+| D6 | Local user accounts (user request 2026-09-01) | Register/login/logout on the local DB. **PBKDF2-SHA256** hashing via `@noble/hashes` (pure JS — Hermes-safe, no WASM/native; 600,000 iterations, 16-byte salt, 32-byte key — **A7 rev 2026-09-03**); **auto-login** session (SecureStore) with explicit logout; **no password policy**; seeded default user `ooiguancheng18@gmail.com` / `1234`; financial data **user-scoped** (`user_id`), categories global; login gates the whole app. |
 | D7 | AI BYOK (user request 2026-09-01) | **Gemini + DeepSeek**, user-supplied API keys (per local user, SecureStore — never SQLite/logs/git); Test Connection; **model discovery only** (no hardcoded lists; manual model-ID entry when discovery fails); explicit **active provider**, no automatic fallback; hardcoded endpoints; app fully functional with no AI configured. |
 
 ### Assumptions (flag any that are wrong)
@@ -168,13 +168,13 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | ID | Requirement |
 |---|---|
 | USR-1 | Register: email (valid format) + password (any non-empty — no policy, confirmed) → creates a user and signs in immediately. |
-| USR-2 | Login: Argon2id verification against the stored hash; wrong credentials → clear error; duplicate email → clear error on register. |
+| USR-2 | Login: PBKDF2-SHA256 verification against the stored hash; wrong credentials → clear error; duplicate email → clear error on register. |
 | USR-3 | Session: auto-login across launches (SecureStore holds the current user id); explicit logout returns to the login screen; a stale id (user gone) is handled as signed-out. |
 | USR-4 | Seed: default user `ooiguancheng18@gmail.com` / `1234` created on first run (hash computed at seed time with the real hasher). |
 | USR-5 | User isolation: accounts, expenses, budgets, commitments, and commitment payments belong to a user (`user_id` FK); the 12 categories stay global. |
 | USR-6 | Gate: Dashboard and all tabs are unreachable while signed out; login/register are the only routes. |
 | USR-7 | Entirely offline; no remote authentication. |
-| USR-8 | Note: Argon2id runs via `hash-wasm` (pure WASM — no native module): **Expo Go works on Android and iOS**; dev builds are optional. Amended 2026-09-01 (cross-platform decision A16). |
+| USR-8 | Note: hashing is PBKDF2-SHA256 via `@noble/hashes` (pure JS). Argon2 JS libraries require WASM, which Hermes (RN's engine) does not support — observed on-device 2026-09-03 ("WebAssembly is not supported in this environment!"). Decision **A7 rev 2026-09-03**: Argon2id → PBKDF2-SHA256 (weaker KDF, accepted trade-off). **Expo Go works on Android and iOS**; dev builds are optional. |
 
 ### 7.9 Settings
 
@@ -250,9 +250,9 @@ Properties of this formula (documented so implementers and users are not surpris
 
 ## 10. Constraints
 
-- Stack: React Native + TypeScript + Expo + Expo Router + Expo SQLite + Drizzle ORM + Zustand + React Hook Form + Zod; AI providers: **Gemini + DeepSeek with user-supplied API keys (BYOK)**; Argon2id (`hash-wasm` — pure WASM, no native module) for local login.
+- Stack: React Native + TypeScript + Expo + Expo Router + Expo SQLite + Drizzle ORM + Zustand + React Hook Form + Zod; AI providers: **Gemini + DeepSeek with user-supplied API keys (BYOK)**; PBKDF2-SHA256 (`@noble/hashes` — pure JS, Hermes/Expo-safe) for local login.
 - **iOS + Android** in the MVP; web stays out of scope.
-- Local login hashing is pure WASM (`hash-wasm` Argon2id): the app runs in **Expo Go** on both platforms; development builds are optional (native tooling only).
+- Local login hashing is pure JS (`@noble/hashes` PBKDF2-SHA256, A7 rev 2026-09-03): the app runs in **Expo Go** on both platforms; development builds are optional (native tooling only).
 - No backend, cloud sync, or third-party BaaS.
 - Do not add features beyond this PRD unless required by the specified functionality.
 

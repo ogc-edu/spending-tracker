@@ -3,12 +3,13 @@
  *
  * Exposes {status: loading | signedOut | signedIn, user, login, register, logout}
  * and validates the persisted current_user_id on boot (stale id → signedOut).
- * The device hasher is Argon2IdHasher (hash-wasm — A16); callers can inject FakeHasher in tests
+ * The device hasher is Pbkdf2Hasher (PBKDF2-SHA256 via @noble/hashes — A7 rev
+ * 2026-09-03, Hermes-safe pure JS); callers can inject FakeHasher in tests
  * but the provider itself always uses the real hasher on-device.
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Argon2IdHasher } from '@/auth/argon2Hasher';
+import { Pbkdf2Hasher } from '@/auth/pbkdf2Hasher';
 import { SecureStoreSessionStore } from '@/auth/sessionStore';
 import type { User } from '@/db/schema';
 import { getDb } from '@/db';
@@ -38,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { authService } = useMemo(() => {
     const db = getDb();
     const repo = new DrizzleUserRepository(db as unknown as never);
-    const hasher = new Argon2IdHasher();
+    const hasher = new Pbkdf2Hasher();
     const session = new SecureStoreSessionStore();
     return { authService: new AuthService(repo, hasher, session) };
   }, []);
