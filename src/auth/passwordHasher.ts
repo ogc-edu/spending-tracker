@@ -4,7 +4,7 @@
  * The real hasher on-device is Pbkdf2Hasher (src/auth/pbkdf2Hasher.ts):
  * PBKDF2-HMAC-SHA256 via @noble/hashes — pure JS (no WASM, no native module),
  * Hermes/Expo Go-safe on both platforms (decision A7 rev 2026-09-03:
- * Argon2id → PBKDF2-SHA256 because Hermes cannot run WASM; 600,000
+ * Argon2id → PBKDF2-SHA256 because Hermes cannot run WASM; 10,000
  * iterations, 16-byte salt, 32-byte key). Jest uses FakeHasher so tests
  * never pay the hashing cost.
  */

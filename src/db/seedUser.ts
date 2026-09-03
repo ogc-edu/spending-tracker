@@ -3,7 +3,7 @@
  *
  * Idempotent: only writes when `users` is empty (first launch after
  * migrations). The password hash is computed at seed time with the
- * injected hasher (Argon2IdHasher on-device, FakeHasher in Jest), so no
+ * injected hasher (Pbkdf2Hasher on-device, FakeHasher in Jest), so no
  * hash is ever committed.
  *
  * Seeded credentials (user-confirmed 2026-09-01):

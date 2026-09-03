@@ -181,7 +181,7 @@ interface AIService {
 
 ## 12. Security Boundaries
 
-- Single-user-per-session local auth: PBKDF2-SHA256 (`@noble/hashes`, 600,000 iterations, 16-byte salt, 32-byte key — **A7 rev 2026-09-03**), per-user random salt; SQLite at rest is unencrypted inside the device sandbox. This is a **local gate, not production auth** — superseded by a future web backend (the user's own AWS auth system applies there).
+- Single-user-per-session local auth: PBKDF2-SHA256 (`@noble/hashes`, 10,000 iterations — Hermes-measured ~1.5 s/hash, A7 rev 2026-09-03; 16-byte salt, 32-byte key), per-user random salt; SQLite at rest is unencrypted inside the device sandbox. This is a **local gate, not production auth** — superseded by a future web backend (the user's own AWS auth system applies there).
 - Hashing is pure JS (`@noble/hashes` PBKDF2-SHA256 — A7 rev 2026-09-03): **Expo Go works on both platforms**; dev builds only for optional native tooling. (Argon2 JS libs require WASM, which Hermes does not support — observed on-device 2026-09-03.)
 - Session: current user id in SecureStore; validated at boot; logout clears it.
 - SQLite lives in app-private storage per platform (Android app-private dir; iOS Library/) — same driver (`expo-sqlite`), same schema.
@@ -214,7 +214,7 @@ Dev: `drizzle-kit`, `jest`, `jest-expo`, `typescript`.
 | A4 | Zustand role | UI state only; SQLite is the source of truth (no data cache) | Confirmed |
 | A5 | Auto-created Debt expense (D3) | Account optional; UI prefills last-used account; balance adjusts when an account is chosen; unique `commitment_payment_id` = exactly-once | Confirmed |
 | A6 | AI input hygiene | Aggregates + category names only; raw descriptions never sent; responses Zod-validated; key in SecureStore | Confirmed |
-| A7 | Local login hashing (**REV 2026-09-03**) | **PBKDF2-SHA256** via `@noble/hashes` (600,000 iterations, 16-byte salt, 32-byte key; format `$pbkdf2-sha256$i=…$salt$hash`). Originally Argon2id (mirroring the user's auth-system); **reverted 2026-09-03 after on-device failure** — Hermes has no WASM, so every Argon2 JS implementation throws "WebAssembly is not supported in this environment!". PBKDF2 is a weaker KDF than Argon2id — accepted trade-off for a pure-JS, no-native, Expo-Go-safe hasher | Confirmed (rev.) |
+| A7 | Local login hashing (**REV 2026-09-03**) | **PBKDF2-SHA256** via `@noble/hashes` (**10,000 iterations**, 16-byte salt, 32-byte key; format `$pbkdf2-sha256$i=…$salt$hash`). Originally Argon2id (mirroring the user's auth-system); **reverted 2026-09-03 after on-device failure** — Hermes has no WASM, so every Argon2 JS implementation throws "WebAssembly is not supported in this environment!". Iterations tuned on-device: Hermes is ~100× slower than V8 at noble's SHA256, so OWASP's 600,000 would take minutes; **10,000 measures ~1.5 s/hash** — below server guidance, defensible for a local gate over sandboxed SQLite, and `$i=` is stored per hash so it can be raised later | Confirmed (rev.) |
 | A8 | Session | Auto-login (current user id in SecureStore, validated at boot); explicit logout; stale id → signed out | Confirmed |
 | A9 | Password policy | **None** — any non-empty password; seeded `1234` is a deliberate exception | Confirmed |
 | A10 | Data scoping | Financial tables carry `user_id`; categories global; every repository query user-scoped | Confirmed |

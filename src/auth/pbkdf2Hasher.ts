@@ -14,14 +14,13 @@
  * Argon2id and diverges from the user's AWS auth-system choice; it was
  * accepted to keep the app dependency-free of WASM/native crypto.
  *
- * Parameters (OWASP PBKDF2 guidance, SHA-256 variant): 600,000 iterations,
- * 16-byte random salt, 32-byte derived key. Iterations are embedded in the
- * stored hash so future tuning never breaks existing records.
- *
- * Stored format:
- *
- *   pbkdf2-sha256$i=600000$<salt-b64>$<hash-b64>
- *
+ * Parameters (tuned 2026-09-03, A7 rev): **10,000 iterations**, 16-byte
+ * random salt, 32-byte derived key. Measured on-device (OPPO, Hermes):
+ * ~1.5 s per hash. Hermes is ~100× slower than V8 at noble's SHA256, so
+ * OWASP's server-grade 600,000 would take minutes and block login. 10k is
+ * below server guidance but defensible for a local-only gate over a
+ * sandboxed SQLite DB; the iteration count is stored per hash
+ * (`$i=…$`), so it can be raised later without breaking stored records.
  * verify() re-derives with the STORED string's own iteration count and
  * compares in constant time (XOR-accumulate). Any malformed stored hash
  * returns `false` — never throws.
@@ -31,12 +30,12 @@
  * DB with them must clear the `users` table before upgrade (documented).
  */
 
-import { pbkdf2Async } from '@noble/hashes/pbkdf2.js';
+import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
 import type { PasswordHasher } from './passwordHasher';
 
-export const PBKDF2_ITERATIONS = 600_000;
+export const PBKDF2_ITERATIONS = 10_000; // A7 rev: measured 1.5s/hash on Hermes (see header)
 export const PBKDF2_SALT_BYTES = 16;
 export const PBKDF2_HASH_BYTES = 32;
 const PREFIX = 'pbkdf2-sha256';
@@ -126,10 +125,14 @@ export class Pbkdf2Hasher implements PasswordHasher {
   async hash(password: string): Promise<string> {
     const salt = this.saltOverride ?? randomSaltBytes(PBKDF2_SALT_BYTES);
     const iterations = this.iterationsOverride ?? PBKDF2_ITERATIONS;
-    const hash = await pbkdf2Async(sha256, password, salt, {
+    // SYNC pbkdf2 on purpose: noble's pbkdf2Async yields via
+    // globalThis.scheduler.yield() / setTimeout, which deadlocks under RN's
+    // Hermes (observed on-device 2026-09-03 — initDb never resolved at the
+    // user-seed step). Sync blocks the JS thread ~1–2 s per hash; the UI
+    // shows a busy state during login/register (plan 003), so this is fine.
+    const hash = pbkdf2(sha256, password, salt, {
       c: iterations,
       dkLen: PBKDF2_HASH_BYTES,
-      asyncTick: 5, // yield to the UI thread periodically on Hermes
     });
     return `$${PREFIX}$i=${iterations}$${encodeBase64(salt)}$${encodeBase64(hash)}`;
   }
@@ -145,10 +148,9 @@ export class Pbkdf2Hasher implements PasswordHasher {
       const salt = decodeBase64(parts[3] ?? '');
       const hash = decodeBase64(parts[4] ?? '');
       if (salt.length === 0 || hash.length === 0) return false;
-      const computed = await pbkdf2Async(sha256, password, salt, {
+      const computed = pbkdf2(sha256, password, salt, {
         c: Number(itersMatch[1]),
         dkLen: hash.length,
-        asyncTick: 5,
       });
       return bytesEqualConstTime(computed, hash);
     } catch {
