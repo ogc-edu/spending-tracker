@@ -7,7 +7,7 @@
  * truth, A4). Deletion pops back to the list, whose totals refresh.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -17,8 +17,10 @@ import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
 import { categoryColor } from '@/components/categoryMeta';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { useToast } from '@/components/ToastProvider';
 import { formatDayLabel } from '@/utils/dates';
-import { formatSen } from '@/utils/money';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
 
 function errMsg(error: unknown): string {
@@ -29,6 +31,7 @@ export default function ExpenseDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authService } = useAuth();
+  const toast = useToast();
   const expenseId = Number(id);
 
   const services = useMemo(() => {
@@ -45,6 +48,10 @@ export default function ExpenseDetailScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Plan 016: destructive delete goes through ConfirmSheet; deleting guards
+  // the sheet's confirm button against a double-tap firing two deletes.
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(expenseId) || expenseId <= 0) {
@@ -77,21 +84,23 @@ export default function ExpenseDetailScreen() {
 
   const handleDelete = () => {
     if (!expense) return;
-    Alert.alert('Delete expense', 'This reverses the balance change on its account.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await services.expenses.delete(expenseId);
-            router.back(); // the list refreshes on focus (totals included)
-          } catch (error: unknown) {
-            Alert.alert('Delete expense', errMsg(error));
-          }
-        },
-      },
-    ]);
+    setConfirmDeleteVisible(true);
+  };
+
+  /** The actual destructive write — fired by ConfirmSheet's confirm button. */
+  const doDelete = async () => {
+    if (!expense) return;
+    setDeleting(true);
+    try {
+      await services.expenses.delete(expenseId);
+      setConfirmDeleteVisible(false);
+      router.back(); // the list refreshes on focus (totals included)
+    } catch (error: unknown) {
+      toast.show(`Could not delete expense: ${errMsg(error)}`);
+      setConfirmDeleteVisible(false);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) {
@@ -131,9 +140,39 @@ export default function ExpenseDetailScreen() {
       ) : null}
 
       <View style={styles.card}>
-        <Text style={styles.amount} testID="expense-detail-amount">
-          {formatSen(expense.amountSen)}
-        </Text>
+        <View style={styles.amountRow}>
+          <Text
+            style={styles.amount}
+            numberOfLines={1}
+            accessibilityLabel={`Expense amount, ${spokenMoneyLabel(expense.amountSen)}`}
+            testID="expense-detail-amount"
+          >
+            {formatSen(expense.amountSen)}
+          </Text>
+          {!linked ? (
+            <>
+              {/* Plan 016 follow-up: actions in the card header — light-gray Edit pill + trash top-right. */}
+              <Pressable
+                onPress={() => router.push(`/expenses/${expense.id}/edit` as never)}
+                style={({ pressed }) => [styles.editPill, pressed && styles.pressed]}
+                accessibilityRole="button"
+                testID="expense-detail-edit"
+              >
+                <Ionicons name="create-outline" size={15} color={colors.muted} />
+                <Text style={styles.editPillLabel}>Edit</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleDelete}
+                style={({ pressed }) => [styles.trashButton, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Delete expense"
+                testID="expense-detail-delete"
+              >
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              </Pressable>
+            </>
+          ) : null}
+        </View>
         <View style={styles.row}>
           <Ionicons name={category?.icon as never} size={18} color={categoryColor(expense.categoryId)} />
           <Text style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
@@ -158,28 +197,17 @@ export default function ExpenseDetailScreen() {
           This expense was created when you marked a commitment payment as paid. To change or remove it, un-pay the
           payment in Commitments.
         </Text>
-      ) : (
-        <>
-          <Pressable
-            onPress={() => router.push(`/expenses/${expense.id}/edit` as never)}
-            style={({ pressed }) => (pressed ? [styles.editButton, styles.pressed] : styles.editButton)}
-            accessibilityRole="button"
-            testID="expense-detail-edit"
-          >
-            <Ionicons name="create-outline" size={18} color={colors.surface} />
-            <Text style={styles.editLabel}>Edit expense</Text>
-          </Pressable>
-          <Pressable
-            onPress={handleDelete}
-            style={({ pressed }) => (pressed ? [styles.deleteButton, styles.pressed] : styles.deleteButton)}
-            accessibilityRole="button"
-            testID="expense-detail-delete"
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
-            <Text style={styles.deleteLabel}>Delete expense</Text>
-          </Pressable>
-        </>
-      )}
+      ) : null}
+
+      <ConfirmSheet
+        visible={confirmDeleteVisible}
+        title="Delete expense"
+        message="This reverses the balance change on its account."
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={() => void doDelete()}
+        onCancel={() => setConfirmDeleteVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -214,7 +242,8 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.lg,
   },
-  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
+  amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, flex: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   rowValue: { fontSize: typography.body, color: colors.text, flex: 1 },
   description: {
@@ -224,29 +253,27 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   linkedHint: { fontSize: typography.caption, color: colors.muted, lineHeight: 18, marginBottom: spacing.lg },
-  editButton: {
+  editPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md,
-  },
-  editLabel: { color: colors.surface, fontSize: typography.emphasis, fontWeight: '700' },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.danger,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.dangerSoft,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    borderRadius: spacing.lg,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    minHeight: 34,
   },
-  deleteLabel: { color: colors.danger, fontSize: typography.emphasis, fontWeight: '700' },
+  editPillLabel: { color: colors.muted, fontSize: typography.caption, fontWeight: '600' },
+  trashButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.dangerSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   button: {
     borderWidth: 1,
     borderColor: colors.border,

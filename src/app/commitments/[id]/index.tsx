@@ -69,7 +69,6 @@ export default function CommitmentDetailScreen() {
   // Plan 016: destructive confirms go through the shared ConfirmSheet;
   // each sheet's confirm button is disabled while `busy` (double-tap guard).
   const [confirmUnPay, setConfirmUnPay] = useState<CommitmentPayment | null>(null);
-  const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Plan 016 follow-up: monthly commitments default to a compact view —
   // the first 3 upcoming slots only; "Show all" expands the rest.
@@ -162,26 +161,6 @@ export default function CommitmentDetailScreen() {
     }
   };
 
-  const handleCancel = () => {
-    if (!commitment) return;
-    setConfirmCancel(true);
-  };
-
-  const doCancel = async () => {
-    if (!commitment) return;
-    setBusy(true);
-    try {
-      await services.commitments.cancel(commitmentId);
-      setConfirmCancel(false);
-      await load();
-    } catch (error: unknown) {
-      toast.show(`Could not cancel commitment: ${errMsg(error)}`);
-      setConfirmCancel(false);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const handleDelete = () => {
     if (!commitment) return;
     setConfirmDelete(true);
@@ -256,6 +235,31 @@ export default function CommitmentDetailScreen() {
             color={colors.text}
           />
           <Text style={styles.name}>{commitment.name}</Text>
+          {/* Plan 016 follow-up: actions live in the header — light-gray Edit pill
+              beside the name, trash icon top-right; Cancel is no longer shown. */}
+          {commitment.status !== 'cancelled' && !archived ? (
+            <Pressable
+              onPress={() => router.push(`/commitments/${commitmentId}/edit`)}
+              style={({ pressed }) => [styles.editPill, pressed && styles.pressed]}
+              accessibilityRole="button"
+              testID="commitment-edit"
+            >
+              <Ionicons name="create-outline" size={15} color={colors.muted} />
+              <Text style={styles.editPillLabel}>Edit</Text>
+            </Pressable>
+          ) : null}
+          {!archived ? (
+            <Pressable
+              onPress={handleDelete}
+              disabled={busy}
+              style={({ pressed }) => [styles.trashButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Delete commitment"
+              testID="commitment-delete"
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            </Pressable>
+          ) : null}
         </View>
         <View style={styles.badgeRow}>
           <View style={[styles.badge, commitment.status === 'cancelled' && styles.badgeDanger]}>
@@ -382,20 +386,8 @@ export default function CommitmentDetailScreen() {
         </Text>
       ) : null}
 
-      {/* Status controls */}
-      {/* Edit (plan 016 follow-up) — cancelled/archived are terminal; edit via re-create instead. */}
-      {commitment.status !== 'cancelled' && !archived ? (
-        <Pressable
-          onPress={() => router.push(`/commitments/${commitmentId}/edit`)}
-          style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-          testID="commitment-edit"
-        >
-          <Ionicons name="create-outline" size={18} color={colors.accent} />
-          <Text style={styles.editLabel}>Edit commitment</Text>
-        </Pressable>
-      ) : null}
-
+      {/* Status controls — Cancel is no longer shown (plan 016 follow-up); delete
+          lives in the trash icon, edit in the header pill. */}
       {archived ? (
         <Pressable
           onPress={handleRestore}
@@ -407,32 +399,6 @@ export default function CommitmentDetailScreen() {
           <Text style={styles.restoreLabel}>Restore commitment</Text>
         </Pressable>
       ) : null}
-
-      {commitment.status === 'active' && !archived ? (
-        <Pressable
-          onPress={handleCancel}
-          disabled={busy}
-          style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-          testID="commitment-cancel"
-        >
-          <Ionicons name="close-circle-outline" size={18} color={colors.warning} />
-          <Text style={styles.cancelLabel}>Cancel commitment</Text>
-        </Pressable>
-      ) : null}
-
-      <Pressable
-        onPress={handleDelete}
-        disabled={busy}
-        style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
-        accessibilityRole="button"
-        testID="commitment-delete"
-      >
-        <Ionicons name="trash-outline" size={18} color={colors.danger} />
-        <Text style={styles.deleteLabel}>
-          {payments.length > 0 && !archived ? 'Archive commitment' : 'Delete commitment'}
-        </Text>
-      </Pressable>
 
       <PaymentFlowSheet
         visible={payingSlot !== null}
@@ -456,16 +422,6 @@ export default function CommitmentDetailScreen() {
         busy={busy}
         onConfirm={() => void doUnPay()}
         onCancel={() => setConfirmUnPay(null)}
-      />
-
-      <ConfirmSheet
-        visible={confirmCancel}
-        title="Cancel commitment"
-        message="Cancel is permanent — re-create the commitment instead of re-activating. Paid history is kept."
-        confirmLabel="Cancel commitment"
-        busy={busy}
-        onConfirm={() => void doCancel()}
-        onCancel={() => setConfirmCancel(false)}
       />
 
       <ConfirmSheet
@@ -585,43 +541,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
   },
   restoreLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '700' },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    minHeight: 48,
-    borderRadius: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    marginBottom: spacing.md,
-    backgroundColor: colors.accentSoft,
-  },
-  editLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '700' },
-  cancelButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md,
-    backgroundColor: colors.warningSoft,
-  },
-  cancelLabel: { color: colors.warning, fontSize: typography.emphasis, fontWeight: '700' },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.dangerSoft,
-  },
-  deleteLabel: { color: colors.danger, fontSize: typography.emphasis, fontWeight: '700' },
+    editPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      borderRadius: spacing.lg,
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.md,
+      minHeight: 34,
+    },
+    editPillLabel: { color: colors.muted, fontSize: typography.caption, fontWeight: '600' },
+    trashButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.dangerSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginLeft: spacing.xs,
+    },
   pressed: { opacity: 0.7 },
 });
