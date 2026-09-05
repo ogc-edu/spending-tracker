@@ -25,7 +25,7 @@ import { CommitmentService } from '@/services/CommitmentService';
 import { AccountService } from '@/services/AccountService';
 import type { ScheduledPayment } from '@/engine/commitments';
 import { useUiStore } from '@/store/uiStore';
-import { todayLocal } from '@/utils/dates';
+import { formatDayLabel, todayLocal } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { COMMITMENT_TYPE_ICONS, COMMITMENT_TYPE_LABELS } from '@/components/commitmentMeta';
@@ -37,6 +37,9 @@ import { useToast } from '@/components/ToastProvider';
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/** How many upcoming slots the compact schedule shows before "Show all" (plan 016 follow-up). */
+const UPCOMING_PREVIEW_COUNT = 3;
 
 export default function CommitmentDetailScreen() {
   const router = useRouter();
@@ -68,6 +71,9 @@ export default function CommitmentDetailScreen() {
   const [confirmUnPay, setConfirmUnPay] = useState<CommitmentPayment | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Plan 016 follow-up: monthly commitments default to a compact view —
+  // the first 3 upcoming slots only; "Show all" expands the rest.
+  const [showAllSchedule, setShowAllSchedule] = useState(false);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(commitmentId) || commitmentId <= 0) {
@@ -209,6 +215,13 @@ export default function CommitmentDetailScreen() {
   const archived = commitment !== null && commitment.archivedAt !== null;
   const canMarkPaid = commitment !== null && commitment.status === 'active' && !archived;
 
+  // Compact schedule view: the summary + first N upcoming slots (expandable).
+  const unpaid = schedule.filter((slot) => !paidByDate.has(slot.dueDate));
+  const paidSlots = schedule.filter((slot) => paidByDate.has(slot.dueDate));
+  const visibleUnpaid = showAllSchedule ? unpaid : unpaid.slice(0, UPCOMING_PREVIEW_COUNT);
+  const hiddenUnpaid = unpaid.length - visibleUnpaid.length;
+  const nextDue = unpaid[0]?.dueDate ?? null;
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -281,19 +294,87 @@ export default function CommitmentDetailScreen() {
       {schedule.length === 0 ? (
         <Text style={styles.sectionNote}>No payments in this window.</Text>
       ) : (
-        schedule.map((slot) => (
-          <ScheduleRow
-            key={slot.dueDate}
-            slot={slot}
-            payment={paidByDate.get(slot.dueDate)}
-            accountName={paidByDate.get(slot.dueDate) ? accountNameByPayment.get(paidByDate.get(slot.dueDate)!.id) : undefined}
-            overdue={slot.dueDate < today && !paidByDate.has(slot.dueDate)}
-            canMarkPaid={canMarkPaid}
-            busy={busy}
-            onMarkPaid={setPayingSlot}
-            onUnPay={handleUnPay}
-          />
-        ))
+        <>
+          {/* Compact payment-plan summary — one row replaces the wall of slots. */}
+          <View style={styles.planCard} testID="commitment-plan-summary">
+            <View style={styles.planLine}>
+              <Ionicons
+                name={commitment.frequency === 'one_time' ? 'calendar-outline' : 'repeat-outline'}
+                size={16}
+                color={colors.accent}
+              />
+              <Text style={styles.planCadence}>
+                {commitment.frequency === 'one_time'
+                  ? 'One-time payment'
+                  : commitment.totalSen !== null
+                    ? 'Monthly payment'
+                    : 'Recurring monthly'}
+              </Text>
+              <Text style={styles.planAmount}>{formatSen(commitment.paymentSen)}</Text>
+            </View>
+            <Text style={styles.planNote}>
+              {nextDue !== null
+                ? `Next payment ${formatDayLabel(nextDue)} · ${unpaid.length} payment${unpaid.length === 1 ? '' : 's'} left`
+                : 'All payments paid'}
+              {commitment.totalSen !== null && nextDue !== null
+                ? ` · ${formatSen(commitment.remainingSen)} remaining`
+                : ''}
+            </Text>
+          </View>
+
+          {visibleUnpaid.length > 0 ? (
+            <>
+              <Text style={styles.sectionSubtitle}>
+                Upcoming{hiddenUnpaid > 0 ? ` · next ${UPCOMING_PREVIEW_COUNT} of ${unpaid.length}` : ''}
+              </Text>
+              {visibleUnpaid.map((slot) => (
+                <ScheduleRow
+                  key={slot.dueDate}
+                  slot={slot}
+                  payment={paidByDate.get(slot.dueDate)}
+                  accountName={paidByDate.get(slot.dueDate) ? accountNameByPayment.get(paidByDate.get(slot.dueDate)!.id) : undefined}
+                  overdue={slot.dueDate < today && !paidByDate.has(slot.dueDate)}
+                  canMarkPaid={canMarkPaid}
+                  busy={busy}
+                  onMarkPaid={setPayingSlot}
+                  onUnPay={handleUnPay}
+                />
+              ))}
+              {hiddenUnpaid > 0 ? (
+                <Pressable
+                  onPress={() => setShowAllSchedule((v) => !v)}
+                  style={({ pressed }) => [styles.showAllButton, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  testID="commitment-schedule-expand"
+                >
+                  <Ionicons name={showAllSchedule ? 'chevron-up' : 'chevron-down'} size={16} color={colors.accent} />
+                  <Text style={styles.showAllLabel}>
+                    {showAllSchedule ? 'Show fewer' : `Show all ${unpaid.length} payments`}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
+          ) : null}
+
+          {paidSlots.length > 0 ? (
+            <>
+              <Text style={styles.sectionSubtitle}>Paid history</Text>
+              {paidSlots.map((slot) => (
+                <ScheduleRow
+                  key={slot.dueDate}
+                  slot={slot}
+                  payment={paidByDate.get(slot.dueDate)}
+                  accountName={paidByDate.get(slot.dueDate) ? accountNameByPayment.get(paidByDate.get(slot.dueDate)!.id) : undefined}
+                  overdue={slot.dueDate < today && !paidByDate.has(slot.dueDate)}
+                  canMarkPaid={canMarkPaid}
+                  busy={busy}
+                  onMarkPaid={setPayingSlot}
+                  onUnPay={handleUnPay}
+                />
+              ))}
+            </>
+          ) : null}
+        </>
       )}
       {payments.length > 0 && schedule.length === 0 ? (
         <Text style={styles.sectionNote}>
@@ -462,6 +543,35 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sectionNote: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md },
+  sectionSubtitle: {
+    fontSize: typography.caption,
+    fontWeight: '700',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  planCard: {
+    flexDirection: 'column',
+    backgroundColor: colors.accentSoft,
+    borderRadius: spacing.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  planLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  planCadence: { flex: 1, fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
+  planAmount: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant },
+  planNote: { marginTop: spacing.xs, fontSize: typography.caption, color: colors.muted, fontWeight: '500' },
+  showAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    minHeight: 44,
+    marginTop: spacing.xs,
+  },
+  showAllLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '600' },
   restoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
