@@ -1,13 +1,13 @@
 /**
- * CalendarSheet (plan 016 follow-up) — the commitment date picker.
- * Pins the Monday-start month grid (pure `monthGrid`), the sheet's
- * render/navigate/select behavior, min/max disabling, and ≥44pt touch
- * targets on month arrows and day cells.
+ * CalendarSheet (plan 016 follow-up) — the commitment date picker SHEET
+ * chrome: renders title/month/navigation, fires onSelect, min/max bounds,
+ * cancel paths, ≥44pt touch targets. (The grid math itself lives in
+ * calendarGrid.test.tsx — monthGrid + the day-cell render.)
  */
 import { describe, expect, it, jest } from '@jest/globals';
 import { StyleSheet } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
-import { CalendarSheet, monthGrid } from '../CalendarSheet';
+import { CalendarSheet } from '../CalendarSheet';
 
 async function render(element: React.ReactElement): Promise<ReactTestRenderer> {
   let tree!: ReactTestRenderer;
@@ -58,42 +58,6 @@ const baseProps = {
   onSelect: (): void => {},
   onCancel: (): void => {},
 };
-
-describe('monthGrid (Monday-start calendar math)', () => {
-  it('anchors 2026-09-01 (a Tuesday) under Monday with one leading null', () => {
-    // 2026-09-01 is a Tuesday → Monday-start grid: [null, '2026-09-01', …]
-    const grid = monthGrid(2026, 9);
-    expect(grid[0]).toBeNull();
-    expect(grid[1]).toBe('2026-09-01');
-    expect(grid[grid.indexOf('2026-09-30')]).toBe('2026-09-30');
-    expect(grid.length % 7).toBe(0);
-  });
-
-  it('aligns the first of any month to its weekday column', () => {
-    const year = 2026;
-    for (let month = 1; month <= 12; month += 1) {
-      const grid = monthGrid(year, month);
-      const firstIndex = grid.indexOf(`${year}-${String(month).padStart(2, '0')}-01`);
-      const dow = new Date(year, month - 1, 1).getDay();
-      expect(firstIndex).toBe((dow + 6) % 7); // Monday-start offset (Sun → 6)
-      expect(grid.length % 7).toBe(0);
-    }
-  });
-
-  it('handles leap February (29 days) and plain February', () => {
-    expect(monthGrid(2024, 2)).toContain('2024-02-29');
-    expect(monthGrid(2026, 2)).not.toContain('2026-02-29');
-  });
-
-  it('pads the trailing week with nulls so the grid is whole weeks', () => {
-    // December 2026 ends on a Thursday → 2 trailing nulls.
-    const grid = monthGrid(2026, 12);
-    expect(grid).toContain('2026-12-31');
-    expect(grid.length % 7).toBe(0);
-    const trailing = grid.slice(grid.indexOf('2026-12-31') + 1);
-    expect(trailing.every((cell) => cell === null)).toBe(true);
-  });
-});
 
 describe('CalendarSheet', () => {
   it('renders nothing while hidden, then the title/month/weekdays when visible', async () => {
@@ -157,9 +121,10 @@ describe('CalendarSheet', () => {
     const tree = await render(<CalendarSheet visible {...baseProps} />);
     const smallest = (node: ReactTestInstance): number => {
       const style = flattenedStyle(node);
-      const vertical = style.minHeight ?? style.height ?? Infinity;
-      const horizontal = style.minWidth ?? style.width ?? Infinity;
-      return Math.min(vertical, horizontal);
+      const numbers = [style.minHeight, style.minWidth, style.height, style.width].filter(
+        (v): v is number => typeof v === 'number',
+      );
+      return numbers.length > 0 ? Math.min(...numbers) : 0;
     };
     for (const testID of ['calendar-prev-month', 'calendar-next-month', 'calendar-sheet-close', 'calendar-cancel']) {
       expect(smallest(tree.root.findByProps({ testID }))).toBeGreaterThanOrEqual(44);

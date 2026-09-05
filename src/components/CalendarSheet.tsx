@@ -1,43 +1,21 @@
 /**
- * CalendarSheet (plan 016 follow-up) — the aesthetic calendar date picker
- * for commitment dates. Replaces pure typing: tapping a date field opens
- * this themed bottom-sheet month calendar, so the keyboard never covers the
- * field (the "keyboard blocks the input" complaint) and dates are picked,
- * not typed. Values stay `YYYY-MM-DD` (the engine/DB contract); display is
- * DD-MM-YYYY via formatDDMMYYYY in the owning form.
+ * CalendarSheet (plan 016 follow-up) — the themed bottom-sheet date picker
+ * used by commitment dates. Replaces pure typing: tapping a date field opens
+ * this sheet, so the keyboard never covers the input and dates are picked,
+ * not typed. Values stay `YYYY-MM-DD` (the engine/DB contract); DD-MM-YYYY
+ * display lives in the owning form (formatDDMMYYYY).
  *
- * - Week starts MONDAY (plan 006 `weekStartLocal` convention).
- * - Month navigation via ≥44pt chevron targets; day cells ≥44pt.
- * - Days outside [minDate, maxDate] are disabled (ISO strings compare
- *   lexicographically, so the component never needs Date math for bounds).
- * - `monthGrid` is exported pure so tests can pin the Monday-start layout
- *   (leading nulls + exact day strings).
+ * The sheet is chrome only (title, close, month navigation, Cancel); the
+ * actual calendar is the reusable CalendarGrid (responsive — fits any
+ * screen width). The displayed month is captured at MOUNT — the owner
+ * remounts per open via a `key` so every open anchors to value/today.
  */
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MIN_TOUCH_TARGET, colors, radius, spacing, typography } from '@/theme';
-import { daysInMonth, formatMonthLabel, toLocalDateString } from '@/utils/dates';
-
-export const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-
-/**
- * The month grid as a flat `YYYY-MM-DD` array with null leading/trailing
- * cells so the first of the month lands on Monday's column and the row count
- * is a whole number of weeks. Pure — tests pin the layout.
- */
-export function monthGrid(year: number, month: number): (string | null)[] {
-  const firstDow = new Date(year, month - 1, 1).getDay(); // 0 = Sun
-  const lead = (firstDow + 6) % 7; // Monday-start offset (Sun gets 6)
-  const dim = daysInMonth(year, month);
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  const cells: (string | null)[] = Array.from({ length: lead }, () => null);
-  for (let day = 1; day <= dim; day += 1) {
-    cells.push(`${year}-${pad(month)}-${pad(day)}`);
-  }
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
-}
+import { formatMonthLabel, toLocalDateString } from '@/utils/dates';
+import { CalendarGrid, type CalendarGridProps } from './CalendarGrid';
 
 export interface CalendarSheetProps {
   visible: boolean;
@@ -65,9 +43,6 @@ export function CalendarSheet({
   onSelect,
   onCancel,
 }: CalendarSheetProps) {
-  // The displayed month is captured at MOUNT (the parent remounts the sheet
-  // per open via a `key`, so every open anchors to value/today — no effect
-  // needed to resync state with props).
   const [view, setView] = useState<{ year: number; month: number }>(() => {
     const anchor =
       (value && value >= '0001-01-01' && value) ||
@@ -80,14 +55,16 @@ export function CalendarSheet({
     setView({ year: Math.floor(total / 12), month: (total % 12) + 1 });
   };
 
-  const isToday = (iso: string): boolean => iso === toLocalDateString();
-  const isSelected = (iso: string): boolean => iso === value;
-  const isDisabled = (iso: string): boolean =>
-    (minDate !== undefined && iso < minDate) || (maxDate !== undefined && iso > maxDate);
-
   if (!visible) return null;
 
-  const cells = monthGrid(view.year, view.month);
+  const gridProps: CalendarGridProps = {
+    year: view.year,
+    month: view.month,
+    value,
+    minDate,
+    maxDate,
+    onSelect,
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel} accessibilityViewIsModal>
@@ -139,45 +116,7 @@ export function CalendarSheet({
             </Pressable>
           </View>
 
-          {/* Weekday header (Monday-first) */}
-          <View style={styles.weekRow}>
-            {WEEKDAY_LABELS.map((label) => (
-              <Text key={label} style={styles.weekLabel}>
-                {label}
-              </Text>
-            ))}
-          </View>
-
-          {/* Day grid */}
-          <View style={styles.grid}>
-            {cells.map((iso, index) =>
-              iso === null ? (
-                <View key={`blank-${index}`} style={styles.dayCell} />
-              ) : (
-                <Pressable
-                  key={iso}
-                  onPress={() => onSelect(iso)}
-                  disabled={isDisabled(iso)}
-                  style={[styles.dayCell, isSelected(iso) && styles.daySelected, isToday(iso) && styles.dayToday]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${Number(iso.slice(8, 10))} ${formatMonthLabel(view.year, view.month)}`}
-                  accessibilityState={{ selected: isSelected(iso), disabled: isDisabled(iso) }}
-                  testID={`calendar-day-${iso}`}
-                >
-                  <Text
-                    style={[
-                      styles.dayText,
-                      isSelected(iso) && styles.dayTextSelected,
-                      isToday(iso) && styles.dayTextToday,
-                      isDisabled(iso) && styles.dayTextDisabled,
-                    ]}
-                  >
-                    {Number(iso.slice(8, 10))}
-                  </Text>
-                </Pressable>
-              ),
-            )}
-          </View>
+          <CalendarGrid {...gridProps} />
 
           <Pressable
             onPress={onCancel}
@@ -192,8 +131,6 @@ export function CalendarSheet({
     </Modal>
   );
 }
-
-const DAY_SIZE = (1080 - spacing.xl * 2) / 7; // full-width grid on phones
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
@@ -229,28 +166,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   monthLabel: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
-  weekRow: { flexDirection: 'row', marginBottom: spacing.xs },
-  weekLabel: {
-    width: DAY_SIZE,
-    textAlign: 'center',
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.muted,
-  },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  dayCell: {
-    width: DAY_SIZE,
-    height: DAY_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.full,
-  },
-  dayToday: { borderWidth: 1.5, borderColor: colors.accent },
-  daySelected: { backgroundColor: colors.accent },
-  dayText: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  dayTextSelected: { color: colors.surface, fontWeight: '700' },
-  dayTextToday: { color: colors.accent, fontWeight: '700' },
-  dayTextDisabled: { color: colors.border, fontWeight: '400' },
   cancel: {
     borderWidth: 1,
     borderColor: colors.border,
