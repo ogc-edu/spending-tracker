@@ -524,3 +524,121 @@ describe('CommitmentService user isolation (A10)', () => {
     expect(fixture.test.db.select().from(commitmentPayments).all()).toHaveLength(1);
   });
 });
+
+describe('CommitmentService.update (plan 016 follow-up — edit)', () => {
+  it('edits name/type/end date and recomputes remaining from paid history', async () => {
+    const fixture = await makeFixture();
+    const commitment = await createFixed(fixture);
+    await fixture.service.markPaid(commitment.id, '2026-09-01', fixture.cash.id); // 40,000 paid
+
+    const edited = await fixture.service.update(commitment.id, fixedInput({
+      name: 'Phone installment v2',
+      type: 'bnpl',
+      // New total lower than original — remaining = newTotal − paidSum.
+      totalSen: 100000,
+      endDate: '2026-12-01',
+    }));
+    expect(edited.name).toBe('Phone installment v2');
+    expect(edited.type).toBe('bnpl');
+    expect(edited.endDate).toBe('2026-12-01');
+    expect(edited.totalSen).toBe(100000);
+    expect(edited.remainingSen).toBe(60000); // 100,000 − 40,000 paid
+    // The paid record survived untouched.
+    expect(fixture.test.db.select().from(commitmentPayments).all()).toHaveLength(1);
+  });
+
+  it('changes payment amount and re-derives the remaining (paid sum unaffected)', async () => {
+    const fixture = await makeFixture();
+    const commitment = await createFixed(fixture);
+    await fixture.service.markPaid(commitment.id, '2026-09-01'); // 40,000 paid, no account
+
+    const edited = await fixture.service.update(commitment.id, fixedInput({ paymentSen: 20000 }));
+    expect(edited.paymentSen).toBe(20000);
+    expect(edited.remainingSen).toBe(80000); // 120,000 − 40,000 (paid at the OLD amount)
+  });
+
+  it('reopens a completed commitment when the new total is not paid down', async () => {
+    const fixture = await makeFixture();
+    const commitment = await createFixed(fixture);
+    await fixture.service.markPaid(commitment.id, '2026-09-01');
+    await fixture.service.markPaid(commitment.id, '2026-10-01');
+    await fixture.service.markPaid(commitment.id, '2026-11-01'); // remaining → 0 → completed
+    expect((await fixture.service.byId(commitment.id))?.status).toBe('completed');
+
+    const edited = await fixture.service.update(commitment.id, fixedInput({ totalSen: 150000 }));
+    expect(edited.status).toBe('active');
+    expect(edited.remainingSen).toBe(30000); // 150,000 − 120,000 paid
+  });
+
+  it('edits ongoing ↔ fixed shape normalization (end date appears/disappears)', async () => {
+    const fixture = await makeFixture();
+    const ongoing = await fixture.service.create({
+      name: 'Rent',
+      type: 'rent',
+      totalSen: null,
+      paymentSen: 60000,
+      frequency: 'monthly',
+      startDate: '2026-09-01',
+      endDate: null,
+      dueDate: '2026-09-01',
+    });
+    // Ongoing → fixed: add a total + end date.
+    const fixed = await fixture.service.update(ongoing.id, {
+      name: 'Rent v2',
+      type: 'rent',
+      totalSen: 360000,
+      paymentSen: 60000,
+      frequency: 'monthly',
+      startDate: '2026-09-01',
+      endDate: '2027-02-01',
+      dueDate: '2026-09-01',
+    });
+    expect(fixed.totalSen).toBe(360000);
+    expect(fixed.endDate).toBe('2027-02-01');
+    expect(fixed.remainingSen).toBe(360000);
+  });
+
+  it('rejects edits to cancelled and archived commitments', async () => {
+    const fixture = await makeFixture();
+    const commitment = await createFixed(fixture);
+    await fixture.service.cancel(commitment.id);
+    await expect(fixture.service.update(commitment.id, fixedInput())).rejects.toThrow(
+      "Cancelled commitments can't be edited",
+    );
+
+    const fresh = await createFixed(fixture);
+    await fixture.service.markPaid(fresh.id, '2026-09-01');
+    await fixture.service.delete(fresh.id); // has payments → archived
+    await expect(fixture.service.update(fresh.id, fixedInput())).rejects.toThrow(
+      "Archived commitments can't be edited",
+    );
+  });
+
+  it('keeps one-time edits on the due date', async () => {
+    const fixture = await makeFixture();
+    const oneTime = await fixture.service.create({
+      name: 'SPL settle',
+      type: 'bnpl',
+      totalSen: null,
+      paymentSen: 96500,
+      frequency: 'one_time',
+      startDate: '2026-10-01',
+      endDate: null,
+      dueDate: '2026-10-01',
+    });
+    const edited = await fixture.service.update(oneTime.id, {
+      name: 'SPL settle (final)',
+      type: 'bnpl',
+      totalSen: null,
+      paymentSen: 100000,
+      frequency: 'one_time',
+      startDate: '2026-11-01',
+      endDate: null,
+      dueDate: '2026-11-01',
+    });
+    expect(edited.dueDate).toBe('2026-11-01');
+    expect(edited.startDate).toBe('2026-11-01');
+    expect(edited.totalSen).toBeNull();
+    expect(edited.remainingSen).toBe(0);
+  });
+});

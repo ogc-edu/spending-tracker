@@ -8,7 +8,7 @@
  */
 import { describe, expect, it, jest } from '@jest/globals';
 import { StyleSheet } from 'react-native';
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { CalendarGrid, monthGrid } from '../CalendarGrid';
 
 async function render(element: React.ReactElement): Promise<ReactTestRenderer> {

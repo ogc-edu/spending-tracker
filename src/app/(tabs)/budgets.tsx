@@ -17,7 +17,7 @@
  * built by plan 009/010) — category budgets are informational rows (BUD-3).
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -32,6 +32,10 @@ import { formatMonthLabel } from '@/utils/dates';
 import { BudgetCard } from '@/components/BudgetCard';
 import { BudgetForm } from '@/components/BudgetForm';
 import { BudgetRow } from '@/components/BudgetRow';
+import { EmptyState } from '@/components/EmptyState';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { useToast } from '@/components/ToastProvider';
+import { categoryColor } from '@/components/categoryMeta';
 import { colors, spacing, typography } from '@/theme';
 
 function errMsg(error: unknown): string {
@@ -48,6 +52,7 @@ type BudgetEditing = { kind: 'overall' } | { kind: 'category'; category: Categor
 
 export default function BudgetsScreen() {
   const { authService } = useAuth();
+  const toast = useToast();
   const services = useMemo(() => {
     const repos = repositories();
     return {
@@ -69,7 +74,11 @@ export default function BudgetsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<BudgetEditing | null>(null);
+  const [pickingCategory, setPickingCategory] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Plan 016: clearing a budget is destructive → ConfirmSheet (with the
+  // month/category context), never a silent row removal.
+  const [clearing, setClearing] = useState<{ categoryId: number | null; categoryName?: string } | null>(null);
 
   const load = useCallback(async () => {
     const scope = { month: selectedMonth.month, year: selectedMonth.year };
@@ -119,12 +128,12 @@ export default function BudgetsScreen() {
         setEditing(null);
         await load();
       } catch (submitError: unknown) {
-        Alert.alert('Budget', errMsg(submitError));
+        toast.show(`Could not save budget: ${errMsg(submitError)}`);
       } finally {
         setBusy(false);
       }
     },
-    [editing, services.budgets, selectedMonth, load],
+    [editing, services.budgets, selectedMonth, load, toast],
   );
 
   const handleClear = useCallback(
@@ -136,15 +145,20 @@ export default function BudgetsScreen() {
           month: selectedMonth.month,
           year: selectedMonth.year,
         });
+        setClearing(null);
         await load();
       } catch (clearError: unknown) {
-        Alert.alert('Budget', errMsg(clearError));
+        toast.show(`Could not clear budget: ${errMsg(clearError)}`);
+        setClearing(null);
       } finally {
         setBusy(false);
       }
     },
-    [services.budgets, selectedMonth, load],
+    [services.budgets, selectedMonth, load, toast],
   );
+
+  /** The budget rows' clear affordance now opens the ConfirmSheet (016). */
+  const requestClear = (key: { categoryId: number | null; categoryName?: string }) => setClearing(key);
 
   const submitLabel = editingInitial !== null ? 'Save budget' : 'Set budget';
 
@@ -154,7 +168,7 @@ export default function BudgetsScreen() {
       <View style={styles.monthBar} testID="budgets-month-bar">
         <Pressable
           onPress={() => setSelectedMonth(shiftMonth(selectedMonth, -1))}
-          hitSlop={8}
+          hitSlop={11}
           accessibilityRole="button"
           accessibilityLabel="Previous month"
           testID="budgets-month-prev"
@@ -166,7 +180,7 @@ export default function BudgetsScreen() {
         </Text>
         <Pressable
           onPress={() => setSelectedMonth(shiftMonth(selectedMonth, 1))}
-          hitSlop={8}
+          hitSlop={11}
           accessibilityRole="button"
           accessibilityLabel="Next month"
           testID="budgets-month-next"
@@ -183,11 +197,21 @@ export default function BudgetsScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
+          {overall === null && byCategory.size === 0 ? (
+            <EmptyState
+              icon="pie-chart-outline"
+              title="No budgets set"
+              body="Set a monthly budget to reserve spending in your cash flow — category budgets are optional extras."
+              action={{ label: 'Set a monthly budget', onPress: () => setEditing({ kind: 'overall' }) }}
+              testID="budgets-empty"
+            />
+          ) : null}
+
           <BudgetCard
             spentSen={spentTotal}
             budget={overall}
             onPress={() => setEditing({ kind: 'overall' })}
-            onClear={() => void handleClear({ categoryId: null })}
+            onClear={() => requestClear({ categoryId: null, categoryName: 'Monthly budget' })}
             busy={busy}
           />
 
@@ -195,17 +219,29 @@ export default function BudgetsScreen() {
           <Text style={styles.sectionNote}>
             Informational only — the overall monthly budget is what your cash flow reserves.
           </Text>
-          {categories.map((category) => (
-            <BudgetRow
-              key={category.id}
-              category={category}
-              spentSen={categorySpent.get(category.id) ?? 0}
-              budget={byCategory.get(category.id) ?? null}
-              onPress={() => setEditing({ kind: 'category', category })}
-              onClear={() => void handleClear({ categoryId: category.id })}
-              busy={busy}
-            />
-          ))}
+          {/* Only categories WITH a budget get a row — no more walls of unset "—" rows. */}
+          {categories
+            .filter((category) => byCategory.has(category.id))
+            .map((category) => (
+              <BudgetRow
+                key={category.id}
+                category={category}
+                spentSen={categorySpent.get(category.id) ?? 0}
+                budget={byCategory.get(category.id) ?? null}
+                onPress={() => setEditing({ kind: 'category', category })}
+                onClear={() => requestClear({ categoryId: category.id, categoryName: category.name })}
+                busy={busy}
+              />
+            ))}
+          <Pressable
+            onPress={() => setPickingCategory(true)}
+            style={({ pressed }) => [styles.addCategoryRow, pressed && styles.pressed]}
+            accessibilityRole="button"
+            testID="budgets-add-category"
+          >
+            <Ionicons name="add" size={18} color={colors.accent} />
+            <Text style={styles.addCategoryLabel}>Add category budget</Text>
+          </Pressable>
           <View style={styles.spacer} />
         </ScrollView>
       )}
@@ -216,7 +252,7 @@ export default function BudgetsScreen() {
         animationType="slide"
         onRequestClose={() => setEditing(null)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalCard} testID="budget-form-modal">
             <BudgetForm
               title={editing?.kind === 'category' ? `${editing.category.name} budget` : 'Monthly budget'}
@@ -227,8 +263,66 @@ export default function BudgetsScreen() {
               onCancel={() => setEditing(null)}
             />
           </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Category picker for NEW category budgets (only categories without one). */}
+      <Modal
+        visible={pickingCategory}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPickingCategory(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalScrim} onPress={() => setPickingCategory(false)} accessibilityRole="button" />
+          <View style={styles.modalCard} testID="budgets-category-picker">
+            <Text style={styles.pickerTitle}>Add a category budget</Text>
+            <Text style={styles.sectionNote}>Pick a category to set its monthly budget for {formatMonthLabel(selectedMonth.year, selectedMonth.month)}.</Text>
+            <View style={styles.pickerChips}>
+              {categories.filter((c) => !byCategory.has(c.id)).map((category) => (
+                <Pressable
+                  key={category.id}
+                  onPress={() => {
+                    setPickingCategory(false);
+                    setEditing({ kind: 'category', category });
+                  }}
+                  style={styles.pickerChip}
+                  accessibilityRole="button"
+                  testID={`budgets-pick-category-${category.id}`}
+                >
+                  <Ionicons name={category.icon as never} size={15} color={categoryColor(category.id)} />
+                  <Text style={styles.pickerChipLabel}>{category.name}</Text>
+                </Pressable>
+              ))}
+              {categories.every((c) => byCategory.has(c.id)) ? (
+                <Text style={styles.sectionNote}>Every category already has a budget this month.</Text>
+              ) : null}
+            </View>
+            <Pressable
+              onPress={() => setPickingCategory(false)}
+              style={({ pressed }) => [styles.pickerCancel, pressed && styles.pressed]}
+              accessibilityRole="button"
+              testID="budgets-category-picker-cancel"
+            >
+              <Text style={styles.pickerCancelLabel}>Cancel</Text>
+            </Pressable>
+          </View>
         </View>
       </Modal>
+
+      <ConfirmSheet
+        visible={clearing !== null}
+        title="Clear budget"
+        message={
+          clearing
+            ? `Clear the ${clearing.categoryName ?? 'budget'} for ${formatMonthLabel(selectedMonth.year, selectedMonth.month)}? This only removes the budget — your expenses stay.`
+            : ''
+        }
+        confirmLabel="Clear"
+        busy={busy}
+        onConfirm={() => clearing && void handleClear(clearing)}
+        onCancel={() => setClearing(null)}
+      />
     </View>
   );
 }
@@ -245,7 +339,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: colors.border,
   },
-  monthLabel: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
+  monthLabel: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
   content: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
   errorText: {
     fontSize: typography.body,
@@ -257,28 +351,77 @@ const styles = StyleSheet.create({
   centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
   sectionTitle: {
     fontSize: typography.emphasis,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.xs,
+    letterSpacing: -0.2,
   },
   sectionNote: {
     fontSize: typography.caption,
     color: colors.muted,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
+    fontWeight: '500',
   },
   spacer: { height: spacing.lg },
+  addCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 48,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.accent,
+    borderRadius: spacing.md,
+    backgroundColor: colors.accentSoft,
+  },
+  addCategoryLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '700' },
+  pressed: { opacity: 0.7 },
+  modalScrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  pickerTitle: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, marginBottom: spacing.sm, letterSpacing: -0.2 },
+  pickerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  pickerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.lg,
+    minHeight: 44,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  pickerChipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
+  pickerCancel: {
+    alignItems: 'center',
+    minHeight: 48,
+    justifyContent: 'center',
+    marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.md,
+  },
+  pickerCancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   modalCard: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: spacing.lg,
-    borderTopRightRadius: spacing.lg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: spacing.xl,
     paddingBottom: spacing.xxl,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 8,
   },
 });

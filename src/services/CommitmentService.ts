@@ -19,6 +19,7 @@ import {
   COMMITMENT_TYPES,
   type CommitmentInput,
   type CommitmentRepository,
+  type CommitmentStatus,
 } from '@/repositories/types';
 import type { Commitment, CommitmentPayment, Expense } from '@/db/schema';
 import {
@@ -155,6 +156,47 @@ export class CommitmentService {
       startDate: anchor,
       endDate: monthly && data.totalSen !== null ? data.endDate : null,
       dueDate: anchor,
+    });
+  }
+
+  /**
+   * Edit a commitment (plan 016 follow-up) — same shape rules as create.
+   * Cancelled/archived commitments are terminal (delete + recreate instead);
+   * editing back to a paid-down state recomputes remaining_sen from the paid
+   * history (fixed: max(0, newTotal − paidSum); ongoing/one-time: 0), and a
+   * completed commitment that is no longer paid down reopens (→ active).
+   * Paid records themselves are never moved — the schedule re-derives.
+   */
+  async update(id: number, input: CommitmentInput): Promise<Commitment> {
+    const userId = await this.requireUserId();
+    assertId(id);
+    const data = parseInput(input);
+    const existing = await this.commitments.byId(userId, id);
+    if (!existing) throw new Error('commitment not found');
+    if (existing.status === 'cancelled') {
+      throw new Error("Cancelled commitments can't be edited — delete and create a new one");
+    }
+    if (existing.archivedAt !== null) {
+      throw new Error("Archived commitments can't be edited — restore it first");
+    }
+    const monthly = data.frequency === 'monthly';
+    const anchor = monthly ? data.startDate : data.dueDate;
+    const paid = await this.commitments.paymentsForCommitment(userId, id);
+    const paidSen = paid.reduce((sum, p) => sum + p.amountSen, 0);
+    const remainingSen = data.totalSen !== null ? Math.max(0, data.totalSen - paidSen) : 0;
+    const status: CommitmentStatus | undefined =
+      existing.status === 'completed' && remainingSen > 0 ? 'active' : undefined;
+    return this.commitments.update(userId, id, {
+      name: data.name,
+      type: data.type,
+      totalSen: data.totalSen,
+      remainingSen,
+      paymentSen: data.paymentSen,
+      frequency: data.frequency,
+      startDate: anchor,
+      endDate: monthly && data.totalSen !== null ? data.endDate : null,
+      dueDate: anchor,
+      status,
     });
   }
 

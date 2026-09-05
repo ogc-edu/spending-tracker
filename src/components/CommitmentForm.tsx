@@ -118,6 +118,8 @@ export interface CommitmentFormProps {
   onSubmit(input: CommitmentInput): Promise<void>;
   submitting: boolean;
   onCancel(): void;
+  /** Partial prefill — the edit screen maps the commitment row to form values. */
+  defaults?: Partial<CommitmentFormValues>;
 }
 
 function buildInput(values: CommitmentFormValues): CommitmentInput {
@@ -136,10 +138,25 @@ function buildInput(values: CommitmentFormValues): CommitmentInput {
   };
 }
 
-export function CommitmentForm({ submitLabel = 'Add commitment', onSubmit, submitting, onCancel }: CommitmentFormProps) {
+export function CommitmentForm({
+  submitLabel = 'Add commitment',
+  onSubmit,
+  submitting,
+  onCancel,
+  defaults,
+}: CommitmentFormProps) {
   const { control, handleSubmit, getValues, setValue } = useForm<CommitmentFormValues>({
     resolver: zodResolver(commitmentFormSchema),
-    defaultValues: { type: 'installment', kind: 'fixed', total: '', payment: '', startDate: '', endDate: '', dueDate: '' },
+    defaultValues: {
+      type: 'installment',
+      kind: 'fixed',
+      total: '',
+      payment: '',
+      startDate: '',
+      endDate: '',
+      dueDate: '',
+      ...defaults,
+    },
   });
 
   /** The date field whose CalendarSheet is open (calendar pick, no typing → the keyboard never covers the input). */

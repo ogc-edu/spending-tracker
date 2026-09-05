@@ -15,7 +15,7 @@
  * all reload here. No SQL, no money math — services + engine only.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -26,11 +26,13 @@ import { AccountService } from '@/services/AccountService';
 import type { ScheduledPayment } from '@/engine/commitments';
 import { useUiStore } from '@/store/uiStore';
 import { todayLocal } from '@/utils/dates';
-import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { COMMITMENT_TYPE_ICONS, COMMITMENT_TYPE_LABELS } from '@/components/commitmentMeta';
 import { ScheduleRow } from '@/components/ScheduleRow';
 import { PaymentFlowSheet } from '@/components/PaymentFlowSheet';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { useToast } from '@/components/ToastProvider';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -40,6 +42,7 @@ export default function CommitmentDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authService } = useAuth();
+  const toast = useToast();
   const commitmentId = Number(id);
   const lastUsedAccountId = useUiStore((s) => s.lastUsedAccountId);
 
@@ -60,6 +63,11 @@ export default function CommitmentDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [payingSlot, setPayingSlot] = useState<ScheduledPayment | null>(null);
+  // Plan 016: destructive confirms go through the shared ConfirmSheet;
+  // each sheet's confirm button is disabled while `busy` (double-tap guard).
+  const [confirmUnPay, setConfirmUnPay] = useState<CommitmentPayment | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(commitmentId) || commitmentId <= 0) {
@@ -123,92 +131,69 @@ export default function CommitmentDetailScreen() {
         setPayingSlot(null);
         await load();
       } catch (error: unknown) {
-        Alert.alert('Mark payment paid', errMsg(error));
+        toast.show(`Could not mark payment paid: ${errMsg(error)}`);
       } finally {
         setBusy(false);
       }
     },
-    [payingSlot, commitmentId, services.commitments, load],
+    [payingSlot, commitmentId, services.commitments, load, toast],
   );
 
-  const handleUnPay = (payment: CommitmentPayment) => {
-    Alert.alert(
-      'Un-pay payment',
-      'This removes the linked Debt/Repayment expense, restores the remaining amount, and reverses the balance change.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Un-pay',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            try {
-              await services.commitments.unPay(payment.id);
-              await load();
-            } catch (error: unknown) {
-              Alert.alert('Un-pay payment', errMsg(error));
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
+  const handleUnPay = (payment: CommitmentPayment) => setConfirmUnPay(payment);
+
+  const doUnPay = async () => {
+    if (!confirmUnPay) return;
+    setBusy(true);
+    try {
+      await services.commitments.unPay(confirmUnPay.id);
+      setConfirmUnPay(null);
+      await load();
+    } catch (error: unknown) {
+      toast.show(`Could not un-pay payment: ${errMsg(error)}`);
+      setConfirmUnPay(null);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleCancel = () => {
     if (!commitment) return;
-    Alert.alert(
-      'Cancel commitment',
-      'Cancel is permanent — re-create the commitment instead of re-activating. Paid history is kept.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Cancel commitment',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            try {
-              await services.commitments.cancel(commitmentId);
-              await load();
-            } catch (error: unknown) {
-              Alert.alert('Cancel commitment', errMsg(error));
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmCancel(true);
+  };
+
+  const doCancel = async () => {
+    if (!commitment) return;
+    setBusy(true);
+    try {
+      await services.commitments.cancel(commitmentId);
+      setConfirmCancel(false);
+      await load();
+    } catch (error: unknown) {
+      toast.show(`Could not cancel commitment: ${errMsg(error)}`);
+      setConfirmCancel(false);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDelete = () => {
     if (!commitment) return;
-    const hasPayments = payments.length > 0;
-    Alert.alert(
-      hasPayments ? 'Archive commitment' : 'Delete commitment',
-      hasPayments
-        ? 'This commitment has paid payments, so it will be ARCHIVED — every payment and linked expense stays, hidden from your lists. You can restore it anytime.'
-        : 'This commitment has no payments — it will be deleted permanently.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: hasPayments ? 'Archive' : 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            try {
-              await services.commitments.delete(commitmentId);
-              router.back(); // the tab refreshes on focus
-            } catch (error: unknown) {
-              Alert.alert('Delete commitment', errMsg(error));
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmDelete(true);
+  };
+
+  const doDelete = async () => {
+    if (!commitment) return;
+    setBusy(true);
+    try {
+      await services.commitments.delete(commitmentId);
+      setConfirmDelete(false);
+      router.back(); // the tab refreshes on focus
+    } catch (error: unknown) {
+      toast.show(`Could not delete commitment: ${errMsg(error)}`);
+      setConfirmDelete(false);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleRestore = () => {
@@ -216,7 +201,7 @@ export default function CommitmentDetailScreen() {
     services.commitments
       .unarchive(commitmentId)
       .then(() => load())
-      .catch((error: unknown) => Alert.alert('Restore commitment', errMsg(error)))
+      .catch((error: unknown) => toast.show(`Could not restore commitment: ${errMsg(error)}`))
       .finally(() => setBusy(false));
   };
 
@@ -275,7 +260,13 @@ export default function CommitmentDetailScreen() {
             {commitment.frequency === 'one_time' ? ' · one-time' : ' · monthly'}
           </Text>
         </View>
-        <Text style={styles.amount}>{formatSen(commitment.paymentSen)}</Text>
+        <Text
+          style={styles.amount}
+          numberOfLines={1}
+          accessibilityLabel={`Payment amount, ${spokenMoneyLabel(commitment.paymentSen)}`}
+        >
+          {formatSen(commitment.paymentSen)}
+        </Text>
         {commitment.totalSen !== null ? (
           <Text style={styles.remaining}>
             {formatSen(commitment.remainingSen)} of {formatSen(commitment.totalSen)} remaining
@@ -311,6 +302,19 @@ export default function CommitmentDetailScreen() {
       ) : null}
 
       {/* Status controls */}
+      {/* Edit (plan 016 follow-up) — cancelled/archived are terminal; edit via re-create instead. */}
+      {commitment.status !== 'cancelled' && !archived ? (
+        <Pressable
+          onPress={() => router.push(`/commitments/${commitmentId}/edit`)}
+          style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+          testID="commitment-edit"
+        >
+          <Ionicons name="create-outline" size={18} color={colors.accent} />
+          <Text style={styles.editLabel}>Edit commitment</Text>
+        </Pressable>
+      ) : null}
+
       {archived ? (
         <Pressable
           onPress={handleRestore}
@@ -361,6 +365,40 @@ export default function CommitmentDetailScreen() {
         busy={busy}
         onConfirm={handleMarkPaid}
         onCancel={() => setPayingSlot(null)}
+      />
+
+      <ConfirmSheet
+        visible={confirmUnPay !== null}
+        title="Un-pay payment"
+        message="This removes the linked Debt/Repayment expense, restores the remaining amount, and reverses the balance change."
+        confirmLabel="Un-pay"
+        busy={busy}
+        onConfirm={() => void doUnPay()}
+        onCancel={() => setConfirmUnPay(null)}
+      />
+
+      <ConfirmSheet
+        visible={confirmCancel}
+        title="Cancel commitment"
+        message="Cancel is permanent — re-create the commitment instead of re-activating. Paid history is kept."
+        confirmLabel="Cancel commitment"
+        busy={busy}
+        onConfirm={() => void doCancel()}
+        onCancel={() => setConfirmCancel(false)}
+      />
+
+      <ConfirmSheet
+        visible={confirmDelete}
+        title={payments.length > 0 ? 'Archive commitment' : 'Delete commitment'}
+        message={
+          payments.length > 0
+            ? 'This commitment has paid payments, so it will be ARCHIVED — every payment and linked expense stays, hidden from your lists. You can restore it anytime.'
+            : 'This commitment has no payments — it will be deleted permanently.'
+        }
+        confirmLabel={payments.length > 0 ? 'Archive' : 'Delete'}
+        busy={busy}
+        onConfirm={() => void doDelete()}
+        onCancel={() => setConfirmDelete(false)}
       />
     </ScrollView>
   );
@@ -413,7 +451,7 @@ const styles = StyleSheet.create({
     fontSize: typography.money,
     fontWeight: '700',
     color: colors.text,
-    fontVariant: ['tabular-nums'],
+    fontVariant: moneyFontVariant,
     marginBottom: spacing.xs,
   },
   remaining: { fontSize: typography.body, color: colors.muted },
@@ -437,6 +475,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
   },
   restoreLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '700' },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 48,
+    borderRadius: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    marginBottom: spacing.md,
+    backgroundColor: colors.accentSoft,
+  },
+  editLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '700' },
   cancelButton: {
     flexDirection: 'row',
     alignItems: 'center',

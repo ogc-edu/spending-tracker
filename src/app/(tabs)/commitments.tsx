@@ -14,7 +14,7 @@
  * Restore action — hidden from the main list, never deleted data.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -27,6 +27,7 @@ import { colors, spacing, typography } from '@/theme';
 import { COMMITMENT_TYPE_ICONS } from '@/components/commitmentMeta';
 import { categoryColor } from '@/components/categoryMeta';
 import { EmptyState } from '@/components/EmptyState';
+import { useToast } from '@/components/ToastProvider';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -53,6 +54,7 @@ function scheduleFor(commitment: Commitment): ScheduledPayment[] {
 export default function CommitmentsScreen() {
   const router = useRouter();
   const { authService } = useAuth();
+  const toast = useToast();
 
   const service = useMemo(() => {
     const repos = repositories();
@@ -61,6 +63,7 @@ export default function CommitmentsScreen() {
 
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [archived, setArchived] = useState<Commitment[]>([]);
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [payments, setPayments] = useState<CommitmentPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +110,7 @@ export default function CommitmentsScreen() {
     service
       .unarchive(commitment.id)
       .then(() => load())
-      .catch((restoreError: unknown) => Alert.alert('Commitments', errMsg(restoreError)))
+      .catch((restoreError: unknown) => toast.show(`Could not restore commitment: ${errMsg(restoreError)}`))
       .finally(() => setBusy(false));
   };
 
@@ -178,6 +181,7 @@ export default function CommitmentsScreen() {
               icon="calendar-outline"
               title="No commitments"
               body="Debts, bills, rent and installments — mark payments paid as they happen."
+              action={{ label: 'Add commitment', onPress: () => router.push('/commitments/new' as never) }}
               testID="commitments-empty"
             />
           ) : (
@@ -186,27 +190,51 @@ export default function CommitmentsScreen() {
 
           {archived.length > 0 ? (
             <>
-              <Text style={styles.sectionTitle}>Archived</Text>
-              <Text style={styles.sectionNote}>
-                Kept for history — restore anytime (payments and expenses stay intact).
-              </Text>
-              {archived.map((commitment) => (
-                <View key={commitment.id} style={styles.archivedRow}>
-                  <Text style={[styles.name, styles.archivedName]} numberOfLines={1}>
-                    {commitment.name}
+              {/* Collapsed by default — one tappable section row; tap to expand. */}
+              <Pressable
+                onPress={() => setArchivedOpen((v) => !v)}
+                style={({ pressed }) => [styles.archivedHeader, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: archivedOpen }}
+                accessibilityLabel={`Archived, ${archived.length} commitment${archived.length === 1 ? '' : 's'}`}
+                testID="commitments-archived-toggle"
+              >
+                <Ionicons
+                  name={archivedOpen ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={colors.muted}
+                />
+                <Text style={styles.archivedHeaderLabel}>
+                  Archived ({archived.length})
+                </Text>
+                <Text style={styles.archivedHeaderHint}>
+                  {archivedOpen ? 'Tap to hide' : 'Kept for history — tap to show'}
+                </Text>
+              </Pressable>
+              {archivedOpen ? (
+                <>
+                  <Text style={styles.sectionNote}>
+                    Restore anytime — payments and expenses stay intact.
                   </Text>
-                  <Pressable
-                    onPress={() => handleRestore(commitment)}
-                    disabled={busy}
-                    style={({ pressed }) => [styles.restoreButton, pressed && styles.pressed]}
-                    accessibilityRole="button"
-                    testID={`commitment-restore-${commitment.id}`}
-                  >
-                    <Ionicons name="refresh-outline" size={14} color={colors.accent} />
-                    <Text style={styles.restoreLabel}>Restore</Text>
-                  </Pressable>
-                </View>
-              ))}
+                  {archived.map((commitment) => (
+                    <View key={commitment.id} style={styles.archivedRow}>
+                      <Text style={[styles.name, styles.archivedName]} numberOfLines={1}>
+                        {commitment.name}
+                      </Text>
+                      <Pressable
+                        onPress={() => handleRestore(commitment)}
+                        disabled={busy}
+                        style={({ pressed }) => [styles.restoreButton, pressed && styles.pressed]}
+                        accessibilityRole="button"
+                        testID={`commitment-restore-${commitment.id}`}
+                      >
+                        <Ionicons name="refresh-outline" size={14} color={colors.accent} />
+                        <Text style={styles.restoreLabel}>Restore</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </>
+              ) : null}
             </>
           ) : null}
 
@@ -243,61 +271,87 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     backgroundColor: colors.surface,
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.xl,
     marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: spacing.sm,
+    borderRadius: 14,
     padding: spacing.md,
   },
+  archivedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 48,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+  },
+  archivedHeaderLabel: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
+  archivedHeaderHint: { flex: 1, fontSize: typography.caption, color: colors.muted, textAlign: 'right' },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
   body: { flex: 1 },
-  name: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
+  name: { fontSize: typography.body, fontWeight: '700', color: colors.text },
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
   dueText: { fontSize: typography.caption, color: colors.muted, fontWeight: '600', flexShrink: 1 },
   overdueText: { color: colors.danger, fontWeight: '700' },
-  progress: { fontSize: typography.caption, color: colors.muted },
+  progress: {
+    fontSize: typography.caption,
+    color: colors.text,
+    fontWeight: '600',
+    backgroundColor: colors.background,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
   statusBadge: {
     backgroundColor: colors.accentSoft,
-    borderRadius: spacing.sm,
+    borderRadius: 6,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
   statusCancelled: { backgroundColor: colors.dangerSoft },
   statusLabel: { fontSize: typography.caption, fontWeight: '700', color: colors.accent },
   sectionTitle: {
     fontSize: typography.emphasis,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     marginHorizontal: spacing.xl,
     marginTop: spacing.lg,
     marginBottom: spacing.xs,
+    letterSpacing: -0.2,
   },
   sectionNote: {
     fontSize: typography.caption,
     color: colors.muted,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
+    fontWeight: '500',
   },
   archivedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     backgroundColor: colors.surface,
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.xl,
     marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: spacing.sm,
+    borderRadius: 14,
     padding: spacing.md,
   },
-  archivedName: { flex: 1, color: colors.muted },
+  archivedName: { flex: 1, color: colors.muted, fontWeight: '500' },
   restoreButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   restoreLabel: { color: colors.accent, fontSize: typography.caption, fontWeight: '700' },
   spacer: { height: spacing.lg },
@@ -305,18 +359,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.xl,
     bottom: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
-  fabPressed: { opacity: 0.85 },
+  fabPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
   pressed: { opacity: 0.7 },
 });

@@ -65,6 +65,34 @@ export class DrizzleCommitmentRepository implements CommitmentRepository {
     return row;
   }
 
+  /** Edit: overwrite the schedule-shaping fields (service recomputes remainingSen). */
+  async update(
+    userId: number,
+    id: number,
+    patch: CommitmentInput & { remainingSen: number; status?: CommitmentStatus },
+  ): Promise<Commitment> {
+    const rows = (await this.db
+      .update(commitments)
+      .set({
+        name: patch.name,
+        type: patch.type,
+        totalSen: patch.totalSen,
+        remainingSen: patch.remainingSen,
+        paymentSen: patch.paymentSen,
+        frequency: patch.frequency,
+        startDate: patch.startDate,
+        endDate: patch.endDate,
+        dueDate: patch.dueDate,
+        status: patch.status,
+        updatedAt: Date.now(),
+      })
+      .where(and(eq(commitments.userId, userId), eq(commitments.id, id)))
+      .returning()) as unknown as Commitment[];
+    const row = rows[0];
+    if (!row) throw new Error('commitment not found');
+    return row;
+  }
+
   /** Includes archived rows (detail view / un-archive need them). */
   async byId(userId: number, id: number): Promise<Commitment | null> {
     const rows = (await this.db

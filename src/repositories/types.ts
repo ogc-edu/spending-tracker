@@ -61,10 +61,23 @@ export interface AccountRepository {
   delete(userId: number, id: number): Promise<void>;
 }
 
-/** CategoryRepository — categories are GLOBAL (no user_id, A10): read-only in the MVP (plan 004). */
+/**
+ * CategoryRepository — categories are GLOBAL (no user_id, A10): read-only in
+ * the MVP (plan 004); plan-016-follow-up adds create/delete (custom
+ * categories, the expense form's "+" chip). Expenses must be REASSIGNED to a
+ * fallback category before the row can go (expenses.category_id is NOT NULL
+ * + FK); per-category budgets silently become overall (category_id → NULL).
+ */
 export interface CategoryRepository {
   list(): Promise<Category[]>;
   byId(id: number): Promise<Category | null>;
+  /** Insert a category (type defaults to 'expense' in the schema). Returns the created row. */
+  create(input: { name: string; icon: string }): Promise<Category>;
+  /**
+   * Delete a category: reassign its expenses to `fallbackCategoryId`, drop
+   * its per-category budget references, then remove the row.
+   */
+  removeWithReassign(id: number, fallbackCategoryId: number): Promise<void>;
 }
 
 /**
@@ -335,6 +348,12 @@ export interface CommitmentRepository {
   create(
     userId: number,
     input: CommitmentInput & { remainingSen: number },
+  ): Promise<Commitment>;
+  /** Edit: overwrite the schedule-shaping fields (service recomputes remainingSen). */
+  update(
+    userId: number,
+    id: number,
+    patch: CommitmentInput & { remainingSen: number; status?: CommitmentStatus },
   ): Promise<Commitment>;
   /** User-scoped fetch — includes archived rows (detail view + un-archive). */
   byId(userId: number, id: number): Promise<Commitment | null>;

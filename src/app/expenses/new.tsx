@@ -15,6 +15,8 @@ import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
 import { ExpenseForm } from '@/components/ExpenseForm';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { useToast } from '@/components/ToastProvider';
 import { useUiStore } from '@/store/uiStore';
 import { todayLocal } from '@/utils/dates';
 import type { ExpenseInput } from '@/repositories/types';
@@ -27,6 +29,7 @@ function errMsg(error: unknown): string {
 export default function NewExpenseScreen() {
   const router = useRouter();
   const { authService } = useAuth();
+  const toast = useToast();
   const { lastUsedCategoryId, lastUsedAccountId } = useUiStore();
 
   const services = useMemo(() => {
@@ -72,7 +75,7 @@ export default function NewExpenseScreen() {
       useUiStore.getState().setLastUsed(input.categoryId, input.accountId);
       router.back();
     } catch (error: unknown) {
-      Alert.alert('Add expense', errMsg(error));
+      toast.show(`Could not add expense: ${errMsg(error)}`);
     } finally {
       setSubmitting(false);
     }
@@ -104,24 +107,35 @@ export default function NewExpenseScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="new-expense-screen">
-      <ExpenseForm
-        categories={categories}
-        accounts={accounts}
-        defaults={defaults}
-        submitLabel="Add expense"
-        onSubmit={handleSubmit}
-        submitting={submitting}
-        onCancel={() => router.back()}
-      />
-      <Pressable
-        onPress={() => router.back()}
-        style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
-        accessibilityRole="button"
-      >
-        <Text style={styles.cancelLinkLabel}>Cancel</Text>
-      </Pressable>
-    </ScrollView>
+    <KeyboardScreen>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="new-expense-screen">
+        <ExpenseForm
+          categories={categories}
+          accounts={accounts}
+          defaults={defaults}
+          submitLabel="Add expense"
+          onSubmit={handleSubmit}
+          submitting={submitting}
+          onCancel={() => router.back()}
+          onCreateCategory={async (name, icon) => {
+            const created = await services.categories.create(name, icon);
+            setCategories((prev) => [...prev, created]);
+            return created;
+          }}
+          onDeleteCategory={async (id) => {
+            await services.categories.delete(id);
+            setCategories((prev) => prev.filter((c) => c.id !== id));
+          }}
+        />
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.cancelLinkLabel}>Cancel</Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardScreen>
   );
 }
 

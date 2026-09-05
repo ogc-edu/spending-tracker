@@ -10,7 +10,7 @@
  * blocks too (defense in depth).
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -20,10 +20,13 @@ import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
 import { ExpenseForm, expenseToFormValues } from '@/components/ExpenseForm';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { useToast } from '@/components/ToastProvider';
 import { categoryColor } from '@/components/categoryMeta';
 import { useUiStore } from '@/store/uiStore';
 import { formatDayLabel } from '@/utils/dates';
-import { formatSen } from '@/utils/money';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import type { ExpenseInput } from '@/repositories/types';
 import { colors, spacing, typography } from '@/theme';
 
@@ -35,6 +38,7 @@ export default function EditExpenseScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authService } = useAuth();
+  const toast = useToast();
   const expenseId = Number(id);
 
   const services = useMemo(() => {
@@ -52,6 +56,9 @@ export default function EditExpenseScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // Plan 016: destructive delete through ConfirmSheet (busy guard = deleting).
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(expenseId) || expenseId <= 0) {
@@ -89,7 +96,7 @@ export default function EditExpenseScreen() {
       useUiStore.getState().setLastUsed(input.categoryId, input.accountId);
       router.back();
     } catch (error: unknown) {
-      Alert.alert('Edit expense', errMsg(error));
+      toast.show(`Could not save expense: ${errMsg(error)}`);
     } finally {
       setSubmitting(false);
     }
@@ -97,21 +104,22 @@ export default function EditExpenseScreen() {
 
   const confirmDelete = () => {
     if (!expense) return;
-    Alert.alert('Delete expense', 'This reverses the balance change on its account.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await services.expenses.delete(expenseId);
-            router.back();
-          } catch (error: unknown) {
-            Alert.alert('Delete expense', errMsg(error));
-          }
-        },
-      },
-    ]);
+    setConfirmDeleteVisible(true);
+  };
+
+  const doDelete = async () => {
+    if (!expense) return;
+    setDeleting(true);
+    try {
+      await services.expenses.delete(expenseId);
+      setConfirmDeleteVisible(false);
+      router.back();
+    } catch (error: unknown) {
+      toast.show(`Could not delete expense: ${errMsg(error)}`);
+      setConfirmDeleteVisible(false);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) {
@@ -144,13 +152,20 @@ export default function EditExpenseScreen() {
     const category = categories.find((c) => c.id === expense.categoryId);
     const account = accounts.find((a) => a.id === expense.accountId);
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="linked-expense-view">
-        <View style={styles.linkedBadge}>
-          <Ionicons name="link-outline" size={16} color={colors.warning} />
-          <Text style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
-        </View>
-        <View style={styles.card}>
-          <Text style={styles.amount}>{formatSen(expense.amountSen)}</Text>
+      <KeyboardScreen>
+        <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="linked-expense-view">
+          <View style={styles.linkedBadge}>
+            <Ionicons name="link-outline" size={16} color={colors.warning} />
+            <Text style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
+          </View>
+          <View style={styles.card}>
+            <Text
+              style={styles.amount}
+              numberOfLines={1}
+              accessibilityLabel={`Expense amount, ${spokenMoneyLabel(expense.amountSen)}`}
+            >
+              {formatSen(expense.amountSen)}
+            </Text>
           <View style={styles.row}>
             <Ionicons name={category?.icon as never} size={18} color={categoryColor(expense.categoryId)} />
             <Text style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
@@ -179,12 +194,14 @@ export default function EditExpenseScreen() {
         >
           <Text style={styles.backButtonLabel}>Back</Text>
         </Pressable>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardScreen>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="edit-expense-screen">
+    <KeyboardScreen>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="edit-expense-screen">
       <ExpenseForm
         categories={categories}
         accounts={accounts}
@@ -193,6 +210,15 @@ export default function EditExpenseScreen() {
         onSubmit={handleSubmit}
         submitting={submitting}
         onCancel={() => router.back()}
+        onCreateCategory={async (name, icon) => {
+          const created = await services.categories.create(name, icon);
+          setCategories((prev) => [...prev, created]);
+          return created;
+        }}
+        onDeleteCategory={async (id) => {
+          await services.categories.delete(id);
+          setCategories((prev) => prev.filter((c) => c.id !== id));
+        }}
       />
       <Pressable
         onPress={confirmDelete}
@@ -204,7 +230,18 @@ export default function EditExpenseScreen() {
         <Ionicons name="trash-outline" size={18} color={colors.danger} />
         <Text style={styles.deleteLabel}>Delete expense</Text>
       </Pressable>
-    </ScrollView>
+
+      <ConfirmSheet
+        visible={confirmDeleteVisible}
+        title="Delete expense"
+        message="This reverses the balance change on its account."
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={() => void doDelete()}
+        onCancel={() => setConfirmDeleteVisible(false)}
+      />
+      </ScrollView>
+    </KeyboardScreen>
   );
 }
 
