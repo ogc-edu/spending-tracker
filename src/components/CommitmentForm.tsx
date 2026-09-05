@@ -19,12 +19,14 @@
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 import { COMMITMENT_TYPES, type CommitmentInput } from '@/repositories/types';
-import { isValidDateStr } from '@/utils/dates';
+import { formatDDMMYYYY, isValidDateStr } from '@/utils/dates';
 import { parseMoneyToSen } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
+import { CalendarSheet } from './CalendarSheet';
 import { COMMITMENT_TYPE_ICONS, COMMITMENT_TYPE_LABELS } from './commitmentMeta';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen. */
@@ -135,10 +137,13 @@ function buildInput(values: CommitmentFormValues): CommitmentInput {
 }
 
 export function CommitmentForm({ submitLabel = 'Add commitment', onSubmit, submitting, onCancel }: CommitmentFormProps) {
-  const { control, handleSubmit } = useForm<CommitmentFormValues>({
+  const { control, handleSubmit, getValues, setValue } = useForm<CommitmentFormValues>({
     resolver: zodResolver(commitmentFormSchema),
     defaultValues: { type: 'installment', kind: 'fixed', total: '', payment: '', startDate: '', endDate: '', dueDate: '' },
   });
+
+  /** The date field whose CalendarSheet is open (calendar pick, no typing → the keyboard never covers the input). */
+  const [dateField, setDateField] = useState<'startDate' | 'endDate' | 'dueDate' | null>(null);
 
   const onValid = (values: CommitmentFormValues) => {
     void onSubmit(buildInput(values));
@@ -172,6 +177,52 @@ export function CommitmentForm({ submitLabel = 'Add commitment', onSubmit, submi
           {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
         </View>
       )}
+    />
+  );
+
+  /**
+   * Calendar date field — a pressable row showing the picked date as
+   * DD-MM-YYYY that opens the CalendarSheet. No TextInput: tapping opens
+   * the calendar instead of the keyboard, so the soft keyboard can never
+   * cover the field (plan 016 follow-up).
+   */
+  const renderDateField = (
+    name: 'startDate' | 'endDate' | 'dueDate',
+    label: string,
+    props: { optional?: boolean; placeholder?: string },
+  ) => (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field: { value }, fieldState: { error } }) => {
+        const minDate = name === 'endDate' && getValues('startDate') ? getValues('startDate') : undefined;
+        return (
+          <View style={styles.field}>
+            <Text style={styles.label}>
+              {label}
+              {props.optional ? ' (optional)' : ''}
+            </Text>
+            <Pressable
+              onPress={() => setDateField(name)}
+              disabled={submitting}
+              style={({ pressed }) => [styles.dateField, error && styles.inputError, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}, ${value ? `${formatDDMMYYYY(value)}, picked` : 'not picked'}`}
+              testID={`commitment-form-${name}`}
+            >
+              <Ionicons name="calendar-outline" size={18} color={colors.muted} />
+              <Text style={[styles.dateValue, !value && styles.datePlaceholder]}>
+                {value ? formatDDMMYYYY(value) : (props.placeholder ?? 'Select a date')}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={colors.muted} />
+            </Pressable>
+            {minDate ? (
+              <Text style={styles.dateHint}>Earliest: {formatDDMMYYYY(minDate)}</Text>
+            ) : null}
+            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+          </View>
+        );
+      }}
     />
   );
 
@@ -229,9 +280,13 @@ export function CommitmentForm({ submitLabel = 'Add commitment', onSubmit, submi
         name="kind"
         render={({ field: { value } }) => (
           <>
-            {value !== 'one_time' ? renderField('startDate', 'Start date', { placeholder: 'YYYY-MM-DD' }) : null}
-            {value === 'fixed' ? renderField('endDate', 'End date', { placeholder: 'YYYY-MM-DD', optional: true }) : null}
-            {value === 'one_time' ? renderField('dueDate', 'Due date', { placeholder: 'YYYY-MM-DD' }) : null}
+            {value !== 'one_time' ? (
+              renderDateField('startDate', 'Start date', { placeholder: 'Select a date' })
+            ) : null}
+            {value === 'fixed' ? (
+              renderDateField('endDate', 'End date', { optional: true, placeholder: 'Optional — select a date' })
+            ) : null}
+            {value === 'one_time' ? renderDateField('dueDate', 'Due date', { placeholder: 'Select a date' }) : null}
           </>
         )}
       />
@@ -256,6 +311,27 @@ export function CommitmentForm({ submitLabel = 'Add commitment', onSubmit, submi
           <Text style={styles.cancelLabel}>Cancel</Text>
         </Pressable>
       </View>
+
+      <CalendarSheet
+        // Remount per open so the mount-time anchor re-reads the current value.
+        key={dateField ?? 'closed'}
+        visible={dateField !== null}
+        title={
+          dateField === 'endDate'
+            ? 'Select end date'
+            : dateField === 'dueDate'
+              ? 'Select due date'
+              : 'Select start date'
+        }
+        value={dateField === 'endDate' ? getValues('endDate') || getValues('startDate') || null : dateField ? getValues(dateField) : null}
+        minDate={dateField === 'endDate' && getValues('startDate') ? getValues('startDate') : undefined}
+        onSelect={(iso) => {
+          if (!dateField) return;
+          setValue(dateField, iso, { shouldValidate: true });
+          setDateField(null);
+        }}
+        onCancel={() => setDateField(null)}
+      />
     </View>
   );
 }
@@ -274,6 +350,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   inputError: { borderColor: colors.danger },
+  dateField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    minHeight: 48,
+  },
+  dateValue: { flex: 1, fontSize: typography.body, color: colors.text, fontWeight: '600' },
+  datePlaceholder: { color: colors.muted, fontWeight: '400' },
+  dateHint: { marginTop: spacing.xs, color: colors.muted, fontSize: typography.caption },
+  pressed: { opacity: 0.7 },
   fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {

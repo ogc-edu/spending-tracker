@@ -132,6 +132,18 @@ export function formatDayLabel(dateStr: string): string {
 }
 
 /**
+ * "01-09-2026" — DAY-MONTH-YEAR display for the calendar date fields
+ * (user-facing format, plan 016 follow-up). Storage stays `YYYY-MM-DD`
+ * (the engine/DB contract); this is display-only. Returns the input
+ * unchanged when it isn't a valid date string.
+ */
+export function formatDDMMYYYY(dateStr: string): string {
+  if (!DATE_RE.test(dateStr)) return dateStr;
+  const [year, month, day] = dateStr.split('-');
+  return `${day}-${month}-${year}`;
+}
+
+/**
  * ── Plan 008: pure calendar math for commitment schedules (ARCH §7) ──
  *
  * These three helpers use INTEGER arithmetic only — no Date objects, no

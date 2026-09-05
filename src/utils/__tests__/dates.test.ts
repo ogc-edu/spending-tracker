@@ -6,6 +6,7 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   formatDayLabel,
+  formatDDMMYYYY,
   formatMonthLabel,
   isSameLocalMonth,
   isValidDateStr,
@@ -119,5 +120,19 @@ describe('periodRange (plan 006 presets)', () => {
   it('thisMonth covers the whole calendar month, not just till today', () => {
     expect(periodRange('thisMonth', new Date(2026, 8, 1))).toEqual({ from: '2026-09-01', to: '2026-09-30' });
     expect(periodRange('thisMonth', new Date(2026, 8, 30))).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+  });
+});
+
+describe('formatDDMMYYYY (calendar date-field display)', () => {
+  it('renders DAY-MONTH-YEAR with zero-padded parts', () => {
+    expect(formatDDMMYYYY('2026-09-01')).toBe('01-09-2026');
+    expect(formatDDMMYYYY('2026-12-31')).toBe('31-12-2026');
+    expect(formatDDMMYYYY('2026-01-05')).toBe('05-01-2026');
+  });
+
+  it('passes non-YYYY-MM-DD input through unchanged (display-only helper)', () => {
+    expect(formatDDMMYYYY('')).toBe('');
+    expect(formatDDMMYYYY('2026-9-1')).toBe('2026-9-1');
+    expect(formatDDMMYYYY('next week')).toBe('next week');
   });
 });
