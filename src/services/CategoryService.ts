@@ -43,21 +43,19 @@ export class CategoryService {
   }
 
   /**
-   * Delete a category. Expenses are reassigned to 'Other'; per-category
-   * budgets lose their category (become overall). 'Other' itself is
-   * protected — it is the reassignment target.
+   * Delete a category — LIST-ONLY by user rule: the row leaves every picker,
+   * but expenses and budgets that reference it are untouched (no cascade,
+   * no reassignment; their rows keep the id and render a generic label).
+   * 'Other' itself is protected (it is the seeded catch-all behind the
+   * pickers' "+" chip).
    */
   async delete(id: number): Promise<void> {
     const all = await this.categories.list();
     const target = all.find((c) => c.id === id);
     if (!target) return; // already gone — idempotent
-    const fallback = all.find((c) => c.name.toLowerCase() === 'other');
-    if (!fallback) {
-      throw new Error("The built-in 'Other' category is missing — can't delete categories");
-    }
-    if (target.id === fallback.id) {
+    if (target.name.toLowerCase() === 'other') {
       throw new Error(CANNOT_DELETE_OTHER_MESSAGE);
     }
-    await this.categories.removeWithReassign(id, fallback.id);
+    await this.categories.remove(id);
   }
 }

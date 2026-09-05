@@ -70,7 +70,7 @@ describe('CategoryService.create', () => {
 });
 
 describe('CategoryService.delete', () => {
-  it('deletes the row and reassigns its expenses to Other', async () => {
+  it('deletes the row but leaves referencing expenses untouched (NO cascade)', async () => {
     const f = await makeFixture();
     const food = f.categories.find((c) => c.name.toLowerCase() === 'food');
     if (!food) throw new Error('no Food');
@@ -85,11 +85,12 @@ describe('CategoryService.delete', () => {
     await f.service.delete(food.id);
     const remaining = (await f.test.db.select().from(categoriesTable)) as unknown as Category[];
     expect(remaining.some((c) => c.id === food.id)).toBe(false);
+    // The expense keeps its category_id — no reassignment, no cascade.
     const expense = (await f.test.db.select().from(expensesTable))[0] as unknown as { categoryId: number };
-    expect(expense.categoryId).toBe(f.other.id); // reassigned, not orphaned
+    expect(expense.categoryId).toBe(food.id);
   });
 
-  it('drops per-category budget references (budgets become overall)', async () => {
+  it('leaves per-category budget rows untouched too (dangling reference is fine)', async () => {
     const f = await makeFixture();
     const travel = f.categories.find((c) => c.name.toLowerCase() === 'travel');
     if (!travel) throw new Error('no Travel');
@@ -103,10 +104,12 @@ describe('CategoryService.delete', () => {
     await f.service.delete(travel.id);
     const rows = await f.test.db.select().from(budgetsTable);
     expect(rows.length).toBe(1);
-    expect(rows[0]?.categoryId).toBeNull();
+    expect(rows[0]?.categoryId).toBe(travel.id); // kept, not nulled
+    // FK enforcement is back ON after the delete (per-connection pragma).
+    expect(f.test.sqlite.pragma('foreign_keys', { simple: true })).toBe(1);
   });
 
-  it('protects Other (the reassignment fallback) and is idempotent for missing ids', async () => {
+  it('protects Other and is idempotent for missing ids', async () => {
     const f = await makeFixture();
     await expect(f.service.delete(f.other.id)).rejects.toThrow(CANNOT_DELETE_OTHER_MESSAGE);
     await expect(f.service.delete(99999)).resolves.toBeUndefined();

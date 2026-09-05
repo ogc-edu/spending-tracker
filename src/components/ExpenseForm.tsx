@@ -96,9 +96,8 @@ export function ExpenseForm({
   const [deleting, setDeleting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
 
-  // The built-in fallback category — shown as the "+" chip, never deletable,
-  // and the reassignment target when a category is deleted.
-  const otherCategory = categories.find((c) => c.name.toLowerCase() === 'other');
+  // The built-in catch-all 'Other' is hidden from the picker — its slot is
+  // the "+" Add chip. (Deleting a category never touches existing rows.)
   const visibleCategories = categories.filter((c) => c.name.toLowerCase() !== 'other');
 
   // Live values for the projected-balance preview (SQLite is a source of truth;
@@ -348,7 +347,7 @@ export function ExpenseForm({
         title="Delete category"
         message={
           confirmDelete
-            ? `"${confirmDelete.name}" will be deleted and its expenses move to Other.`
+            ? `"${confirmDelete.name}" is removed from the picker only — expenses and budgets that already use it are left unchanged.`
             : ''
         }
         confirmLabel="Delete"
@@ -358,8 +357,8 @@ export function ExpenseForm({
           setDeleting(true);
           try {
             await onDeleteCategory(confirmDelete.id);
-            if (otherCategory && watched.categoryId === confirmDelete.id) {
-              setValue('categoryId', otherCategory.id, { shouldValidate: true });
+            if (watched.categoryId === confirmDelete.id && visibleCategories[0] !== undefined) {
+              setValue('categoryId', visibleCategories[0].id, { shouldValidate: true });
             }
             setConfirmDelete(null);
           } finally {

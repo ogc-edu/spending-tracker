@@ -10,7 +10,7 @@
  * Balances are NOT editable here (D1 — they change only through expenses).
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -18,14 +18,21 @@ import { repositories } from '@/db';
 import type { Account, Category } from '@/db/schema';
 import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
+import { SettingsService } from '@/services/SettingsService';
 import { AiConfigService, type ConfigurableAIProvider } from '@/services/AiConfigService';
 import type { AccountInput } from '@/repositories/types';
 import type { AIProviderName } from '@/ai/types';
 import { AccountForm } from '@/components/AccountForm';
 import { AccountRow } from '@/components/AccountRow';
+import { CategoryAddSheet } from '@/components/CategoryAddSheet';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { ProviderRow, maskKeySuffix } from '@/components/ai/ProviderRow';
 import { ActiveProviderSelector } from '@/components/ai/ActiveProviderSelector';
-import { colors, spacing, typography } from '@/theme';
+import { aiStatusLabel } from '@/components/ai/providerMeta';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { useToast } from '@/components/ToastProvider';
+import { formatSen, parseMoneyToSen, spokenMoneyLabel } from '@/utils/money';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -34,6 +41,7 @@ function errMsg(error: unknown): string {
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, logout, authService } = useAuth();
+  const toast = useToast();
 
   // Services built once auth is available; repositories() needs the initialized DB.
   const services = useMemo(() => {
@@ -41,6 +49,7 @@ export default function SettingsScreen() {
     return {
       accounts: new AccountService(repos.accounts, authService),
       categories: new CategoryService(repos.categories),
+      settings: new SettingsService(repos.settings, authService),
       ai: new AiConfigService(repos.settings, authService),
     };
   }, [authService]);
@@ -51,9 +60,25 @@ export default function SettingsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
 
+  // Plan 016 follow-up: category manager — long-press enters multi-select
+  // mode (header shows Delete); the "+" chip (Other's slot) opens the add sheet.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedCats, setSelectedCats] = useState<Set<number>>(new Set());
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const [confirmDeleteCats, setConfirmDeleteCats] = useState(false);
+
   // Plan 013: masked key suffix per provider (null = not configured) + active choice.
   const [aiSuffixes, setAiSuffixes] = useState<Partial<Record<ConfigurableAIProvider, string | null>>>({});
   const [aiActive, setAiActive] = useState<AIProviderName | null>(null);
+
+  // Plan 016 (SET-1 completion): the safety-buffer editor. bufferSen is the
+  // persisted value (default 30000 = RM300 until overridden); bufferInput is
+  // the in-progress edit; bufferError is the inline validation message.
+  const [bufferSen, setBufferSen] = useState<number | null>(null);
+  const [bufferInput, setBufferInput] = useState('');
+  const [bufferError, setBufferError] = useState<string | null>(null);
+  const [bufferBusy, setBufferBusy] = useState(false);
 
   const loadAccounts = useCallback(async () => {
     try {
@@ -72,6 +97,46 @@ export default function SettingsScreen() {
     }
   }, [services.categories]);
 
+  // ── Plan 016 follow-up: category manager (multi-select delete + add). ──
+  const visibleCategories = categories.filter((c) => c.name.toLowerCase() !== 'other');
+
+  const enterSelect = (category: Category): void => {
+    setSelecting(true);
+    setSelectedCats(new Set([category.id]));
+  };
+
+  const toggleSelect = (category: Category): void => {
+    if (!selecting) return;
+    setSelectedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(category.id)) next.delete(category.id);
+      else next.add(category.id);
+      return next;
+    });
+  };
+
+  const exitSelect = (): void => {
+    setSelecting(false);
+    setSelectedCats(new Set());
+  };
+
+  const doDeleteSelected = async (): Promise<void> => {
+    setCategoryBusy(true);
+    try {
+      for (const id of selectedCats) {
+        await services.categories.delete(id);
+      }
+      setConfirmDeleteCats(false);
+      setCategories(await services.categories.list());
+      exitSelect();
+    } catch (error: unknown) {
+      Alert.alert('Could not delete categories', errMsg(error));
+      setConfirmDeleteCats(false);
+    } finally {
+      setCategoryBusy(false);
+    }
+  };
+
   const loadAi = useCallback(async () => {
     try {
       const [geminiKey, deepseekKey, active] = await Promise.all([
@@ -89,6 +154,45 @@ export default function SettingsScreen() {
     }
   }, [services.ai]);
 
+  const loadBuffer = useCallback(async () => {
+    try {
+      setBufferSen(await services.settings.getBuffer());
+    } catch {
+      // Keep the previous state; non-fatal (read failure).
+    }
+  }, [services.settings]);
+
+  /**
+   * SET-1 save: the money string parses via parseMoneyToSen (negative and
+   * junk rejected inline); 0 is a legitimate "no buffer" choice (plan §Edge
+   * cases); the service re-validates at its boundary. Write failures toast.
+   */
+  const saveBuffer = async () => {
+    const trimmed = bufferInput.trim();
+    if (trimmed === '') {
+      setBufferError('Enter an amount');
+      return;
+    }
+    let sen: number;
+    try {
+      sen = parseMoneyToSen(trimmed);
+    } catch {
+      setBufferError('Enter a valid amount (up to 2 decimal places)');
+      return;
+    }
+    setBufferError(null);
+    setBufferBusy(true);
+    try {
+      const saved = await services.settings.setBuffer(sen);
+      setBufferSen(saved.safetyBufferSen);
+      setBufferInput('');
+    } catch (error: unknown) {
+      toast.show(`Could not save safety buffer: ${errMsg(error)}`);
+    } finally {
+      setBufferBusy(false);
+    }
+  };
+
   /** The active selector lists CONFIGURED providers only (no automatic fallback). */
   const configuredProviders: ConfigurableAIProvider[] = (['gemini', 'deepseek'] as const).filter(
     (p) => aiSuffixes[p] !== null,
@@ -99,7 +203,7 @@ export default function SettingsScreen() {
       await services.ai.setActiveProvider(provider);
       setAiActive(provider);
     } catch (error: unknown) {
-      Alert.alert('Active AI provider', errMsg(error));
+      toast.show(`Could not set active provider: ${errMsg(error)}`);
     }
   };
 
@@ -122,6 +226,12 @@ export default function SettingsScreen() {
     }, [loadAi]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      void loadBuffer();
+    }, [loadBuffer]),
+  );
+
   const handleAdd = async (input: AccountInput) => {
     setSubmitting(true);
     try {
@@ -129,7 +239,7 @@ export default function SettingsScreen() {
       setShowForm(false);
       await loadAccounts();
     } catch (error: unknown) {
-      Alert.alert('Add account', errMsg(error));
+      toast.show(`Could not add account: ${errMsg(error)}`);
     } finally {
       setSubmitting(false);
     }
@@ -149,7 +259,7 @@ export default function SettingsScreen() {
               await services.accounts.delete(account.id);
               await loadAccounts();
             } catch (error: unknown) {
-              Alert.alert('Cannot delete', errMsg(error));
+              toast.show(`Could not delete account: ${errMsg(error)}`);
             }
           },
         },
@@ -158,8 +268,9 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="settings-screen">
-      <Text style={styles.title}>Settings</Text>
+    <KeyboardScreen>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="settings-screen">
+        <Text style={styles.title}>Settings</Text>
 
       {/* Account 003: signed-in user + logout. */}
       {user ? (
@@ -206,23 +317,164 @@ export default function SettingsScreen() {
         <Text style={styles.note}>Credit-card accounts show the amount owed and count negatively.</Text>
       ) : null}
 
-      {/* Plan 004: read-only categories preview (proves the seeded repository). */}
-      <Text style={styles.sectionTitle}>Categories</Text>
-      <Text style={styles.note}>Default categories power the expense form.</Text>
-      <View style={styles.chipWrap}>
-        {categories.map((category) => (
-          <View key={category.id} style={styles.chip}>
-            <Ionicons name={category.icon as never} size={14} color={colors.accent} />
-            <Text style={styles.chipLabel}>{category.name}</Text>
-          </View>
-        ))}
+      {/* Plan 016 (SET-1): safety-buffer editor — the promised SET-1 surface. */}
+      <Text style={styles.sectionTitle}>Safety buffer</Text>
+      <Text style={styles.note}>
+        Reserved from your available money before safe-to-spend is calculated. RM0 means no buffer.
+      </Text>
+      <View style={styles.card}>
+        <Text style={styles.label}>Current buffer</Text>
+        <Text
+          style={styles.bufferCurrent}
+          numberOfLines={1}
+          accessibilityLabel={`Safety buffer, ${spokenMoneyLabel(bufferSen ?? 0)}`}
+          testID="settings-buffer-current"
+        >
+          {bufferSen === null ? '…' : formatSen(bufferSen)}
+        </Text>
+        <View style={styles.bufferRow}>
+          <TextInput
+            style={styles.bufferInput}
+            keyboardType="decimal-pad"
+            placeholder="e.g. 300"
+            placeholderTextColor={colors.muted}
+            accessibilityLabel="Safety buffer amount in ringgit"
+            value={bufferInput}
+            onChangeText={(text) => {
+              setBufferInput(text);
+              setBufferError(null);
+            }}
+            editable={!bufferBusy}
+            testID="settings-buffer-input"
+          />
+          <Pressable
+            onPress={() => void saveBuffer()}
+            disabled={bufferBusy}
+            style={({ pressed }) => [styles.bufferSave, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Save safety buffer"
+            testID="settings-buffer-save"
+          >
+            <Text style={styles.bufferSaveLabel}>Save</Text>
+          </Pressable>
+        </View>
+        {bufferError ? (
+          <Text style={styles.fieldError} testID="settings-buffer-error">
+            {bufferError}
+          </Text>
+        ) : null}
+        <Text style={styles.note}>0 is allowed — it simply means no money is held back.</Text>
       </View>
+
+      {/* Plan 016 follow-up: Categories manager — long-press a chip to select
+        (multi-select), Delete appears on the header row; the "+" chip
+        (Other's slot) opens the add sheet. Delete is list-only: existing
+        expenses/budgets keep their category label (never a cascade). */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>Categories</Text>
+        {selecting ? (
+          <>
+            <Pressable
+              onPress={() => setConfirmDeleteCats(true)}
+              disabled={selectedCats.size === 0 || categoryBusy}
+              style={({ pressed }) => [
+                styles.headerDelete,
+                selectedCats.size === 0 && styles.headerDeleteDisabled,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              testID="settings-categories-delete"
+            >
+              <Ionicons name="trash-outline" size={15} color={colors.surface} />
+              <Text style={styles.headerDeleteLabel}>Delete ({selectedCats.size})</Text>
+            </Pressable>
+            <Pressable
+              onPress={exitSelect}
+              style={({ pressed }) => [styles.headerDone, pressed && styles.pressed]}
+              accessibilityRole="button"
+              testID="settings-categories-exit"
+            >
+              <Text style={styles.headerDoneLabel}>Done</Text>
+            </Pressable>
+          </>
+        ) : null}
+      </View>
+      <Text style={styles.note}>
+        Long-press to select categories, then Delete — tap more to multi-select. Deleting removes them from the
+        pickers only; expenses and budgets using them keep their label.
+      </Text>
+      <View style={styles.chipWrap}>
+        {visibleCategories.map((category) => {
+          const selected = selecting && selectedCats.has(category.id);
+          return (
+            <Pressable
+              key={category.id}
+              onLongPress={() => enterSelect(category)}
+              onPress={() => toggleSelect(category)}
+              delayLongPress={450}
+              style={[styles.chip, selected && styles.chipSelected]}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityHint="Long-press to select for deletion"
+              testID={`settings-category-${category.id}`}
+            >
+              <Ionicons name={category.icon as never} size={14} color={selected ? colors.surface : colors.accent} />
+              <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{category.name}</Text>
+              {selected ? <Ionicons name="checkmark-circle" size={14} color={colors.surface} /> : null}
+            </Pressable>
+          );
+        })}
+        {/* The "+" chip replaces the Other slot. */}
+        <Pressable
+          onPress={() => setAddCategoryOpen(true)}
+          style={({ pressed }) => [styles.chip, styles.addChip, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Add a new category"
+          testID="settings-categories-add"
+        >
+          <Ionicons name="add" size={15} color={colors.accent} />
+          <Text style={[styles.chipLabel, styles.addChipLabel]}>Add</Text>
+        </Pressable>
+      </View>
+
+      <CategoryAddSheet
+        visible={addCategoryOpen}
+        onSave={async (name, icon) => {
+          const created = await services.categories.create(name, icon);
+          setCategories((prev) => [...prev, created]);
+          setAddCategoryOpen(false);
+        }}
+        onCancel={() => setAddCategoryOpen(false)}
+      />
+
+      <ConfirmSheet
+        visible={confirmDeleteCats}
+        title={`Delete ${selectedCats.size} categor${selectedCats.size === 1 ? 'y' : 'ies'}?`}
+        message="They are removed from the pickers only — expenses and budgets that already use them are left unchanged."
+        confirmLabel="Delete"
+        busy={categoryBusy}
+        onConfirm={() => void doDeleteSelected()}
+        onCancel={() => setConfirmDeleteCats(false)}
+      />
 
       {/* Plan 013: AI Providers (BYOK — Gemini + DeepSeek). */}
       <Text style={styles.sectionTitle}>AI Provider</Text>
       <Text style={styles.note}>
         Bring your own API key to analyze your finances with AI. Keys are stored securely on this
         device and sent only to the provider.
+      </Text>
+      {/* Plan 016 (SET-2): the AI status line — key presence per provider (013's config). */}
+      <Text
+        style={[styles.aiStatus, aiSuffixes.gemini !== null && styles.aiStatusConfigured]}
+        testID="settings-ai-status-gemini"
+      >
+        {aiStatusLabel('gemini', aiSuffixes.gemini !== null)}
+      </Text>
+      <Text
+        style={[styles.aiStatus, aiSuffixes.deepseek !== null && styles.aiStatusConfigured]}
+        testID="settings-ai-status-deepseek"
+      >
+        {aiStatusLabel('deepseek', aiSuffixes.deepseek !== null)}
       </Text>
       <ProviderRow
         provider="gemini"
@@ -256,30 +508,37 @@ export default function SettingsScreen() {
       </Pressable>
 
       <Text style={styles.footNote}>AI analysis through your own provider keys.</Text>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingTop: spacing.xxl, paddingBottom: spacing.xxl },
-  title: { fontSize: typography.title, fontWeight: '700', color: colors.text, marginBottom: spacing.xl },
+  content: { padding: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xxl },
+  title: { fontSize: typography.title, fontWeight: '800', color: colors.text, marginBottom: spacing.lg, letterSpacing: -0.3 },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
+    borderRadius: 16,
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.xl,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs },
-  email: { fontSize: typography.body, fontWeight: '600', color: colors.text },
+  label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600' },
+  email: { fontSize: typography.body, fontWeight: '700', color: colors.text },
   sectionTitle: {
     fontSize: typography.emphasis,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     marginTop: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
+    letterSpacing: -0.2,
   },
   empty: { fontSize: typography.body, color: colors.muted, marginBottom: spacing.md },
   errorText: { fontSize: typography.body, color: colors.danger, marginBottom: spacing.md },
@@ -288,21 +547,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.accent,
     borderStyle: 'dashed',
-    borderRadius: spacing.sm,
+    borderRadius: 12,
     paddingVertical: spacing.md,
     marginBottom: spacing.xl,
   },
-  addButtonLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '600' },
-  note: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.lg },
+  addButtonLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '700' },
+  note: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md, fontWeight: '500' },
   activeLabel: {
     fontSize: typography.caption,
     color: colors.muted,
     marginBottom: spacing.sm,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontWeight: '700',
   },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.xl },
   chip: {
@@ -312,19 +572,73 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: spacing.lg,
+    borderRadius: 999,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
   },
   chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
+  headerDelete: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.danger,
+    borderRadius: spacing.lg,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    minHeight: 34,
+  },
+  headerDeleteDisabled: { opacity: 0.5 },
+  headerDeleteLabel: { color: colors.surface, fontSize: typography.caption, fontWeight: '700' },
+  headerDone: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.lg,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.background,
+    minHeight: 34,
+  },
+  headerDoneLabel: { color: colors.muted, fontSize: typography.caption, fontWeight: '600' },
+  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  chipLabelSelected: { color: colors.surface, fontWeight: '700' },
+  addChip: { borderStyle: 'dashed', borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.background },
+  addChipLabel: { color: colors.accent },
   button: {
     backgroundColor: colors.danger,
-    borderRadius: spacing.sm,
+    borderRadius: 12,
     paddingVertical: spacing.md,
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
   },
-  buttonLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
+  buttonLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '700' },
   pressed: { opacity: 0.8 },
-  footNote: { marginTop: spacing.lg, fontSize: typography.body, color: colors.muted },
+  footNote: { marginTop: spacing.lg, fontSize: typography.caption, color: colors.muted, textAlign: 'center' },
+  bufferCurrent: { fontSize: typography.moneySmall, fontWeight: '800', color: colors.text, marginBottom: spacing.sm, fontVariant: moneyFontVariant },
+  bufferRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', marginBottom: spacing.sm },
+  bufferInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    minHeight: 44, // touch target (plan 016 a11y)
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    fontSize: typography.body,
+    color: colors.text,
+    backgroundColor: colors.background,
+  },
+  bufferSave: {
+    backgroundColor: colors.accent,
+    borderRadius: 10,
+    minHeight: 44,
+    minWidth: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  bufferSaveLabel: { color: colors.surface, fontSize: typography.body, fontWeight: '700' },
+  fieldError: { fontSize: typography.caption, color: colors.danger, marginBottom: spacing.sm },
+  aiStatus: { fontSize: typography.caption, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs },
+  aiStatusConfigured: { color: colors.accent },
 });

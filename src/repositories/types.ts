@@ -64,20 +64,18 @@ export interface AccountRepository {
 /**
  * CategoryRepository — categories are GLOBAL (no user_id, A10): read-only in
  * the MVP (plan 004); plan-016-follow-up adds create/delete (custom
- * categories, the expense form's "+" chip). Expenses must be REASSIGNED to a
- * fallback category before the row can go (expenses.category_id is NOT NULL
- * + FK); per-category budgets silently become overall (category_id → NULL).
+ * categories, the pickers' "+" chip and the Settings multi-select manager).
+ * Delete is LIST-ONLY by user rule: never a cascade — expenses and budgets
+ * keep their category_id (dangling ids render with a generic label). SQLite
+ * FK enforcement is suspended for the delete statement only.
  */
 export interface CategoryRepository {
   list(): Promise<Category[]>;
   byId(id: number): Promise<Category | null>;
   /** Insert a category (type defaults to 'expense' in the schema). Returns the created row. */
   create(input: { name: string; icon: string }): Promise<Category>;
-  /**
-   * Delete a category: reassign its expenses to `fallbackCategoryId`, drop
-   * its per-category budget references, then remove the row.
-   */
-  removeWithReassign(id: number, fallbackCategoryId: number): Promise<void>;
+  /** Delete the row WITHOUT touching expenses/budgets that reference it (no cascade). */
+  remove(id: number): Promise<void>;
 }
 
 /**
