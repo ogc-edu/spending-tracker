@@ -198,13 +198,15 @@ export default function BudgetsScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           {overall === null && byCategory.size === 0 ? (
-            <EmptyState
-              icon="pie-chart-outline"
-              title="No budgets set"
-              body="Set a monthly budget to reserve spending in your cash flow — category budgets are optional extras."
-              action={{ label: 'Set a monthly budget', onPress: () => setEditing({ kind: 'overall' }) }}
-              testID="budgets-empty"
-            />
+            <View style={styles.emptyWrap}>
+              <EmptyState
+                icon="pie-chart-outline"
+                title="No budgets set"
+                body="Set a monthly budget to reserve spending in your cash flow — category budgets are optional extras."
+                action={{ label: 'Set a monthly budget', onPress: () => setEditing({ kind: 'overall' }) }}
+                testID="budgets-empty"
+              />
+            </View>
           ) : null}
 
           <BudgetCard
@@ -365,6 +367,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   spacer: { height: spacing.lg },
+  // Gap under the empty-state CTA so it never sticks to the "Monthly budget" card below (plan 016 follow-up).
+  emptyWrap: { marginBottom: spacing.lg },
   addCategoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
