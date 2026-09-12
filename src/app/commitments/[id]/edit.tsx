@@ -131,13 +131,6 @@ export default function EditCommitmentScreen() {
           onCancel={() => router.back()}
           defaults={commitmentToFormValues(commitment)}
         />
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.cancelLinkLabel}>Cancel</Text>
-        </Pressable>
       </ScrollView>
     </KeyboardScreen>
   );
@@ -156,7 +149,4 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.lg },
   backLink: { padding: spacing.sm },
   backLinkLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '600' },
-  cancelLink: { alignItems: 'center', paddingVertical: spacing.lg },
-  cancelLinkLabel: { color: colors.muted, fontSize: typography.body, fontWeight: '600' },
-  pressed: { opacity: 0.6 },
 });

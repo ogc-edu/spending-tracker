@@ -1,9 +1,9 @@
 /**
  * ExpenseForm (plan 005 UI) — add/edit expense form. React Hook Form + Zod
- * (the register/account-form pattern). Fields: amount (money string,
- * auto-focused for fast entry), category (chips grid from the seeded set),
+ * (the register/account-form pattern). Fields: amount (POS-style
+ * sen-first MoneyInput, auto-focused for fast entry), category (chips grid from the seeded set),
  * account (chips with the current balance + a projected balance after save),
- * date (YYYY-MM-DD, defaults to today), description (optional, ≤200).
+ * date (CalendarSheet picker, stored YYYY-MM-DD, defaults to today), description (optional, ≤200).
  *
  * The Zod schema here is the validation source of truth for the FORM (rejects
  * 0/negative/>2-decimal amounts, empty pickers, bad dates) — the service
@@ -18,14 +18,17 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 import type { Account, Category, Expense } from '@/db/schema';
-import { DATE_RE, isValidDateStr, todayLocal } from '@/utils/dates';
+import { DATE_RE, formatDDMMYYYY, isValidDateStr, todayLocal } from '@/utils/dates';
 import { formatSen, formatSenInput, parseMoneyToSen } from '@/utils/money';
 import { balanceEffectFor } from '@/services/ExpenseService';
 import type { ExpenseInput } from '@/repositories/types';
 import { colors, spacing, typography } from '@/theme';
 import { categoryColor } from './categoryMeta';
 import { CategoryAddSheet } from './CategoryAddSheet';
+import { CalendarSheet } from './CalendarSheet';
 import { ConfirmSheet } from './ConfirmSheet';
+import { useKeyboardAwareFocus } from './KeyboardAwareScrollView';
+import { MoneyInput } from './MoneyInput';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.[0-9]{1,2})?$/;
@@ -86,7 +89,7 @@ export function ExpenseForm({
     setValue,
   } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
-    defaultValues: { amount: '', description: '', date: todayLocal(), ...defaults },
+    defaultValues: { amount: '0.00', description: '', date: todayLocal(), ...defaults },
   });
 
   // Category management state (plan 016 follow-up): armed = long-press
@@ -95,6 +98,12 @@ export function ExpenseForm({
   const [confirmDelete, setConfirmDelete] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  /** Calendar visibility for the date field (pick, don't type). */
+  const [dateOpen, setDateOpen] = useState(false);
+
+  // Every text input reports its focus so the screen's scroller can lift it
+  // above the keyboard (no-op when the form isn't inside one).
+  const onInputFocus = useKeyboardAwareFocus();
 
   // The built-in catch-all 'Other' is hidden from the picker — its slot is
   // the "+" Add chip. (Deleting a category never touches existing rows.)
@@ -142,19 +151,18 @@ export function ExpenseForm({
         name="amount"
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
           <View style={styles.field}>
-            <Text style={styles.label} nativeID="expense-form-label-amount">Amount (RM)</Text>
-            <TextInput
-              style={[styles.input, error && styles.inputError]}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              placeholderTextColor={colors.muted}
-              accessibilityLabel="Amount in ringgit"
-              accessibilityLabelledBy="expense-form-label-amount"
+            <Text style={styles.label} nativeID="expense-form-label-amount">Amount</Text>
+            {/* POS-style entry: digits fill in from the sen place (2,0,0 → RM2.00). */}
+            <MoneyInput
               value={value}
-              onChangeText={onChange}
+              onChangeValue={onChange}
               onBlur={onBlur}
+              onFocus={onInputFocus}
               autoFocus
               editable={!submitting}
+              hasError={error !== undefined}
+              accessibilityLabel="Amount in ringgit"
+              accessibilityLabelledBy="expense-form-label-amount"
               testID="expense-form-amount"
             />
             {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
@@ -265,23 +273,30 @@ export function ExpenseForm({
         )}
       />
 
+      {/* Date is PICKED, never typed (the CommitmentForm pattern): the row opens
+          the CalendarSheet, so no keyboard can cover it and the stored value is
+          always a valid YYYY-MM-DD. */}
       <Controller
         control={control}
         name="date"
-        render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
+        render={({ field: { value }, fieldState: { error } }) => (
           <View style={styles.field}>
             <Text style={styles.label}>Date</Text>
-            <TextInput
-              style={[styles.input, error && styles.inputError]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.muted}
-              accessibilityLabel="Date, YYYY dash MM dash DD"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              editable={!submitting}
+            <Pressable
+              onPress={() => setDateOpen(true)}
+              disabled={submitting}
+              style={({ pressed }) => [styles.dateField, error && styles.inputError, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`Date, ${value ? `${formatDDMMYYYY(value)}, picked` : 'not picked'}`}
+              accessibilityHint="Opens a calendar"
               testID="expense-form-date"
-            />
+            >
+              <Ionicons name="calendar-outline" size={18} color={colors.muted} />
+              <Text style={[styles.dateValue, !value && styles.datePlaceholder]}>
+                {value ? formatDDMMYYYY(value) : 'Select a date'}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={colors.muted} />
+            </Pressable>
             {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
           </View>
         )}
@@ -301,6 +316,7 @@ export function ExpenseForm({
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
+              onFocus={onInputFocus}
               multiline
               maxLength={200}
               editable={!submitting}
@@ -331,6 +347,19 @@ export function ExpenseForm({
           <Text style={styles.cancelLabel}>Cancel</Text>
         </Pressable>
       </View>
+
+      <CalendarSheet
+        // Remount per open so the sheet anchors on the currently picked date.
+        key={dateOpen ? 'date-open' : 'date-closed'}
+        visible={dateOpen}
+        title="Select date"
+        value={watched.date ?? null}
+        onSelect={(iso) => {
+          setValue('date', iso, { shouldValidate: true });
+          setDateOpen(false);
+        }}
+        onCancel={() => setDateOpen(false)} // dismiss leaves the date untouched
+      />
 
       <CategoryAddSheet
         visible={addOpen}
@@ -405,6 +434,21 @@ const styles = StyleSheet.create({
   },
   multiline: { minHeight: 64, textAlignVertical: 'top' },
   inputError: { borderColor: colors.danger },
+  dateField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    minHeight: 48, // touch target (plan 016 a11y)
+  },
+  dateValue: { flex: 1, fontSize: typography.body, color: colors.text, fontWeight: '600' },
+  datePlaceholder: { color: colors.muted, fontWeight: '400' },
+  pressed: { opacity: 0.7 },
   fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chipSlot: { position: 'relative' },

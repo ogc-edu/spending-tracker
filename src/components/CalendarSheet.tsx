@@ -5,7 +5,7 @@
  * not typed. Values stay `YYYY-MM-DD` (the engine/DB contract); DD-MM-YYYY
  * display lives in the owning form (formatDDMMYYYY).
  *
- * The sheet is chrome only (title, close, month navigation, Cancel); the
+ * The sheet is chrome only (title, close, month/year navigation, Cancel); the
  * actual calendar is the reusable CalendarGrid (responsive — fits any
  * screen width). The displayed month is captured at MOUNT — the owner
  * remounts per open via a `key` so every open anchors to value/today.
@@ -55,6 +55,11 @@ export function CalendarSheet({
     setView({ year: Math.floor(total / 12), month: (total % 12) + 1 });
   };
 
+  /** Year jump — reaching a date a year away shouldn't take twelve taps. */
+  const shiftYear = (delta: number): void => {
+    setView((current) => ({ year: current.year + delta, month: current.month }));
+  };
+
   if (!visible) return null;
 
   const gridProps: CalendarGridProps = {
@@ -91,8 +96,17 @@ export function CalendarSheet({
             </Pressable>
           </View>
 
-          {/* Month navigator */}
+          {/* Month + year navigator */}
           <View style={styles.monthBar}>
+            <Pressable
+              onPress={() => shiftYear(-1)}
+              style={styles.monthArrow}
+              accessibilityRole="button"
+              accessibilityLabel="Previous year"
+              testID="calendar-prev-year"
+            >
+              <Ionicons name="play-skip-back" size={16} color={colors.muted} />
+            </Pressable>
             <Pressable
               onPress={() => shiftMonth(-1)}
               style={styles.monthArrow}
@@ -113,6 +127,15 @@ export function CalendarSheet({
               testID="calendar-next-month"
             >
               <Ionicons name="chevron-forward" size={22} color={colors.text} />
+            </Pressable>
+            <Pressable
+              onPress={() => shiftYear(1)}
+              style={styles.monthArrow}
+              accessibilityRole="button"
+              accessibilityLabel="Next year"
+              testID="calendar-next-year"
+            >
+              <Ionicons name="play-skip-forward" size={16} color={colors.muted} />
             </Pressable>
           </View>
 

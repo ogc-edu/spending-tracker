@@ -200,6 +200,41 @@ export const expenses = sqliteTable(
 );
 
 /**
+ * Payroll allocations (payroll-in): the standing split of the user's pay
+ * across their accounts — "RM1,500 to Savings, RM500 to Spending". Pressing
+ * "Payroll in" credits every account here by its amount in one transaction.
+ *
+ * This is CONFIGURATION, not history: one row per account (unique), and the
+ * cascade means deleting an account simply drops its slice of the split
+ * instead of blocking the delete the way an expense reference does.
+ */
+export const payrollAllocations = sqliteTable(
+  'payroll_allocations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Credited to the account on each payroll-in run. Always > 0. */
+    amountSen: integer('amount_sen').notNull(),
+    createdAt: integer('created_at')
+      .notNull()
+      .$defaultFn(() => Date.now()),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .$defaultFn(() => Date.now()),
+  },
+  (t) => [
+    // One allocation per account: editing an account's slice replaces its row.
+    unique('payroll_allocations_user_account_unique').on(t.userId, t.accountId),
+    index('payroll_allocations_user_id_idx').on(t.userId),
+  ],
+);
+
+/**
  * User preferences (folded into this initial migration set — plan 010/016).
  * NEVER secrets: AI keys live in SecureStore (plan 013); only provider/model
  * selections persist here.
@@ -214,6 +249,8 @@ export const settings = sqliteTable('settings', {
   aiActiveProvider: text('ai_active_provider'),
   aiModelGemini: text('ai_model_gemini'),
   aiModelDeepseek: text('ai_model_deepseek'),
+  /** Epoch ms of the last payroll-in run; NULL = never run. */
+  payrollLastRunAt: integer('payroll_last_run_at'),
   updatedAt: integer('updated_at')
     .notNull()
     .$defaultFn(() => Date.now()),
@@ -235,3 +272,5 @@ export type Expense = typeof expenses.$inferSelect;
 export type NewExpense = typeof expenses.$inferInsert;
 export type Settings = typeof settings.$inferSelect;
 export type NewSettings = typeof settings.$inferInsert;
+export type PayrollAllocation = typeof payrollAllocations.$inferSelect;
+export type NewPayrollAllocation = typeof payrollAllocations.$inferInsert;

@@ -44,6 +44,7 @@ import { DrizzleBudgetRepository } from '@/repositories/drizzle/budgetRepository
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
 import { DrizzleCommitmentRepository } from '@/repositories/drizzle/commitmentRepository';
 import { DrizzleExpenseRepository } from '@/repositories/drizzle/expenseRepository';
+import { DrizzlePayrollRepository } from '@/repositories/drizzle/payrollRepository';
 import { DrizzleSettingsRepository } from '@/repositories/drizzle/settingsRepository';
 import type { Repositories } from '@/db/repositories';
 import { ExpenseService } from '@/services/ExpenseService';
@@ -70,6 +71,7 @@ jest.mock('expo-router', () => {
     useFocusEffect: (effect: () => void | (() => void)) => {
       React.useEffect(effect, [effect]);
     },
+    useRouter: () => ({ push: jest.fn(), navigate: jest.fn(), back: jest.fn() }),
   };
 });
 
@@ -202,6 +204,7 @@ async function makeFixture({
     expenses: new DrizzleExpenseRepository(test.db as unknown as never),
     budgets: new DrizzleBudgetRepository(test.db as unknown as never),
     commitments: new DrizzleCommitmentRepository(test.db as unknown as never),
+    payroll: new DrizzlePayrollRepository(test.db as unknown as never),
     settings: new DrizzleSettingsRepository(test.db as unknown as never),
   };
 

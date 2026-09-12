@@ -48,6 +48,19 @@ export class AccountService {
     return this.accounts.sumBalances(await this.requireUserId());
   }
 
+  /**
+   * Correct an account's recorded balance (credit_card: the amount owed).
+   * This is a restatement of the figure, not a transaction: no expense is
+   * written and no other row changes, so past expenses keep their history.
+   */
+  async setBalance(id: number, balanceSen: number): Promise<Account> {
+    const userId = await this.requireUserId();
+    if (!Number.isInteger(balanceSen) || balanceSen < 0) {
+      throw new Error('invalid balance');
+    }
+    return this.accounts.setBalance(userId, id, balanceSen);
+  }
+
   /** Deletes only when no expense references the account (FK-protected). */
   async delete(id: number): Promise<void> {
     return this.accounts.delete(await this.requireUserId(), id);

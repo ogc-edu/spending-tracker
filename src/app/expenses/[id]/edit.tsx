@@ -21,6 +21,7 @@ import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
 import { ExpenseForm, expenseToFormValues } from '@/components/ExpenseForm';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { useToast } from '@/components/ToastProvider';
 import { categoryColor } from '@/components/categoryMeta';
@@ -200,8 +201,11 @@ export default function EditExpenseScreen() {
   }
 
   return (
-    <KeyboardScreen>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="edit-expense-screen">
+    <KeyboardAwareScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      testID="edit-expense-screen"
+    >
       <ExpenseForm
         categories={categories}
         accounts={accounts}
@@ -240,8 +244,7 @@ export default function EditExpenseScreen() {
         onConfirm={() => void doDelete()}
         onCancel={() => setConfirmDeleteVisible(false)}
       />
-      </ScrollView>
-    </KeyboardScreen>
+    </KeyboardAwareScrollView>
   );
 }
 

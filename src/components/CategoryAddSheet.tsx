@@ -3,13 +3,16 @@
  * opened from the expense form's "+" chip (which replaced the built-in
  * "Other" chip position). A name input + a curated icon grid + Save:
  * pure typing is the input here (short, single field), and the save path is
+ * The sheet lifts itself above the soft keyboard (useKeyboardInset), so the
+ * name field stays visible while it is being typed. The save path is
  * validated (empty name / duplicate surfaced inline; the service is the
  * source of truth — errors bubble to `error`).
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/theme';
+import { useKeyboardInset } from './keyboardInset';
 import { CATEGORY_ICON_CHOICES } from './categoryMeta';
 
 export interface CategoryAddSheetProps {
@@ -23,6 +26,10 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
   const [name, setName] = useState('');
   const [icon, setIcon] = useState<string>(CATEGORY_ICON_CHOICES[0] ?? 'grid-outline');
   const [error, setError] = useState<string | null>(null);
+  // The sheet is bottom-anchored, so the keyboard's covered strip becomes the
+  // overlay's bottom padding: the card rides up by exactly the keyboard height.
+  const overlayRef = useRef<View>(null);
+  const keyboardInset = useKeyboardInset(overlayRef);
   const [saving, setSaving] = useState(false);
 
   const reset = (): void => {
@@ -58,7 +65,7 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} accessibilityViewIsModal>
-      <View style={styles.overlay}>
+      <View ref={overlayRef} style={[styles.overlay, { paddingBottom: keyboardInset }]} collapsable={false}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
         <View style={styles.card} testID="category-add-sheet">
           <Text style={styles.title} testID="category-add-title">

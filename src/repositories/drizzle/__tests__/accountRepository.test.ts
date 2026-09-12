@@ -1,6 +1,7 @@
 /**
  * Plan 004 — Drizzle AccountRepository against the better-sqlite3 harness.
- * Covers: create→list round-trip (all four types), sumBalances signed math
+ * Covers: create→list round-trip (all four types), setBalance corrections,
+ * sumBalances signed math
  * with mixed cash/bank/credit, user scoping, delete-blocking when an expense
  * references the account (FK-protected), and delete-on-empty.
  */
@@ -146,5 +147,65 @@ describe('AccountRepository.delete — FK-protected', () => {
     const created = await createAccount(f, f.otherUserId, 'Other', 'cash', 5);
     await f.accounts.delete(f.ownerUserId, created.id); // not owner → no-op
     expect(await f.accounts.list(f.otherUserId)).toHaveLength(1);
+  });
+});
+
+describe('AccountRepository.setBalance — correcting the recorded figure', () => {
+  it('overwrites the balance, returns the updated row, and bumps updatedAt', async () => {
+    const f = fixture();
+    const created = await createAccount(f, f.ownerUserId, 'Wallet', 'cash', 10_000);
+
+    const updated = await f.accounts.setBalance(f.ownerUserId, created.id, 25_075);
+    expect(updated.balanceSen).toBe(25_075);
+    expect(updated.id).toBe(created.id);
+    expect(updated.updatedAt).toBeGreaterThanOrEqual(created.updatedAt);
+
+    // Persisted, not just returned.
+    expect((await f.accounts.byId(f.ownerUserId, created.id))?.balanceSen).toBe(25_075);
+  });
+
+  it('accepts 0 and feeds straight into sumBalances', async () => {
+    const f = fixture();
+    const cash = await createAccount(f, f.ownerUserId, 'Wallet', 'cash', 10_000);
+    const card = await createAccount(f, f.ownerUserId, 'Citi', 'credit_card', 5_000);
+
+    await f.accounts.setBalance(f.ownerUserId, cash.id, 0);
+    await f.accounts.setBalance(f.ownerUserId, card.id, 7_500); // owed goes up
+    expect(await f.accounts.sumBalances(f.ownerUserId)).toBe(-7_500);
+  });
+
+  it('is user-scoped: another user cannot move this balance', async () => {
+    const f = fixture();
+    const created = await createAccount(f, f.ownerUserId, 'Wallet', 'cash', 10_000);
+
+    await expect(f.accounts.setBalance(f.otherUserId, created.id, 1)).rejects.toThrow('Account not found');
+    expect((await f.accounts.byId(f.ownerUserId, created.id))?.balanceSen).toBe(10_000);
+  });
+
+  it('throws for an unknown account', async () => {
+    const f = fixture();
+    await expect(f.accounts.setBalance(f.ownerUserId, 99_999, 1)).rejects.toThrow('Account not found');
+  });
+
+  it('leaves the account\'s expenses untouched (a restatement, not a transaction)', async () => {
+    const f = fixture();
+    const account = await createAccount(f, f.ownerUserId, 'Wallet', 'cash', 10_000);
+    f.test.db
+      .insert(expenses)
+      .values({
+        userId: f.ownerUserId,
+        amountSen: 2_500,
+        categoryId: f.categoryId,
+        description: 'lunch',
+        date: '2026-09-12',
+        accountId: account.id,
+      })
+      .run();
+
+    await f.accounts.setBalance(f.ownerUserId, account.id, 99_900);
+
+    const rows = f.test.db.select().from(expenses).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.amountSen).toBe(2_500);
   });
 });

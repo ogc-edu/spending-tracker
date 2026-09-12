@@ -4,6 +4,10 @@
  * commitments, safe-to-spend, daily allowance, the budget bar, and the
  * category summary (ARCH §8 pipeline).
  *
+ * Card order: what is COMMITTED or already spent comes first (hero → upcoming
+ * → by category), then the derived guidance (safe-to-spend → its formula →
+ * the budget bar).
+ *
  * Data flow: `CashFlowService.snapshot(now)` reads the same rows the other
  * tabs show and runs them through the pure engine — this screen contains NO
  * SQL and NO financial arithmetic (NFR-7). It re-reads on focus and supports
@@ -17,14 +21,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -38,6 +40,7 @@ import { AIUnavailableError, toAIError } from '@/ai/errors';
 import type { AIResult } from '@/ai/types';
 import { formatDayLabel, nextMonthStartDate } from '@/utils/dates';
 import { colors, spacing, typography } from '@/theme';
+import { EmptyState } from '@/components/EmptyState';
 import { HeroCard } from '@/components/dashboard/HeroCard';
 import { SafeToSpendCard } from '@/components/dashboard/SafeToSpendCard';
 import { FormulaCard } from '@/components/dashboard/FormulaCard';
@@ -176,26 +179,26 @@ export default function DashboardScreen() {
 
   if (!snapshot) return null;
 
-  // No accounts: a first-class CTA, not a crash (plan §Edge cases).
+  // No accounts: a first-class CTA, not a crash (plan §Edge cases) — the
+  // CTA links to Settings → Accounts (016: EmptyState with action links).
   if (snapshot.accountCount === 0) {
     return (
       <ScrollView contentContainerStyle={styles.emptyWrap} refreshControl={refreshControl} testID="dashboard-empty-accounts">
-        <Ionicons name="wallet-outline" size={44} color={colors.muted} />
-        <Text style={styles.emptyTitle}>No accounts yet</Text>
-        <Text style={styles.emptyBody}>
-          Add an account to start tracking your available money, safe-to-spend and commitments.
-        </Text>
-        <Pressable
-          onPress={() => router.navigate('/settings' as never)}
-          style={({ pressed }) => [styles.ctaButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-          testID="dashboard-create-account"
-        >
-          <Text style={styles.ctaLabel}>Create an account</Text>
-        </Pressable>
+        <EmptyState
+          icon="wallet-outline"
+          title="No accounts yet"
+          body="Add an account to start tracking your available money, safe-to-spend and commitments."
+          action={{ label: 'Create an account', onPress: () => router.navigate('/settings' as never) }}
+          testID="dashboard-empty-accounts"
+        />
       </ScrollView>
     );
   }
+
+  // Accounts exist but nothing has happened yet (016 "no data"): a quiet
+  // prompt to record the first expense — the zeroed cards below still show
+  // the available balance, so this is guidance, not a replacement.
+  const noData = snapshot.spentSen === 0 && snapshot.upcomingItems.length === 0 && !snapshot.hasBudget;
 
   const dueBeforeLabel = formatDayLabel(nextMonthStartDate(snapshot.month.year, snapshot.month.month));
   const topCategories = snapshot.categorySummary.slice(0, 5);
@@ -206,12 +209,36 @@ export default function DashboardScreen() {
     <ScrollView contentContainerStyle={styles.content} refreshControl={refreshControl} testID="dashboard-screen">
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
+      {noData ? (
+        <EmptyState
+          icon="receipt-outline"
+          title="No data yet"
+          body="Record an expense, set a budget, or add a commitment to bring your cash flow to life."
+          action={{ label: 'Record an expense', onPress: () => router.push('/expenses/new' as never) }}
+          testID="dashboard-empty-data"
+        />
+      ) : null}
+
       <HeroCard
         availableSen={snapshot.availableSen}
         spentSen={snapshot.spentSen}
         remainingSen={snapshot.hasBudget ? snapshot.remainingSen : null}
         onSetBudget={goToBudgets}
       />
+
+      <UpcomingList
+        items={snapshot.upcomingItems}
+        totalSen={snapshot.upcomingSen}
+        dueBeforeLabel={dueBeforeLabel}
+      />
+
+      {topCategories.length > 0 ? (
+        <CategorySummary
+          summary={topCategories}
+          categories={categories}
+          onShowAll={goToAnalytics}
+        />
+      ) : null}
 
       <SafeToSpendCard
         safeSen={snapshot.safeSen}
@@ -235,20 +262,6 @@ export default function DashboardScreen() {
         onSetBudget={goToBudgets}
       />
 
-      <UpcomingList
-        items={snapshot.upcomingItems}
-        totalSen={snapshot.upcomingSen}
-        dueBeforeLabel={dueBeforeLabel}
-      />
-
-      {topCategories.length > 0 ? (
-        <CategorySummary
-          summary={topCategories}
-          categories={categories}
-          onShowAll={goToAnalytics}
-        />
-      ) : null}
-
       <View style={styles.spacer} />
     </ScrollView>
   );
@@ -270,15 +283,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     backgroundColor: colors.background,
   },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginTop: spacing.md, marginBottom: spacing.xs },
-  emptyBody: { fontSize: typography.body, color: colors.muted, textAlign: 'center', lineHeight: 21, marginBottom: spacing.lg },
-  ctaButton: {
-    backgroundColor: colors.accent,
-    borderRadius: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-  },
-  pressed: { opacity: 0.8 },
-  ctaLabel: { color: '#fff', fontSize: typography.body, fontWeight: '700' },
   spacer: { height: spacing.lg },
 });

@@ -7,6 +7,8 @@
  *   - offline / invalidKey → typed error + Retry → retry succeeds;
  *   - rapid double-tap → exactly ONE analyze call (pending guard).
  *
+ * Plus the dashboard's CARD ORDER, which only shows up on the mounted screen.
+ *
  * Module-mock stack: DB/auth/router/repos are inert doubles; CashFlowService
  * returns a fixture snapshot; the real createAIService + real facade run with
  * a FakeProvider injected (source of canned output + lastRequest assertions).
@@ -386,5 +388,35 @@ describe('Dashboard — Explain my allowance (plan 015)', () => {
     const tree = await renderDashboard(buildFixture());
     expect(hasTestID(tree.root, 'ai-analysis-card')).toBe(false);
     expect(hasTestID(tree.root, 'explain-allowance-button')).toBe(true);
+  });
+});
+/* ------------------------------------------------------------------ *
+ * Card order — committed/spent money first, derived guidance after.
+ * ------------------------------------------------------------------ */
+
+describe('Dashboard card order', () => {
+  it('renders hero → upcoming → by category → safe-to-spend → formula → budget bar', async () => {
+    const tree = await renderDashboard(
+      buildFixture({
+        categorySummary: [
+          { categoryId: 1, totalSen: 50_000 },
+          { categoryId: 2, totalSen: 30_000 },
+        ],
+      }),
+    );
+
+    const cardIds = [
+      'hero-card',
+      'upcoming-card',
+      'category-summary',
+      'safe-to-spend',
+      'formula-card',
+      'budget-bar',
+    ];
+    const rendered = tree.root
+      .findAll((node) => typeof node.type === 'string' && cardIds.includes(node.props.testID))
+      .map((node) => node.props.testID as string);
+
+    expect(rendered).toEqual(cardIds);
   });
 });

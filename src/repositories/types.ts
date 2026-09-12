@@ -12,6 +12,7 @@ import type {
   Commitment,
   CommitmentPayment,
   Expense,
+  PayrollAllocation,
   Settings,
   User,
 } from '@/db/schema';
@@ -57,6 +58,12 @@ export interface AccountRepository {
   sumBalances(userId: number): Promise<number>;
   /** Number of expenses referencing this account (for delete-blocking). */
   countExpenses(userId: number, accountId: number): Promise<number>;
+  /**
+   * Overwrite the stored balance (credit_card: the amount owed) and return the
+   * updated row. A correction of the recorded figure — it writes no expense and
+   * touches nothing else, so history stays as it was.
+   */
+  setBalance(userId: number, id: number, balanceSen: number): Promise<Account>;
   /** Deletes only when no expense references the account; otherwise throws with ACCOUNT_DELETE_BLOCKED_MESSAGE. */
   delete(userId: number, id: number): Promise<void>;
 }
@@ -385,6 +392,25 @@ export interface CommitmentRepository {
  * buffer() never returns null, so CashFlowService can feed it straight into
  * the engine.
  */
+/**
+ * The payroll split (config) plus the deposit that applies it. Amounts are
+ * integer sen and always > 0 — an account with no slice simply has no row.
+ */
+export interface PayrollRepository {
+  list(userId: number): Promise<PayrollAllocation[]>;
+  /** Insert or replace this account's slice of the split. */
+  upsert(userId: number, accountId: number, amountSen: number): Promise<PayrollAllocation>;
+  remove(userId: number, accountId: number): Promise<void>;
+  /**
+   * Credit every allocated account and stamp the run — ONE transaction, so a
+   * partially applied payroll is unreachable. Returns the updated accounts.
+   * Throws when the user has no allocations.
+   */
+  deposit(userId: number, runAt: number): Promise<Account[]>;
+  /** Epoch ms of the last deposit, or null when it has never run. */
+  lastRunAt(userId: number): Promise<number | null>;
+}
+
 export interface SettingsRepository {
   /**
    * The user's safety-buffer sen value, or the 30000 default when no row

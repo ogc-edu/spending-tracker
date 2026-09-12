@@ -22,6 +22,12 @@ import {
 import { createMigratedTestDb, createTestDb, runMigrations, type TestDb } from '../testing';
 import { DEFAULT_CATEGORY_SEED, insertDefaultCategoriesIfEmpty } from '../seed';
 
+/** Committed migrations, read from drizzle-kit's journal (the app's cursor). */
+function committedMigrationCount(): number {
+  const journal = require('../../../drizzle/meta/_journal.json') as { entries: unknown[] };
+  return journal.entries.length;
+}
+
 const TABLES = [
   'users',
   'categories',
@@ -31,6 +37,7 @@ const TABLES = [
   'commitments',
   'commitment_payments',
   'settings',
+  'payroll_allocations',
   '__drizzle_migrations',
 ];
 
@@ -47,6 +54,8 @@ const INDEXES = [
   'commitments_status_idx',
   'commitment_payments_user_id_idx',
   'commitment_payments_commitment_id_idx',
+  'payroll_allocations_user_id_idx',
+  'payroll_allocations_user_account_unique',
 ];
 
 function tableNames(db: TestDb): string[] {
@@ -108,12 +117,16 @@ describe('migration harness', () => {
   it('creates versioned bookkeeping rows one-per-migration in __drizzle_migrations', () => {
     const test = createTestDb();
     runMigrations(test.db);
-    const row = test.sqlite
+    const rows = test.sqlite
       .prepare('SELECT id, hash, created_at FROM __drizzle_migrations')
       .all() as { id: number; hash: string; created_at: number }[];
-    expect(row).toHaveLength(1); // one initial migration (0000_*)
-    expect(row[0]!.hash).toMatch(/^[a-f0-9]{64}$/);
-    expect(typeof row[0]!.created_at).toBe('number');
+    // One row per committed migration — counted from the journal, so adding a
+    // migration doesn't require editing this expectation.
+    expect(rows).toHaveLength(committedMigrationCount());
+    for (const row of rows) {
+      expect(row.hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(typeof row.created_at).toBe('number');
+    }
   });
 
   it('is idempotent: re-running migrations is a no-op over the recorded cursor', () => {
@@ -123,7 +136,7 @@ describe('migration harness', () => {
     const count = test.sqlite
       .prepare('SELECT count(*) AS n FROM __drizzle_migrations')
       .get() as { n: number };
-    expect(count.n).toBe(1);
+    expect(count.n).toBe(committedMigrationCount());
     // the schema still works after the no-op run
     expect(() => test.db.select().from(users).all()).not.toThrow();
   });
@@ -191,7 +204,7 @@ describe('seed (12 default categories)', () => {
     const count = test.sqlite.prepare('SELECT count(*) AS n FROM categories').get() as {
       n: number;
     };
-    expect(count.n).toBe(1);
+    expect(count.n).toBe(1); // the seed is skipped when the table is non-empty
   });
 });
 

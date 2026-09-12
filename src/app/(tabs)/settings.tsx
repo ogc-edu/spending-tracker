@@ -7,10 +7,13 @@
  * masked key suffix) and the Active AI Provider selector (configured only;
  * no automatic fallback).
  *
- * Balances are NOT editable here (D1 — they change only through expenses).
+ * Payroll: the standing split of the user's pay across accounts, plus the
+ * "Payroll in" button that credits every allocated account in one go. It sits
+ * here because it is account configuration, and the action it drives is the
+ * monthly counterpart to the balances listed right above it.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -18,19 +21,23 @@ import { repositories } from '@/db';
 import type { Account, Category } from '@/db/schema';
 import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
+import { PayrollService, type PayrollPlan } from '@/services/PayrollService';
 import { SettingsService } from '@/services/SettingsService';
 import { AiConfigService, type ConfigurableAIProvider } from '@/services/AiConfigService';
 import type { AccountInput } from '@/repositories/types';
 import type { AIProviderName } from '@/ai/types';
 import { AccountForm } from '@/components/AccountForm';
+import { AccountBalanceSheet } from '@/components/AccountBalanceSheet';
 import { AccountRow } from '@/components/AccountRow';
+import { PayrollAllocationSheet } from '@/components/PayrollAllocationSheet';
 import { CategoryAddSheet } from '@/components/CategoryAddSheet';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { ProviderRow, maskKeySuffix } from '@/components/ai/ProviderRow';
 import { ActiveProviderSelector } from '@/components/ai/ActiveProviderSelector';
 import { aiStatusLabel } from '@/components/ai/providerMeta';
-import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { KeyboardAwareScrollView, useKeyboardAwareFocus } from '@/components/KeyboardAwareScrollView';
 import { useToast } from '@/components/ToastProvider';
+import { formatDDMMYYYY, toLocalDateString } from '@/utils/dates';
 import { formatSen, parseMoneyToSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
@@ -50,6 +57,7 @@ export default function SettingsScreen() {
       accounts: new AccountService(repos.accounts, authService),
       categories: new CategoryService(repos.categories),
       settings: new SettingsService(repos.settings, authService),
+      payroll: new PayrollService(repos.payroll, repos.accounts, authService),
       ai: new AiConfigService(repos.settings, authService),
     };
   }, [authService]);
@@ -57,6 +65,18 @@ export default function SettingsScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  /** The account whose balance sheet is open (null = closed). */
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+
+  // Payroll-in: the split, the allocation sheet, and the deposit confirm.
+  const [payroll, setPayroll] = useState<PayrollPlan | null>(null);
+  const [payrollSheet, setPayrollSheet] = useState<
+    { mode: 'add' } | { mode: 'edit'; accountId: number; amountSen: number } | null
+  >(null);
+  const [confirmPayroll, setConfirmPayroll] = useState(false);
+  // Text inputs report focus so the screen's scroller lifts them clear of the keyboard.
+  const onInputFocus = useKeyboardAwareFocus();
+  const [payrollBusy, setPayrollBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -88,6 +108,14 @@ export default function SettingsScreen() {
       setAccountsError(errMsg(error));
     }
   }, [services.accounts]);
+
+  const loadPayroll = useCallback(async () => {
+    try {
+      setPayroll(await services.payroll.plan());
+    } catch (error: unknown) {
+      toast.show(`Could not load payroll: ${errMsg(error)}`);
+    }
+  }, [services.payroll, toast]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -216,6 +244,12 @@ export default function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      void loadPayroll();
+    }, [loadPayroll]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
       void loadCategories();
     }, [loadCategories]),
   );
@@ -245,6 +279,50 @@ export default function SettingsScreen() {
     }
   };
 
+  /** Correct an account's recorded balance (no expense, no history change). */
+  const handleAdjustBalance = async (balanceSen: number) => {
+    if (!editingAccount) return;
+    try {
+      await services.accounts.setBalance(editingAccount.id, balanceSen);
+      setEditingAccount(null);
+      await loadAccounts();
+    } catch (error: unknown) {
+      toast.show(`Could not update balance: ${errMsg(error)}`);
+      throw error; // keeps the sheet open with the message inline
+    }
+  };
+
+  /** Save one slice of the split (add or edit) — the sheet shows any error. */
+  const handleSaveAllocation = async (accountId: number, amountSen: number) => {
+    await services.payroll.setAllocation(accountId, amountSen);
+    setPayrollSheet(null);
+    await loadPayroll();
+  };
+
+  const handleRemoveAllocation = async (accountId: number) => {
+    try {
+      await services.payroll.removeAllocation(accountId);
+      await loadPayroll();
+    } catch (error: unknown) {
+      toast.show(`Could not remove allocation: ${errMsg(error)}`);
+    }
+  };
+
+  /** The button: credit every allocated account, once, after confirming. */
+  const handlePayrollIn = async () => {
+    setPayrollBusy(true);
+    try {
+      const { depositedSen } = await services.payroll.deposit(new Date());
+      setConfirmPayroll(false);
+      await Promise.all([loadAccounts(), loadPayroll()]);
+      toast.show(`Payroll in: ${formatSen(depositedSen)} added across your accounts`);
+    } catch (error: unknown) {
+      toast.show(`Could not record payroll: ${errMsg(error)}`);
+    } finally {
+      setPayrollBusy(false);
+    }
+  };
+
   const handleDelete = (account: Account) => {
     Alert.alert(
       'Delete account',
@@ -268,8 +346,11 @@ export default function SettingsScreen() {
   };
 
   return (
-    <KeyboardScreen>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="settings-screen">
+    <KeyboardAwareScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      testID="settings-screen"
+    >
         <Text style={styles.title}>Settings</Text>
 
       {/* Account 003: signed-in user + logout. */}
@@ -295,7 +376,12 @@ export default function SettingsScreen() {
         <Text style={styles.empty}>No accounts yet — add one to start tracking money.</Text>
       ) : (
         accounts.map((account) => (
-          <AccountRow key={account.id} account={account} onDelete={() => handleDelete(account)} />
+          <AccountRow
+            key={account.id}
+            account={account}
+            onPress={() => setEditingAccount(account)}
+            onDelete={() => handleDelete(account)}
+          />
         ))
       )}
 
@@ -316,6 +402,138 @@ export default function SettingsScreen() {
       {accounts.some((a) => a.type === 'credit_card') ? (
         <Text style={styles.note}>Credit-card accounts show the amount owed and count negatively.</Text>
       ) : null}
+
+      {/* Payroll in — the standing split, and the button that applies it. */}
+      <Text style={styles.sectionTitle}>Payroll</Text>
+      <Text style={styles.note}>
+        Split each payroll across your accounts, then press Payroll in when you are paid — every
+        account below is credited by its amount. Balances move; your expense history does not.
+      </Text>
+
+      {payroll && payroll.lines.length > 0 ? (
+        <View style={styles.card}>
+          {payroll.lines.map((line) => (
+            <View key={line.allocation.id} style={styles.payrollRow} testID={`payroll-line-${line.account.id}`}>
+              <Pressable
+                onPress={() =>
+                  setPayrollSheet({
+                    mode: 'edit',
+                    accountId: line.account.id,
+                    amountSen: line.allocation.amountSen,
+                  })
+                }
+                style={({ pressed }) => [styles.payrollRowMain, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`${line.account.name}, ${formatSen(line.allocation.amountSen)} per payroll`}
+                accessibilityHint="Edit this allocation"
+                testID={`payroll-line-edit-${line.account.id}`}
+              >
+                <Text style={styles.payrollName} numberOfLines={1}>
+                  {line.account.name}
+                </Text>
+                <Text style={styles.payrollAmount}>{formatSen(line.allocation.amountSen)}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleRemoveAllocation(line.account.id)}
+                style={({ pressed }) => [styles.payrollRemove, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${line.account.name} from the payroll split`}
+                testID={`payroll-line-remove-${line.account.id}`}
+              >
+                <Ionicons name="close-circle-outline" size={18} color={colors.muted} />
+              </Pressable>
+            </View>
+          ))}
+          <View style={styles.payrollTotalRow}>
+            <Text style={styles.payrollTotalLabel}>Total per payroll</Text>
+            <Text
+              style={styles.payrollTotalValue}
+              accessibilityLabel={`Total per payroll, ${spokenMoneyLabel(payroll.totalSen)}`}
+              testID="payroll-total"
+            >
+              {formatSen(payroll.totalSen)}
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.empty} testID="payroll-empty">
+          No allocations yet — add one to tell the app where your pay goes.
+        </Text>
+      )}
+
+      <Pressable
+        onPress={() => setPayrollSheet({ mode: 'add' })}
+        style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+        accessibilityRole="button"
+        testID="payroll-add-allocation"
+      >
+        <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
+        <Text style={styles.addButtonLabel}>Add allocation</Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => setConfirmPayroll(true)}
+        disabled={!payroll || payroll.lines.length === 0 || payrollBusy}
+        style={({ pressed }) => [
+          styles.payrollButton,
+          (!payroll || payroll.lines.length === 0 || payrollBusy) && styles.buttonDisabled,
+          pressed && styles.pressed,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={
+          payroll && payroll.lines.length > 0
+            ? `Payroll in, add ${formatSen(payroll.totalSen)} across your accounts`
+            : 'Payroll in, no allocations yet'
+        }
+        testID="payroll-in-button"
+      >
+        <Ionicons name="download-outline" size={18} color={colors.surface} />
+        <Text style={styles.payrollButtonLabel}>
+          {payroll && payroll.lines.length > 0 ? `Payroll in · ${formatSen(payroll.totalSen)}` : 'Payroll in'}
+        </Text>
+      </Pressable>
+
+      {payroll?.lastRunAt ? (
+        <Text style={styles.note} testID="payroll-last-run">
+          Last payroll in: {formatDDMMYYYY(toLocalDateString(new Date(payroll.lastRunAt)))}
+        </Text>
+      ) : null}
+
+      <PayrollAllocationSheet
+        // Remount per open so the account/amount prefill re-reads.
+        key={
+          payrollSheet
+            ? `payroll-${payrollSheet.mode}-${'accountId' in payrollSheet ? payrollSheet.accountId : 'new'}`
+            : 'payroll-closed'
+        }
+        visible={payrollSheet !== null}
+        accounts={accounts.filter((account) => account.type !== 'credit_card')}
+        editing={payrollSheet?.mode === 'edit' ? payrollSheet : null}
+        onSave={handleSaveAllocation}
+        onCancel={() => setPayrollSheet(null)}
+      />
+
+      <ConfirmSheet
+        visible={confirmPayroll}
+        title="Record payroll in"
+        message={
+          payroll
+            ? `Add ${formatSen(payroll.totalSen)} across ${payroll.lines.length} account${payroll.lines.length === 1 ? '' : 's'}? Press once per payroll — each press deposits again.`
+            : ''
+        }
+        confirmLabel="Payroll in"
+        busy={payrollBusy}
+        onConfirm={() => void handlePayrollIn()}
+        onCancel={() => setConfirmPayroll(false)}
+      />
+
+      <AccountBalanceSheet
+        // Remount per account so the sheet prefills with that row's figure.
+        key={editingAccount ? `balance-${editingAccount.id}` : 'balance-closed'}
+        account={editingAccount}
+        onSave={handleAdjustBalance}
+        onCancel={() => setEditingAccount(null)}
+      />
 
       {/* Plan 016 (SET-1): safety-buffer editor — the promised SET-1 surface. */}
       <Text style={styles.sectionTitle}>Safety buffer</Text>
@@ -344,6 +562,7 @@ export default function SettingsScreen() {
               setBufferInput(text);
               setBufferError(null);
             }}
+            onFocus={onInputFocus}
             editable={!bufferBusy}
             testID="settings-buffer-input"
           />
@@ -508,8 +727,7 @@ export default function SettingsScreen() {
       </Pressable>
 
       <Text style={styles.footNote}>AI analysis through your own provider keys.</Text>
-      </ScrollView>
-    </KeyboardScreen>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -556,6 +774,51 @@ const styles = StyleSheet.create({
   },
   addButtonLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '700' },
   note: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md, fontWeight: '500' },
+  payrollRow: { flexDirection: 'row', alignItems: 'center' },
+  payrollRowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44, // touch target (plan 016 a11y)
+    gap: spacing.md,
+  },
+  payrollName: { flex: 1, fontSize: typography.body, fontWeight: '600', color: colors.text },
+  payrollAmount: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    color: colors.text,
+    fontVariant: moneyFontVariant,
+  },
+  payrollRemove: { width: 44, height: 44, alignItems: 'flex-end', justifyContent: 'center' },
+  payrollTotalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  payrollTotalLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '600' },
+  payrollTotalValue: {
+    fontSize: typography.emphasis,
+    fontWeight: '700',
+    color: colors.accent,
+    fontVariant: moneyFontVariant,
+  },
+  payrollButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    minHeight: 48,
+    marginBottom: spacing.md,
+  },
+  payrollButtonLabel: { color: colors.surface, fontSize: typography.emphasis, fontWeight: '700' },
+  buttonDisabled: { opacity: 0.5 },
   activeLabel: {
     fontSize: typography.caption,
     color: colors.muted,
