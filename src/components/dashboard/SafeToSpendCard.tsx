@@ -10,8 +10,8 @@
  * never styled as success.
  */
 import { StyleSheet, Text, View } from 'react-native';
-import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 export function SafeToSpendCard({
   safeSen,
@@ -29,11 +29,17 @@ export function SafeToSpendCard({
       style={[styles.card, deficit && styles.cardDeficit]}
       testID={deficit ? 'safe-to-spend-deficit' : 'safe-to-spend'}
     >
-      <Text style={[styles.label, deficit && styles.deficitText]}>
-        {deficit ? 'No safe-to-spend' : 'Safe to spend'}
-      </Text>
+      <View style={styles.header}>
+        <View style={[styles.badge, deficit ? styles.badgeDeficit : styles.badgeNormal]}>
+          <Text style={[styles.label, deficit && styles.deficitText]}>
+            {deficit ? 'No safe-to-spend' : 'Safe to spend'}
+          </Text>
+        </View>
+      </View>
       <Text
         style={[styles.headline, deficit && styles.headlineDeficit]}
+        numberOfLines={1}
+        accessibilityLabel={`${deficit ? 'No safe to spend' : 'Safe to spend'}, ${spokenMoneyLabel(safeSen)}`}
         testID="safe-headline"
       >
         {formatSen(safeSen)}
@@ -43,7 +49,14 @@ export function SafeToSpendCard({
         testID="daily-allowance-chip"
       >
         <Text style={[styles.chipLabel, deficit && styles.deficitText]}>Daily allowance</Text>
-        <Text style={[styles.chipValue, deficit && styles.deficitText]} testID="daily-allowance-value">
+        <Text
+          style={[styles.chipValue, deficit && styles.deficitText]}
+          numberOfLines={1}
+          accessibilityLabel={
+            deficit ? 'Daily allowance, no safe to spend' : `Daily allowance, ${spokenMoneyLabel(dailyAllowanceSen)} per day`
+          }
+          testID="daily-allowance-value"
+        >
           {dailyText}
         </Text>
       </View>
@@ -59,40 +72,59 @@ export function SafeToSpendCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: spacing.md,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardDeficit: { backgroundColor: colors.dangerSoft, borderColor: colors.danger },
-  label: { fontSize: typography.body, color: colors.muted, marginBottom: spacing.xs },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgeNormal: { backgroundColor: colors.accentSoft },
+  badgeDeficit: { backgroundColor: colors.surface },
+  label: { fontSize: typography.caption, color: colors.accent, fontWeight: '700' },
   headline: {
-    fontSize: typography.money,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     color: colors.text,
-    marginBottom: spacing.md,
-    fontVariant: ['tabular-nums'],
+    marginVertical: spacing.sm,
+    letterSpacing: -0.4,
+    fontVariant: moneyFontVariant,
   },
   headlineDeficit: { color: colors.danger },
   chip: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.accentSoft,
-    borderRadius: spacing.md,
-    paddingVertical: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
   },
   chipDeficit: { backgroundColor: colors.surface },
-  chipLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '600' },
-  chipValue: { fontSize: typography.emphasis, fontWeight: '700', color: colors.accent, fontVariant: ['tabular-nums'] },
+  chipLabel: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
+  chipValue: { fontSize: typography.emphasis, fontWeight: '700', color: colors.accent, fontVariant: moneyFontVariant, flexShrink: 1 },
   deficitText: { color: colors.danger },
   warning: {
     fontSize: typography.body,
     color: colors.danger,
     marginTop: spacing.md,
     lineHeight: 21,
+    fontWeight: '500',
   },
 });

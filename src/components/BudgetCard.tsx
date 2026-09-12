@@ -14,7 +14,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Budget } from '@/db/schema';
 import { budgetMetrics, type BudgetMetrics } from '@/engine/budgets';
 import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { ProgressBar } from './ProgressBar';
 
 function MetricsRow({ metrics }: { metrics: BudgetMetrics }) {
@@ -107,27 +107,32 @@ export function BudgetCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: spacing.md,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardPressed: { opacity: 0.85 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
-  title: { fontSize: typography.body, fontWeight: '700', color: colors.muted },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+  title: { fontSize: typography.caption, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
   overBadge: {
     backgroundColor: colors.dangerSoft,
-    borderRadius: spacing.lg,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+    borderRadius: 6,
+    paddingVertical: 3,
+    paddingHorizontal: spacing.sm,
   },
   overBadgeLabel: { color: colors.danger, fontSize: typography.caption, fontWeight: '700' },
-  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, marginBottom: spacing.xs, fontVariant: ['tabular-nums'] },
-  metricsRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: spacing.sm },
-  metricText: { fontSize: typography.body, color: colors.muted },
-  pctText: { fontSize: typography.body, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  amount: { fontSize: 30, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.4 },
+  metricsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
+  metricText: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
+  pctText: { fontSize: typography.body, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant },
   overText: { color: colors.danger },
   progressWrap: { marginBottom: spacing.md },
   clearButton: { alignSelf: 'flex-start', marginTop: spacing.xs },

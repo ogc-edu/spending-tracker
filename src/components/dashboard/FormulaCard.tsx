@@ -16,8 +16,8 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { CashFlowBreakdownItem } from '@/engine/cashflow';
-import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { AIAnalysisCard, type AIAnalysisState } from '@/components/AIAnalysisCard';
 
 export function FormulaCard({
@@ -67,6 +67,8 @@ export function FormulaCard({
                   styles.rowAmount,
                   item.amountSen < 0 ? styles.minus : styles.plus,
                 ]}
+                numberOfLines={1}
+                accessibilityLabel={`${item.label}, ${spokenMoneyLabel(item.amountSen)}`}
               >
                 {formatSen(item.amountSen)}
               </Text>
@@ -74,7 +76,9 @@ export function FormulaCard({
           ))}
           <View style={styles.equalsRow} testID="formula-equals">
             <Text style={styles.equalsLabel}>Safe to spend</Text>
-            <Text style={styles.equalsAmount}>{formatSen(safeSen)}</Text>
+            <Text style={styles.equalsAmount} numberOfLines={1} accessibilityLabel={`Safe to spend, ${spokenMoneyLabel(safeSen)}`}>
+              {formatSen(safeSen)}
+            </Text>
           </View>
 
           <AIAnalysisCard {...ai} />
@@ -102,59 +106,66 @@ export function FormulaCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: spacing.md,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    paddingVertical: spacing.xs,
   },
   headerText: { flex: 1 },
   title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
-  headerHint: { fontSize: typography.caption, color: colors.muted, marginTop: spacing.xs },
+  headerHint: { fontSize: typography.caption, color: colors.muted, marginTop: 2 },
   body: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
+    marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-    paddingVertical: spacing.xs,
+    alignItems: 'center',
+    paddingVertical: spacing.xs + 2,
   },
-  rowLabel: { fontSize: typography.body, color: colors.muted },
-  rowAmount: { fontSize: typography.body, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  rowLabel: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
+  rowAmount: { fontSize: typography.body, fontWeight: '700', fontVariant: moneyFontVariant, flexShrink: 1, marginLeft: spacing.md },
   plus: { color: colors.text },
   minus: { color: colors.danger },
   equalsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: colors.border,
     marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
+    marginBottom: spacing.sm,
   },
   equalsLabel: { fontSize: typography.body, fontWeight: '700', color: colors.text },
-  equalsAmount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.accent, fontVariant: ['tabular-nums'] },
+  equalsAmount: { fontSize: typography.emphasis, fontWeight: '800', color: colors.accent, fontVariant: moneyFontVariant, flexShrink: 1, marginLeft: spacing.md },
   explainButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.md,
-    paddingVertical: spacing.sm,
+    backgroundColor: colors.accentSoft,
+    borderRadius: 12,
+    paddingVertical: spacing.md,
+    marginTop: spacing.xs,
   },
-  pressed: { opacity: 0.7 },
-  explainLabel: { fontSize: typography.body, fontWeight: '600', color: colors.text },
+  pressed: { opacity: 0.75 },
+  explainLabel: { fontSize: typography.body, fontWeight: '700', color: colors.accent },
 });

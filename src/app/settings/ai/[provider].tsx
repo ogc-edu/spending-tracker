@@ -15,6 +15,7 @@ import {
   type ConfigurableAIProvider,
 } from '@/services/AiConfigService';
 import { ProviderConfigScreen } from '@/components/ai/ProviderConfigScreen';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
 
 export default function AiProviderConfigRoute() {
   const { provider } = useLocalSearchParams<{ provider: string }>();
@@ -32,10 +33,12 @@ export default function AiProviderConfigRoute() {
   }
 
   return (
-    <ProviderConfigScreen
-      provider={provider as ConfigurableAIProvider}
-      config={config}
-      service={service}
-    />
+    <KeyboardScreen>
+      <ProviderConfigScreen
+        provider={provider as ConfigurableAIProvider}
+        config={config}
+        service={service}
+      />
+    </KeyboardScreen>
   );
 }

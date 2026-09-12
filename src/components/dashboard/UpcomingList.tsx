@@ -10,8 +10,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { UpcomingSnapshotItem } from '@/services/CashFlowService';
 import { formatDayLabel } from '@/utils/dates';
-import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 export function UpcomingList({
   items,
@@ -43,12 +43,16 @@ export function UpcomingList({
                 </Text>
                 <Text style={styles.date}>{formatDayLabel(item.dueDate)}</Text>
               </View>
-              <Text style={styles.amount}>{formatSen(item.amountSen)}</Text>
+              <Text style={styles.amount} numberOfLines={1} accessibilityLabel={`${item.name}, ${spokenMoneyLabel(item.amountSen)}`}>
+                {formatSen(item.amountSen)}
+              </Text>
             </View>
           ))}
           <View style={styles.footer} testID="upcoming-total">
             <Text style={styles.footerLabel}>Due before {dueBeforeLabel}</Text>
-            <Text style={styles.footerAmount}>{formatSen(totalSen)}</Text>
+            <Text style={styles.footerAmount} numberOfLines={1} accessibilityLabel={`Due before ${dueBeforeLabel}, ${spokenMoneyLabel(totalSen)}`}>
+              {formatSen(totalSen)}
+            </Text>
           </View>
         </>
       )}
@@ -59,36 +63,41 @@ export function UpcomingList({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: spacing.md,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  empty: { fontSize: typography.body, color: colors.muted },
+  empty: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   rowMain: { flex: 1, marginRight: spacing.md },
   name: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  date: { fontSize: typography.caption, color: colors.muted, marginTop: 2 },
-  amount: { fontSize: typography.body, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  date: { fontSize: typography.caption, color: colors.muted, marginTop: 2, fontWeight: '500' },
+  amount: { fontSize: typography.body, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant, flexShrink: 1, marginLeft: spacing.md },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: colors.border,
     marginTop: spacing.xs,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
   },
-  footerLabel: { fontSize: typography.caption, color: colors.muted },
-  footerAmount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  footerLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '500' },
+  footerAmount: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, flexShrink: 1, marginLeft: spacing.md },
 });

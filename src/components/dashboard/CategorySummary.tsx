@@ -8,8 +8,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Category } from '@/db/schema';
 import type { CategorySummaryItem } from '@/services/CashFlowService';
 import { categoryColor } from '@/components/categoryMeta';
-import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 export function CategorySummary({
   summary,
@@ -36,7 +36,13 @@ export function CategorySummary({
               {nameById.get(item.categoryId) ?? `Category ${item.categoryId}`}
             </Text>
           </View>
-          <Text style={styles.amount}>{formatSen(item.totalSen)}</Text>
+          <Text
+            style={styles.amount}
+            numberOfLines={1}
+            accessibilityLabel={`${nameById.get(item.categoryId) ?? `Category ${item.categoryId}`}, ${spokenMoneyLabel(item.totalSen)}`}
+          >
+            {formatSen(item.totalSen)}
+          </Text>
         </View>
       ))}
       <Pressable
@@ -55,32 +61,38 @@ export function CategorySummary({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: spacing.md,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: spacing.md },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.sm },
-  name: { fontSize: typography.body, color: colors.text },
-  amount: { fontSize: typography.body, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.md },
+  name: { fontSize: typography.body, color: colors.text, fontWeight: '500' },
+  amount: { fontSize: typography.body, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant, flexShrink: 1, marginLeft: spacing.md },
   showAll: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
     marginTop: spacing.xs,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.md,
+    alignItems: 'center',
   },
-  showAllLabel: { fontSize: typography.body, fontWeight: '600', color: colors.accent },
-  pressed: { opacity: 0.6 },
+  showAllLabel: { fontSize: typography.body, fontWeight: '700', color: colors.accent },
+  pressed: { opacity: 0.7 },
 });

@@ -1,16 +1,10 @@
-/**
- * ExpenseRow (plan 006) — one expense in the history list: category dot,
- * category name + amount, meta line (date · description · account), and the
- * E7 linked badge for commitment auto-created expenses. Presentational —
- * the screen resolves category/account names and the press handler.
- */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Category, Expense } from '@/db/schema';
 import { categoryColor } from '@/components/categoryMeta';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 export interface ExpenseRowProps {
   expense: Expense;
@@ -22,6 +16,8 @@ export interface ExpenseRowProps {
 
 export function ExpenseRow({ expense, category, accountName, onPress }: ExpenseRowProps) {
   const linked = expense.commitmentPaymentId !== null;
+  const catColor = categoryColor(expense.categoryId);
+
   return (
     <Pressable
       onPress={onPress}
@@ -29,18 +25,24 @@ export function ExpenseRow({ expense, category, accountName, onPress }: ExpenseR
       accessibilityRole="button"
       testID={`expense-row-${expense.id}`}
     >
-      <View style={[styles.categoryDot, { backgroundColor: categoryColor(expense.categoryId) }]} />
+      <View style={[styles.avatar, { backgroundColor: `${catColor}18` }]}>
+        <Ionicons
+          name={(category?.icon ?? 'receipt-outline') as never}
+          size={18}
+          color={catColor}
+        />
+      </View>
       <View style={styles.rowInfo}>
         <View style={styles.rowTop}>
           <Text style={styles.rowTitle} numberOfLines={1}>
-            {category?.name ?? 'Category'}
+            {expense.description ? expense.description : (category?.name ?? 'Category')}
           </Text>
           <Text style={styles.rowAmount}>{formatSen(expense.amountSen)}</Text>
         </View>
         <View style={styles.rowBottom}>
           <Text style={styles.rowMeta} numberOfLines={1}>
             {formatDayLabel(expense.date)}
-            {expense.description ? ` · ${expense.description}` : ''}
+            {expense.description ? ` · ${category?.name ?? 'Expense'}` : ''}
             {accountName ? ` · ${accountName}` : ''}
           </Text>
           {linked ? (
@@ -51,6 +53,7 @@ export function ExpenseRow({ expense, category, accountName, onPress }: ExpenseR
           ) : null}
         </View>
       </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.muted} style={styles.chevron} />
     </Pressable>
   );
 }
@@ -60,21 +63,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
-  pressed: { opacity: 0.6 },
-  categoryDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.md },
+  pressed: { opacity: 0.7 },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
   rowInfo: { flex: 1 },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rowTitle: { fontSize: typography.body, fontWeight: '600', color: colors.text, flex: 1, marginRight: spacing.sm },
-  rowAmount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
+  rowTitle: { fontSize: typography.body, fontWeight: '700', color: colors.text, flex: 1, marginRight: spacing.sm },
+  rowAmount: {
+    fontSize: typography.emphasis,
+    fontWeight: '700',
+    color: colors.text,
+    fontVariant: moneyFontVariant,
+  },
   rowBottom: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
-  rowMeta: { fontSize: typography.caption, color: colors.muted, flex: 1 },
-  linkedChip: { flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: spacing.sm },
+  rowMeta: { fontSize: typography.caption, color: colors.muted, fontWeight: '500', flex: 1 },
+  linkedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginLeft: spacing.xs,
+    backgroundColor: colors.warningSoft,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
   linkedChipLabel: { fontSize: 10, color: colors.warning, fontWeight: '700' },
+  chevron: { marginLeft: spacing.xs },
 });

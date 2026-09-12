@@ -11,12 +11,15 @@ import { ActivityIndicator, View } from 'react-native';
  * signedOut we push the user to /login; the login screen's own redirect
  * brings them back after auth.
  */
+import { Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ColorValue } from 'react-native';
 
-const tabIcon = (name: React.ComponentProps<typeof Ionicons>['name']) =>
-  function TabIcon({ color, size }: { color: ColorValue; size: number }) {
-    return <Ionicons name={name} size={size} color={color} />;
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const tabIcon = (activeName: IconName, inactiveName: IconName) =>
+  function TabIcon({ focused, color, size }: { focused: boolean; color: ColorValue; size: number }) {
+    return <Ionicons name={focused ? activeName : inactiveName} size={size} color={color} />;
   };
 
 export default function TabLayout() {
@@ -38,15 +41,40 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.muted,
         headerTitleAlign: 'center',
+        headerStyle: {
+          backgroundColor: colors.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        headerTitleStyle: {
+          fontSize: 18,
+          fontWeight: '700',
+          color: colors.text,
+        },
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: Platform.OS === 'ios' ? 88 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 26 : 8,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+        },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Dashboard', tabBarIcon: tabIcon('home-outline') }} />
-      <Tabs.Screen name="expenses" options={{ title: 'Expenses', tabBarIcon: tabIcon('receipt-outline') }} />
-      <Tabs.Screen name="budgets" options={{ title: 'Budgets', tabBarIcon: tabIcon('pie-chart-outline') }} />
-      <Tabs.Screen name="commitments" options={{ title: 'Commitments', tabBarIcon: tabIcon('calendar-outline') }} />
-      <Tabs.Screen name="analytics" options={{ title: 'Analytics', tabBarIcon: tabIcon('stats-chart-outline') }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings-outline') }} />
+      <Tabs.Screen name="index" options={{ title: 'Dashboard', tabBarIcon: tabIcon('home', 'home-outline') }} />
+      <Tabs.Screen name="expenses" options={{ title: 'Expenses', tabBarIcon: tabIcon('receipt', 'receipt-outline') }} />
+      <Tabs.Screen name="budgets" options={{ title: 'Budgets', tabBarIcon: tabIcon('pie-chart', 'pie-chart-outline') }} />
+      <Tabs.Screen name="commitments" options={{ title: 'Commitments', tabBarIcon: tabIcon('calendar', 'calendar-outline') }} />
+      <Tabs.Screen name="analytics" options={{ title: 'Analytics', tabBarIcon: tabIcon('stats-chart', 'stats-chart-outline') }} />
+      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings', 'settings-outline') }} />
     </Tabs>
   );
 }

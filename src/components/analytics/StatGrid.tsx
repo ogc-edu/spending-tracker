@@ -8,7 +8,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { SpendingSnapshot } from '@/services/AnalyticsService';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 function StatCell({
   label,
@@ -87,11 +87,18 @@ const styles = StyleSheet.create({
   cell: {
     width: '48%',
     backgroundColor: colors.surface,
-    borderRadius: spacing.md,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: spacing.lg,
     marginBottom: spacing.md,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs },
-  value: { fontSize: typography.moneySmall, fontWeight: '700', color: colors.text },
-  sub: { fontSize: typography.caption, color: colors.muted, marginTop: spacing.xs },
+  label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+  value: { fontSize: 20, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, letterSpacing: -0.3 },
+  sub: { fontSize: typography.caption, color: colors.muted, marginTop: spacing.xs, fontWeight: '500' },
 });

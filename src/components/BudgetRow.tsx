@@ -16,7 +16,7 @@ import type { Budget, Category } from '@/db/schema';
 import { budgetMetrics } from '@/engine/budgets';
 import { formatSen } from '@/utils/money';
 import { categoryColor } from './categoryMeta';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { ProgressBar } from './ProgressBar';
 
 export function BudgetRow({
@@ -112,7 +112,7 @@ export function BudgetRow({
 const styles = StyleSheet.create({
   row: {
     backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.md,
@@ -122,30 +122,30 @@ const styles = StyleSheet.create({
   rowPressed: { opacity: 0.85 },
   leading: { flexDirection: 'row', alignItems: 'center' },
   iconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
   info: { flex: 1 },
   titleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  name: { fontSize: typography.body, fontWeight: '600', color: colors.text },
+  name: { fontSize: typography.body, fontWeight: '700', color: colors.text },
   overBadge: {
     backgroundColor: colors.dangerSoft,
-    borderRadius: spacing.lg,
+    borderRadius: 6,
     paddingVertical: 1,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 6,
   },
   overBadgeLabel: { color: colors.danger, fontSize: 10, fontWeight: '700' },
-  spent: { fontSize: typography.caption, color: colors.muted, marginTop: 2 },
+  spent: { fontSize: typography.caption, color: colors.muted, marginTop: 2, fontWeight: '500' },
   trailing: { alignItems: 'flex-end', gap: 4, marginLeft: spacing.sm },
-  budgetAmount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
-  noBudget: { fontSize: typography.emphasis, fontWeight: '700', color: colors.border },
+  budgetAmount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant },
+  noBudget: { fontSize: typography.emphasis, fontWeight: '700', color: colors.muted },
   clearLabel: { color: colors.muted, fontSize: typography.caption, fontWeight: '600', textDecorationLine: 'underline' },
   pressed: { opacity: 0.6 },
   progressColumn: { marginTop: spacing.sm, gap: 4 },
-  pct: { fontSize: typography.caption, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  pct: { fontSize: typography.caption, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant },
   overText: { color: colors.danger },
 });

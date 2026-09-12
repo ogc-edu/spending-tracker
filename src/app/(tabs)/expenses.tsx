@@ -26,11 +26,11 @@ import { ExpenseService } from '@/services/ExpenseService';
 import type { ExpenseFilter, ExpenseTotals } from '@/repositories/types';
 import { useUiStore } from '@/store/uiStore';
 import { periodRange } from '@/utils/dates';
-import { formatSen } from '@/utils/money';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { FilterBar } from '@/components/FilterBar';
 import { ExpenseList } from '@/components/ExpenseList';
 import { EmptyState } from '@/components/EmptyState';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 /** Batch size for "load more" pagination (plan §UI — 50/batch). */
 const EXPENSE_PAGE_SIZE = 50;
@@ -155,7 +155,7 @@ export default function ExpensesScreen() {
 
       <View style={styles.totalsBar} testID="expenses-totals-bar">
         <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue} testID="expenses-total">
+        <Text style={styles.totalValue} testID="expenses-total" accessibilityLabel={`Total, ${spokenMoneyLabel(totals.totalSen)}`}>
           {formatSen(totals.totalSen)}
         </Text>
         <Text style={styles.totalCount} testID="expenses-total-count">
@@ -178,6 +178,16 @@ export default function ExpensesScreen() {
                 icon="search-outline"
                 title="No matching expenses"
                 body="Try a different search, category, or period."
+                action={{
+                  label: 'Clear filters',
+                  onPress: () => {
+                    setExpenseSearch('');
+                    setExpenseCategory(null);
+                    setExpensePeriod('all');
+                    setExpenseCustomRange('', '');
+                    setExpenseOffset(0);
+                  },
+                }}
                 testID="expenses-empty-filtered"
               />
             )
@@ -186,6 +196,7 @@ export default function ExpensesScreen() {
                 icon="receipt-outline"
                 title="No expenses yet"
                 body="Tap + to record lunch, a bill, a ride…"
+                action={{ label: 'Add expense', onPress: () => router.push('/expenses/new' as never) }}
                 testID="expenses-empty"
               />
             )
@@ -219,19 +230,33 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   totalsBar: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    borderRadius: 14,
+    borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  totalLabel: { fontSize: typography.body, color: colors.muted, fontWeight: '600' },
-  totalValue: { fontSize: typography.title, fontWeight: '700', color: colors.text },
-  totalCount: { fontSize: typography.caption, color: colors.muted },
+  totalLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  totalValue: { fontSize: typography.title, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, letterSpacing: -0.4 },
+  totalCount: {
+    fontSize: typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+    backgroundColor: colors.accentSoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
   errorText: {
     fontSize: typography.body,
     color: colors.danger,
@@ -243,17 +268,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.xl,
     bottom: spacing.xl,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
-  fabPressed: { opacity: 0.85 },
+  fabPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
 });

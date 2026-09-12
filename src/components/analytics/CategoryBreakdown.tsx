@@ -10,7 +10,7 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { categoryColor } from '@/components/categoryMeta';
 import type { CategorySpend } from '@/services/AnalyticsService';
 import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 export function CategoryBreakdown({
   breakdown,
@@ -45,21 +45,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     marginHorizontal: spacing.xl,
     marginTop: spacing.lg,
-    borderRadius: spacing.md,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: spacing.lg,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   title: {
     fontSize: typography.emphasis,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     marginBottom: spacing.md,
+    letterSpacing: -0.2,
   },
   row: { marginBottom: spacing.md },
   rowHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing.xs,
+    alignItems: 'center',
+    marginBottom: spacing.xs + 2,
   },
-  name: { fontSize: typography.body, color: colors.text },
-  amount: { fontSize: typography.body, color: colors.text, fontWeight: '600' },
+  name: { fontSize: typography.body, color: colors.text, fontWeight: '600' },
+  amount: { fontSize: typography.body, color: colors.text, fontWeight: '700', fontVariant: moneyFontVariant },
 });

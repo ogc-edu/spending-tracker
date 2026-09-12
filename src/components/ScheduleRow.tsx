@@ -10,8 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { CommitmentPayment } from '@/db/schema';
 import type { ScheduledPayment } from '@/engine/commitments';
 import { formatDayLabel } from '@/utils/dates';
-import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 export interface ScheduleRowProps {
   slot: ScheduledPayment;
@@ -44,7 +44,9 @@ export function ScheduleRow({
         <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
         <View style={styles.body}>
           <View style={styles.line}>
-            <Text style={styles.amount}>{formatSen(payment.amountSen)}</Text>
+            <Text style={styles.amount} numberOfLines={1} accessibilityLabel={`Payment, ${spokenMoneyLabel(payment.amountSen)}`}>
+              {formatSen(payment.amountSen)}
+            </Text>
             <Text style={styles.paidLabel}>Paid</Text>
           </View>
           <Text style={styles.meta}>
@@ -71,7 +73,9 @@ export function ScheduleRow({
       <Ionicons name="calendar-outline" size={18} color={overdue ? colors.danger : colors.muted} />
       <View style={styles.body}>
         <View style={styles.line}>
-          <Text style={styles.amount}>{formatSen(slot.amountSen)}</Text>
+          <Text style={styles.amount} numberOfLines={1} accessibilityLabel={`Payment, ${spokenMoneyLabel(slot.amountSen)}`}>
+            {formatSen(slot.amountSen)}
+          </Text>
           <Text style={[styles.dueLabel, overdue && styles.overdueLabel]}>
             {formatDayLabel(slot.dueDate)}
           </Text>
@@ -115,7 +119,7 @@ const styles = StyleSheet.create({
   paidRow: { backgroundColor: colors.surface },
   body: { flex: 1 },
   line: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  amount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  amount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant },
   paidLabel: { fontSize: typography.caption, color: colors.accent, fontWeight: '700' },
   dueLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '600' },
   overdueLabel: { color: colors.danger, fontWeight: '700' },

@@ -10,8 +10,8 @@
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Budget } from '@/db/schema';
-import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { formatSen, spokenMoneyLabel } from '@/utils/money';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { ProgressBar } from '@/components/ProgressBar';
 
 export function BudgetBar({
@@ -64,7 +64,9 @@ export function BudgetBar({
           </View>
         ) : null}
       </View>
-      <Text style={styles.amount}>{formatSen(budget.amountSen)}</Text>
+      <Text style={styles.amount} numberOfLines={1} accessibilityLabel={`Monthly budget, ${spokenMoneyLabel(budget.amountSen)}`}>
+        {formatSen(budget.amountSen)}
+      </Text>
       <View style={styles.progressWrap}>
         <ProgressBar
           pct={pctUsed ?? 0}
@@ -73,7 +75,10 @@ export function BudgetBar({
           testID="budget-bar-progress"
         />
       </View>
-      <Text style={styles.metrics}>
+      <Text
+        style={styles.metrics}
+        accessibilityLabel={`Spent ${spokenMoneyLabel(spentSen)}, remaining ${spokenMoneyLabel(remainingSen)}`}
+      >
         Spent {formatSen(spentSen)}
         {' · '}Remaining {formatSen(remainingSen)}
         {pctUsed !== null ? <Text style={styles.pct}> · {pctUsed.toFixed(1)}%</Text> : null}
@@ -85,12 +90,17 @@ export function BudgetBar({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
-    borderRadius: spacing.md,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   header: {
     flexDirection: 'row',
@@ -101,30 +111,31 @@ const styles = StyleSheet.create({
   title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
   overBadge: {
     backgroundColor: colors.dangerSoft,
-    borderRadius: spacing.lg,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    paddingVertical: 3,
+    paddingHorizontal: spacing.sm,
   },
   overLabel: { color: colors.danger, fontSize: typography.caption, fontWeight: '700' },
   amount: {
-    fontSize: typography.moneySmall,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: colors.text,
     marginBottom: spacing.sm,
-    fontVariant: ['tabular-nums'],
+    fontVariant: moneyFontVariant,
+    letterSpacing: -0.3,
   },
   progressWrap: { marginBottom: spacing.sm },
-  metrics: { fontSize: typography.body, color: colors.muted },
+  metrics: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
   pct: { fontWeight: '700', color: colors.text },
   emptyBody: { fontSize: typography.body, color: colors.muted, marginTop: spacing.xs, lineHeight: 21 },
   setButton: {
     alignSelf: 'flex-start',
     marginTop: spacing.md,
     backgroundColor: colors.accentSoft,
-    borderRadius: spacing.md,
+    borderRadius: 10,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.75 },
   setLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '700' },
 });

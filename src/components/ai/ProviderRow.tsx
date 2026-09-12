@@ -7,7 +7,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ConfigurableAIProvider } from '@/services/AiConfigService';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { PROVIDER_ICONS, PROVIDER_LABELS } from './providerMeta';
 
 export const MASK_BULLETS = '•'.repeat(12);
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   icon: { marginRight: spacing.md },
   info: { flex: 1, marginRight: spacing.sm },
   name: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  masked: { fontSize: typography.caption, color: colors.muted, fontVariant: ['tabular-nums'] },
+  masked: { fontSize: typography.caption, color: colors.muted, fontVariant: moneyFontVariant },
   notConfigured: { fontSize: typography.caption, color: colors.muted, fontStyle: 'italic' },
   pressed: { opacity: 0.7 },
 });

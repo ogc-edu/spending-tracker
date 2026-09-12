@@ -15,7 +15,7 @@ import type { AccountType } from '@/repositories/types';
 import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS } from './accountMeta';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 export interface PaymentFlowSheetProps {
   visible: boolean;
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, fontVariant: ['tabular-nums'] },
+  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant },
   due: { fontSize: typography.body, color: colors.muted, marginBottom: spacing.lg },
   label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
   hint: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md },
