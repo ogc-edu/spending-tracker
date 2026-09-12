@@ -238,6 +238,28 @@ describe('Settings screen — payroll in', () => {
     expect(tree.root.findByProps({ testID: 'payroll-in-button' }).props.disabled).toBe(false);
   });
 
+  it('asks before depositing — the button alone moves no money', async () => {
+    const tree = await renderScreen();
+    await press(tree, 'payroll-add-allocation');
+    await press(tree, 'payroll-allocation-account-1');
+    await typeAllocation(tree, '150000');
+    await press(tree, 'payroll-allocation-save');
+    expect(has(tree, 'confirm-sheet')).toBe(false);
+
+    await press(tree, 'payroll-in-button');
+    expect(has(tree, 'confirm-sheet')).toBe(true);
+    // The confirm names the split, and nothing has been written yet.
+    expect(textOf(tree.root, 'confirm-sheet-message')).toContain('Savings  +RM1,500.00');
+    expect(textOf(tree.root, 'confirm-sheet-message')).toContain('Total RM1,500.00');
+    expect(textOf(tree.root, 'account-balance-1')).toBe('RM200.00');
+    expect(has(tree, 'payroll-last-run')).toBe(false);
+
+    // Backing out leaves the balance alone.
+    await press(tree, 'confirm-sheet-cancel');
+    expect(has(tree, 'confirm-sheet')).toBe(false);
+    expect(textOf(tree.root, 'account-balance-1')).toBe('RM200.00');
+  });
+
   it('deposits the split into the accounts on confirm', async () => {
     const tree = await renderScreen();
     await press(tree, 'payroll-add-allocation');

@@ -77,6 +77,8 @@ export default function SettingsScreen() {
   // Text inputs report focus so the screen's scroller lifts them clear of the keyboard.
   const onInputFocus = useKeyboardAwareFocus();
   const [payrollBusy, setPayrollBusy] = useState(false);
+  /** Nothing to deposit (or a deposit already in flight). */
+  const payrollDisabled = payroll === null || payroll.lines.length === 0 || payrollBusy;
   const [submitting, setSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -461,37 +463,42 @@ export default function SettingsScreen() {
         </Text>
       )}
 
-      <Pressable
-        onPress={() => setPayrollSheet({ mode: 'add' })}
-        style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
-        accessibilityRole="button"
-        testID="payroll-add-allocation"
-      >
-        <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
-        <Text style={styles.addButtonLabel}>Add allocation</Text>
-      </Pressable>
+      {/* Two compact pills rather than full-width slabs: the deposit moves real
+          money, so it should take a deliberate tap, not a thumb brushing a
+          banner. It still confirms before anything is written. */}
+      <View style={styles.payrollActions}>
+        <Pressable
+          onPress={() => setPayrollSheet({ mode: 'add' })}
+          style={({ pressed }) => [styles.payrollAddButton, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Add a payroll allocation"
+          testID="payroll-add-allocation"
+        >
+          <Ionicons name="add" size={16} color={colors.accent} />
+          <Text style={styles.payrollAddLabel}>Add allocation</Text>
+        </Pressable>
 
-      <Pressable
-        onPress={() => setConfirmPayroll(true)}
-        disabled={!payroll || payroll.lines.length === 0 || payrollBusy}
-        style={({ pressed }) => [
-          styles.payrollButton,
-          (!payroll || payroll.lines.length === 0 || payrollBusy) && styles.buttonDisabled,
-          pressed && styles.pressed,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={
-          payroll && payroll.lines.length > 0
-            ? `Payroll in, add ${formatSen(payroll.totalSen)} across your accounts`
-            : 'Payroll in, no allocations yet'
-        }
-        testID="payroll-in-button"
-      >
-        <Ionicons name="download-outline" size={18} color={colors.surface} />
-        <Text style={styles.payrollButtonLabel}>
-          {payroll && payroll.lines.length > 0 ? `Payroll in · ${formatSen(payroll.totalSen)}` : 'Payroll in'}
-        </Text>
-      </Pressable>
+        <Pressable
+          onPress={() => setConfirmPayroll(true)}
+          disabled={payrollDisabled}
+          style={({ pressed }) => [
+            styles.payrollButton,
+            payrollDisabled && styles.buttonDisabled,
+            pressed && styles.pressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={
+            payroll && payroll.lines.length > 0
+              ? `Payroll in, add ${formatSen(payroll.totalSen)} across your accounts`
+              : 'Payroll in, no allocations yet'
+          }
+          accessibilityHint="Asks you to confirm first"
+          testID="payroll-in-button"
+        >
+          <Ionicons name="download-outline" size={16} color={colors.surface} />
+          <Text style={styles.payrollButtonLabel}>Payroll in</Text>
+        </Pressable>
+      </View>
 
       {payroll?.lastRunAt ? (
         <Text style={styles.note} testID="payroll-last-run">
@@ -518,7 +525,11 @@ export default function SettingsScreen() {
         title="Record payroll in"
         message={
           payroll
-            ? `Add ${formatSen(payroll.totalSen)} across ${payroll.lines.length} account${payroll.lines.length === 1 ? '' : 's'}? Press once per payroll — each press deposits again.`
+            ? [
+                ...payroll.lines.map((line) => `${line.account.name}  +${formatSen(line.allocation.amountSen)}`),
+                '',
+                `Total ${formatSen(payroll.totalSen)}. Press once per payroll — each press deposits again.`,
+              ].join('\n')
             : ''
         }
         confirmLabel="Payroll in"
@@ -807,17 +818,35 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontVariant: moneyFontVariant,
   },
+  payrollActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  payrollAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    minHeight: 44, // touch target (plan 016 a11y) — width follows the label
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  payrollAddLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '600' },
   payrollButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
     backgroundColor: colors.accent,
-    borderRadius: 12,
-    minHeight: 48,
-    marginBottom: spacing.md,
+    borderRadius: 10,
+    minHeight: 44, // touch target (plan 016 a11y) — width follows the label
+    paddingHorizontal: spacing.lg,
   },
-  payrollButtonLabel: { color: colors.surface, fontSize: typography.emphasis, fontWeight: '700' },
+  payrollButtonLabel: { color: colors.surface, fontSize: typography.body, fontWeight: '700' },
   buttonDisabled: { opacity: 0.5 },
   activeLabel: {
     fontSize: typography.caption,
