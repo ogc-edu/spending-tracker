@@ -188,6 +188,37 @@ export function remainingAfterPaid(c: CommitmentLike, paidAmounts: number[]): nu
   return Math.max(0, (c.totalSen as number) - paid);
 }
 
+/** The ordering key the commitments list sorts on. */
+export interface NextDueOrder {
+  /** dueDate of the first UNPAID slot (`YYYY-MM-DD`), or null when nothing is outstanding. */
+  nextDue: string | null;
+  name: string;
+  id: number;
+}
+
+/**
+ * DEFAULT COMMITMENT ORDER: what is due soonest, first.
+ *
+ * Overdue slots sort to the very top for free — their dates are in the past,
+ * and ISO dates compare lexicographically, so no Date math (and no timezone)
+ * enters into it. Commitments with nothing outstanding ("All paid", or a
+ * cancelled one with no unpaid slot) sink to the bottom: they are not asking
+ * for money. Ties fall back to name then id so the order is total and stable
+ * — case-folded, but never locale-dependent (the engine must be deterministic,
+ * ARCH §6).
+ */
+export function compareByNextDue(a: NextDueOrder, b: NextDueOrder): number {
+  if (a.nextDue !== b.nextDue) {
+    if (a.nextDue === null) return 1; // nothing due sinks
+    if (b.nextDue === null) return -1;
+    return a.nextDue < b.nextDue ? -1 : 1;
+  }
+  const nameA = a.name.toLowerCase();
+  const nameB = b.name.toLowerCase();
+  if (nameA !== nameB) return nameA < nameB ? -1 : 1;
+  return a.id - b.id;
+}
+
 /**
  * Upcoming obligations before a window end (PRD COM-5 / ARCH §7 / §8.3-§8.4):
  * every UNPAID slot with dueDate < windowEnd, across the given commitments —

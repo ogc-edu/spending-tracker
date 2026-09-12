@@ -1,6 +1,10 @@
 /**
  * Commitments tab (plan 008 / COM-1..4) — the active commitments list.
  *
+ * Rows are ordered by NEXT DUE — soonest first, so overdue sits at the top
+ * and anything with nothing outstanding sinks to the bottom (the engine's
+ * compareByNextDue; see ARCH §7 for the derivation).
+ *
  * Per row: semantic type icon, name, next due (first UNPAID slot), an
  * OVERDUE badge in danger color when that slot is in the past (never hidden —
  * overdue stays visible), a status badge (completed / cancelled), and
@@ -21,7 +25,12 @@ import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
 import type { Commitment, CommitmentPayment } from '@/db/schema';
 import { CommitmentService } from '@/services/CommitmentService';
-import { commitmentSchedule, type CommitmentLike, type ScheduledPayment } from '@/engine/commitments';
+import {
+  commitmentSchedule,
+  compareByNextDue,
+  type CommitmentLike,
+  type ScheduledPayment,
+} from '@/engine/commitments';
 import { addMonthsClamped, formatDayLabel, todayLocal } from '@/utils/dates';
 import { colors, spacing, typography } from '@/theme';
 import { COMMITMENT_TYPE_ICONS } from '@/components/commitmentMeta';
@@ -105,6 +114,26 @@ export default function CommitmentsScreen() {
     [payments],
   );
 
+  /**
+   * Default order: soonest obligation first (overdue at the top, "All paid"
+   * at the bottom) — the comparator is the engine's, this only feeds it the
+   * derived next-due dates. Recomputed when rows or payments change, never
+   * per render.
+   */
+  const orderByNextDue = useCallback(
+    (rows: Commitment[]): Commitment[] =>
+      [...rows].sort((a, b) =>
+        compareByNextDue(
+          { nextDue: nextDue(a), name: a.name, id: a.id },
+          { nextDue: nextDue(b), name: b.name, id: b.id },
+        ),
+      ),
+    [nextDue],
+  );
+
+  const orderedCommitments = useMemo(() => orderByNextDue(commitments), [commitments, orderByNextDue]);
+  const orderedArchived = useMemo(() => orderByNextDue(archived), [archived, orderByNextDue]);
+
   const handleRestore = (commitment: Commitment) => {
     setBusy(true);
     service
@@ -138,7 +167,7 @@ export default function CommitmentsScreen() {
           />
         </View>
         <View style={styles.body}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={styles.name} numberOfLines={1} testID={`commitment-name-${commitment.id}`}>
             {commitment.name}
           </Text>
           <View style={styles.metaLine}>
@@ -185,7 +214,7 @@ export default function CommitmentsScreen() {
               testID="commitments-empty"
             />
           ) : (
-            commitments.map(renderRow)
+            orderedCommitments.map(renderRow)
           )}
 
           {archived.length > 0 ? (
@@ -216,7 +245,7 @@ export default function CommitmentsScreen() {
                   <Text style={styles.sectionNote}>
                     Restore anytime — payments and expenses stay intact.
                   </Text>
-                  {archived.map((commitment) => (
+                  {orderedArchived.map((commitment) => (
                     <View key={commitment.id} style={styles.archivedRow}>
                       <Text style={[styles.name, styles.archivedName]} numberOfLines={1}>
                         {commitment.name}
