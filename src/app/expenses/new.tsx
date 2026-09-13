@@ -73,6 +73,7 @@ export default function NewExpenseScreen() {
       await services.expenses.create(input);
       // Fast entry (EXP-8): remember the picks for next time.
       useUiStore.getState().setLastUsed(input.categoryId, input.accountId);
+      toast.show('Expense saved');
       router.back();
     } catch (error: unknown) {
       toast.show(`Could not add expense: ${errMsg(error)}`);

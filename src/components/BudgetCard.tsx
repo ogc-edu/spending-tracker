@@ -14,7 +14,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Budget } from '@/db/schema';
 import { budgetMetrics, type BudgetMetrics } from '@/engine/budgets';
 import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
 import { ProgressBar } from './ProgressBar';
 import { Badge } from '@/components/ui/Badge';
 
@@ -112,11 +112,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   cardPressed: { opacity: 0.85 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },

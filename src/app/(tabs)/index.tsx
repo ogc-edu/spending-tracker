@@ -20,7 +20,6 @@
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -40,7 +39,10 @@ import type { AIResult } from '@/ai/types';
 import { formatDayLabel, nextMonthStartDate } from '@/utils/dates';
 import { colors, spacing } from '@/theme';
 import { EmptyState } from '@/components/EmptyState';
+import { Fab } from '@/components/ui/Fab';
 import { InlineError } from '@/components/ui/InlineError';
+import { SkeletonHome } from '@/components/ui/Skeleton';
+import { useUiStore } from '@/store/uiStore';
 import { HeroCard } from '@/components/dashboard/HeroCard';
 import { SafeToSpendCard } from '@/components/dashboard/SafeToSpendCard';
 import { FormulaCard } from '@/components/dashboard/FormulaCard';
@@ -55,6 +57,7 @@ function errMsg(error: unknown): string {
 export default function DashboardScreen() {
   const { authService } = useAuth();
   const router = useRouter();
+  const setExpenseCategory = useUiStore((s) => s.setExpenseCategory);
   const services = useMemo(() => {
     const repos = repositories();
     return {
@@ -163,8 +166,8 @@ export default function DashboardScreen() {
 
   if (loading && !snapshot) {
     return (
-      <View style={styles.centerBox}>
-        <ActivityIndicator />
+      <View style={styles.centerBox} testID="dashboard-loading">
+        <SkeletonHome />
       </View>
     );
   }
@@ -230,6 +233,7 @@ export default function DashboardScreen() {
         items={snapshot.upcomingItems}
         totalSen={snapshot.upcomingSen}
         dueBeforeLabel={dueBeforeLabel}
+        onOpenCommitment={(commitmentId) => router.push(`/commitments/${commitmentId}` as never)}
       />
 
       {topCategories.length > 0 ? (
@@ -237,6 +241,11 @@ export default function DashboardScreen() {
           summary={topCategories}
           categories={categories}
           onShowAll={goToAnalytics}
+          onOpenCategory={(categoryId) => {
+            // Plan 018: a category row IS the filter — open Expenses on it.
+            setExpenseCategory(categoryId);
+            router.navigate('/expenses' as never);
+          }}
         />
       ) : null}
 
@@ -263,13 +272,16 @@ export default function DashboardScreen() {
       />
 
       <View style={styles.spacer} />
+
+      {/* Plan 018: the dashboard's most common write — record an expense. */}
+      <Fab onPress={() => router.push('/expenses/new' as never)} label="Add expense" testID="dashboard-add-expense-fab" />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  content: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
+  content: { paddingTop: spacing.lg, paddingBottom: 96 },
   emptyWrap: {
     flexGrow: 1,
     alignItems: 'center',

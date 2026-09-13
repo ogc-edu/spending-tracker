@@ -95,6 +95,7 @@ export default function EditExpenseScreen() {
     try {
       await services.expenses.edit(expenseId, input);
       useUiStore.getState().setLastUsed(input.categoryId, input.accountId);
+      toast.show('Expense saved');
       router.back();
     } catch (error: unknown) {
       toast.show(`Could not save expense: ${errMsg(error)}`);

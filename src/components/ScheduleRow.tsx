@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  markPaidLabel: { color: '#fff', fontSize: typography.caption, fontWeight: '700' },
+  markPaidLabel: { color: colors.onAccent, fontSize: typography.caption, fontWeight: '700' },
   unpay: {
     flexDirection: 'row',
     alignItems: 'center',

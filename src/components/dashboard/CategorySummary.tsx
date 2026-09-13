@@ -22,6 +22,7 @@ export function CategorySummary({
   summary,
   categories,
   onShowAll,
+  onOpenCategory,
 }: {
   /** Top 5 category totals, descending (pre-sliced by the screen). */
   summary: CategorySummaryItem[];
@@ -29,6 +30,8 @@ export function CategorySummary({
   categories: Category[];
   /** "Show all" → Analytics tab (011). */
   onShowAll(): void;
+  /** Plan 018: rows open Expenses filtered to the category. */
+  onOpenCategory(categoryId: number): void;
 }) {
   const nameById = new Map(categories.map((c) => [c.id, c.name]));
   /** Σ of the top-5 rows — the bars' denominator (shares of what's shown). */
@@ -39,26 +42,35 @@ export function CategorySummary({
       <Text style={styles.title}>By category</Text>
       {summary.map((item) => {
         const share = shownTotal === 0 ? 0 : Math.floor((item.totalSen * 1000) / shownTotal) / 10;
+        const label = nameById.get(item.categoryId) ?? `Category ${item.categoryId}`;
         return (
-          <View key={item.categoryId} style={styles.row} testID={`category-row-${item.categoryId}`}>
+          <Pressable
+            key={item.categoryId}
+            onPress={() => onOpenCategory(item.categoryId)}
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
+            accessibilityRole="button"
+            accessibilityLabel={`${label}, ${spokenMoneyLabel(item.totalSen)} this month`}
+            testID={`category-row-${item.categoryId}`}
+          >
             <View style={styles.rowTop}>
               <View style={styles.rowMain}>
                 <View style={[styles.dot, { backgroundColor: categoryColor(item.categoryId) }]} />
                 <Text style={styles.name} numberOfLines={1}>
-                  {nameById.get(item.categoryId) ?? `Category ${item.categoryId}`}
+                  {label}
                 </Text>
               </View>
               <Text
                 style={styles.amount}
                 numberOfLines={1}
-                accessibilityLabel={`${nameById.get(item.categoryId) ?? `Category ${item.categoryId}`}, ${spokenMoneyLabel(item.totalSen)}`}
+                accessibilityLabel={`${label}, ${spokenMoneyLabel(item.totalSen)}`}
               >
                 {formatSen(item.totalSen)}
                 {share > 0 ? <Text style={styles.share}>  ·  {share.toFixed(0)}%</Text> : null}
               </Text>
             </View>
             <ProgressBar pct={share} color={categoryColor(item.categoryId)} />
-          </View>
+          </Pressable>
         );
       })}
       <Pressable
@@ -78,6 +90,7 @@ export function CategorySummary({
 const styles = StyleSheet.create({
   title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
   row: { paddingVertical: spacing.sm + 2 },
+  pressed: { opacity: 0.7, backgroundColor: colors.background },
   rowTop: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -98,5 +111,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   showAllLabel: { fontSize: typography.body, fontWeight: '700', color: colors.accent },
-  pressed: { opacity: 0.7 },
 });

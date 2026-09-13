@@ -7,7 +7,7 @@
  * first account) so marking paid costs one tap.
  */
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Account } from '@/db/schema';
 import type { ScheduledPayment } from '@/engine/commitments';
@@ -16,6 +16,8 @@ import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS } from './accountMeta';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { Sheet } from '@/components/ui/Sheet';
+import { Button } from '@/components/ui/Button';
 
 export interface PaymentFlowSheetProps {
   visible: boolean;
@@ -50,10 +52,8 @@ export function PaymentFlowSheet({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet} testID="payment-flow-sheet">
-          <Text style={styles.title}>Mark payment paid</Text>
+    <Sheet visible={visible} onClose={onCancel} title="Mark payment paid" cardTestID="payment-flow-sheet">
+        
           <Text style={styles.amount}>{formatSen(slot.amountSen)}</Text>
           <Text style={styles.due}>Due {formatDayLabel(slot.dueDate)}</Text>
           <Text style={styles.label}>Pay from account (optional)</Text>
@@ -98,47 +98,30 @@ export function PaymentFlowSheet({
             </Pressable>
           </View>
 
-          <View style={styles.actions}>
-            <Pressable
-              onPress={() => onConfirm(selectedId)}
-              disabled={busy}
-              style={[styles.confirm, busy && styles.buttonDisabled]}
-              accessibilityRole="button"
-              testID="payment-flow-confirm"
-            >
-              <Ionicons name="checkmark" size={16} color="#fff" />
-              <Text style={styles.confirmLabel}>Mark paid</Text>
-            </Pressable>
-            <Pressable
-              onPress={onCancel}
-              disabled={busy}
-              style={styles.cancel}
-              accessibilityRole="button"
-              testID="payment-flow-cancel"
-            >
-              <Text style={styles.cancelLabel}>Cancel</Text>
-            </Pressable>
-          </View>
+        <View style={styles.actions}>
+          <Button
+            label="Mark paid"
+            variant="primary"
+            icon="checkmark"
+            flex
+            disabled={busy}
+            onPress={() => onConfirm(selectedId)}
+            testID="payment-flow-confirm"
+          />
+          <Button
+            label="Cancel"
+            variant="secondary"
+            flex
+            disabled={busy}
+            onPress={onCancel}
+            testID="payment-flow-cancel"
+          />
         </View>
-      </View>
-    </Modal>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: spacing.lg,
-    borderTopRightRadius: spacing.lg,
-    padding: spacing.xl,
-    paddingBottom: spacing.xxl,
-  },
-  title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
   amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant },
   due: { fontSize: typography.body, color: colors.muted, marginBottom: spacing.lg },
   label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
@@ -161,25 +144,4 @@ const styles = StyleSheet.create({
   chipType: { fontSize: typography.caption, color: colors.muted },
   chipTypeSelected: { color: colors.surface },
   actions: { flexDirection: 'row', gap: spacing.md },
-  confirm: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-  },
-  confirmLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '700' },
-  cancel: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  cancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.6 },
 });

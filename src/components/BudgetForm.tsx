@@ -10,10 +10,11 @@
  */
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 import { parseMoneyToSen, formatSenInput } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
+import { Button } from '@/components/ui/Button';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.\d{1,2})?$/;
@@ -94,24 +95,22 @@ export function BudgetForm({
       />
 
       <View style={styles.actions}>
-        <Pressable
+        <Button
+          label={submitLabel}
+          variant="primary"
+          flex
+          busy={submitting}
           onPress={handleSubmit(onValid)}
-          style={[styles.submit, submitting && styles.buttonDisabled]}
-          disabled={submitting}
-          accessibilityRole="button"
           testID="budget-form-submit"
-        >
-          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitLabel}>{submitLabel}</Text>}
-        </Pressable>
-        <Pressable
-          onPress={onCancel}
-          style={styles.cancel}
+        />
+        <Button
+          label="Cancel"
+          variant="secondary"
+          flex
           disabled={submitting}
-          accessibilityRole="button"
+          onPress={onCancel}
           testID="budget-form-cancel"
-        >
-          <Text style={styles.cancelLabel}>Cancel</Text>
-        </Pressable>
+        />
       </View>
     </View>
   );
@@ -125,7 +124,8 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: spacing.sm,
+    borderRadius: 12,
+    minHeight: 48,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     fontSize: typography.moneySmall,
@@ -135,22 +135,4 @@ const styles = StyleSheet.create({
   inputError: { borderColor: colors.danger },
   fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
   actions: { flexDirection: 'row', gap: spacing.md },
-  submit: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  buttonDisabled: { opacity: 0.7 },
-  submitLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
-  cancel: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  cancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
 });

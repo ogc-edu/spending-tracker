@@ -17,7 +17,7 @@
  * built by plan 009/010) — category budgets are informational rows (BUD-3).
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -36,6 +36,10 @@ import { EmptyState } from '@/components/EmptyState';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { InlineError } from '@/components/ui/InlineError';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { Sheet } from '@/components/ui/Sheet';
+import { Chip } from '@/components/ui/Chip';
+import { Button } from '@/components/ui/Button';
+import { SkeletonCard, SkeletonRow } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ToastProvider';
 import { categoryColor } from '@/components/categoryMeta';
 import { colors, spacing, typography } from '@/theme';
@@ -73,6 +77,7 @@ export default function BudgetsScreen() {
   const [categorySpent, setCategorySpent] = useState<Map<number, number>>(new Map());
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<BudgetEditing | null>(null);
@@ -109,6 +114,15 @@ export default function BudgetsScreen() {
     }, [load]),
   );
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
+
   /** The current amountSen for an editing target (prefill), or null for a fresh form. */
   const editingInitial = useMemo<number | null>(() => {
     if (!editing) return null;
@@ -128,6 +142,7 @@ export default function BudgetsScreen() {
           amountSen,
         });
         setEditing(null);
+        toast.show('Budget saved');
         await load();
       } catch (submitError: unknown) {
         toast.show(`Could not save budget: ${errMsg(submitError)}`);
@@ -196,11 +211,17 @@ export default function BudgetsScreen() {
       {error ? <InlineError message={error} testID="budgets-error" /> : null}
 
       {loading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator />
+        <View style={styles.centerBox} testID="budgets-loading">
+          <SkeletonCard />
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />}
+        >
           {overall === null && byCategory.size === 0 ? (
             <View style={styles.emptyWrap}>
               <EmptyState
@@ -252,69 +273,54 @@ export default function BudgetsScreen() {
         </ScrollView>
       )}
 
-      <Modal
+      <Sheet
         visible={editing !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditing(null)}
+        onClose={() => setEditing(null)}
+        cardTestID="budget-form-modal"
       >
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalCard} testID="budget-form-modal">
-            <BudgetForm
-              title={editing?.kind === 'category' ? `${editing.category.name} budget` : 'Monthly budget'}
-              initialAmountSen={editingInitial}
-              submitLabel={submitLabel}
-              onSubmit={handleUpsert}
-              submitting={busy}
-              onCancel={() => setEditing(null)}
-            />
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        <BudgetForm
+          title={editing?.kind === 'category' ? `${editing.category.name} budget` : 'Monthly budget'}
+          initialAmountSen={editingInitial}
+          submitLabel={submitLabel}
+          onSubmit={handleUpsert}
+          submitting={busy}
+          onCancel={() => setEditing(null)}
+        />
+      </Sheet>
 
       {/* Category picker for NEW category budgets (only categories without one). */}
-      <Modal
+      <Sheet
         visible={pickingCategory}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPickingCategory(false)}
+        onClose={() => setPickingCategory(false)}
+        title="Add a category budget"
+        cardTestID="budgets-category-picker"
       >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalScrim} onPress={() => setPickingCategory(false)} accessibilityRole="button" />
-          <View style={styles.modalCard} testID="budgets-category-picker">
-            <Text style={styles.pickerTitle}>Add a category budget</Text>
-            <Text style={styles.sectionNote}>Pick a category to set its monthly budget for {formatMonthLabel(selectedMonth.year, selectedMonth.month)}.</Text>
-            <View style={styles.pickerChips}>
-              {categories.filter((c) => !byCategory.has(c.id)).map((category) => (
-                <Pressable
-                  key={category.id}
-                  onPress={() => {
-                    setPickingCategory(false);
-                    setEditing({ kind: 'category', category });
-                  }}
-                  style={styles.pickerChip}
-                  accessibilityRole="button"
-                  testID={`budgets-pick-category-${category.id}`}
-                >
-                  <Ionicons name={category.icon as never} size={15} color={categoryColor(category.id)} />
-                  <Text style={styles.pickerChipLabel}>{category.name}</Text>
-                </Pressable>
-              ))}
-              {categories.every((c) => byCategory.has(c.id)) ? (
-                <Text style={styles.sectionNote}>Every category already has a budget this month.</Text>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={() => setPickingCategory(false)}
-              style={({ pressed }) => [styles.pickerCancel, pressed && styles.pressed]}
-              accessibilityRole="button"
-              testID="budgets-category-picker-cancel"
-            >
-              <Text style={styles.pickerCancelLabel}>Cancel</Text>
-            </Pressable>
-          </View>
+        <Text style={styles.sheetNote}>Pick a category to set its monthly budget for {formatMonthLabel(selectedMonth.year, selectedMonth.month)}.</Text>
+        <View style={styles.pickerChips}>
+          {categories.filter((c) => !byCategory.has(c.id)).map((category) => (
+            <Chip
+              key={category.id}
+              label={category.name}
+              icon={category.icon as never}
+              iconColor={categoryColor(category.id)}
+              onPress={() => {
+                setPickingCategory(false);
+                setEditing({ kind: 'category', category });
+              }}
+              testID={`budgets-pick-category-${category.id}`}
+            />
+          ))}
+          {categories.every((c) => byCategory.has(c.id)) ? (
+            <Text style={styles.sheetNote}>Every category already has a budget this month.</Text>
+          ) : null}
         </View>
-      </Modal>
+        <Button
+          label="Cancel"
+          variant="secondary"
+          onPress={() => setPickingCategory(false)}
+          testID="budgets-category-picker-cancel"
+        />
+      </Sheet>
 
       <ConfirmSheet
         visible={clearing !== null}
@@ -369,6 +375,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontWeight: '500',
   },
+  pickerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  sheetNote: {
+    fontSize: typography.caption,
+    color: colors.muted,
+    marginBottom: spacing.md,
+    fontWeight: '500',
+  },
   spacer: { height: spacing.lg },
   // Gap under the empty-state CTA so it never sticks to the "Monthly budget" card below (plan 016 follow-up).
   emptyWrap: { marginBottom: spacing.lg },
@@ -388,47 +401,4 @@ const styles = StyleSheet.create({
   },
   addCategoryLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '700' },
   pressed: { opacity: 0.7 },
-  modalScrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  pickerTitle: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, marginBottom: spacing.sm, letterSpacing: -0.2 },
-  pickerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
-  pickerChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.lg,
-    minHeight: 44,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  pickerChipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
-  pickerCancel: {
-    alignItems: 'center',
-    minHeight: 48,
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.md,
-  },
-  pickerCancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: spacing.xl,
-    paddingBottom: spacing.xxl,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 8,
-  },
 });

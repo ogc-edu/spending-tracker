@@ -33,6 +33,7 @@ import { PayrollAllocationSheet } from '@/components/PayrollAllocationSheet';
 import { CategoryAddSheet } from '@/components/CategoryAddSheet';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { List } from '@/components/ui/List';
 import { ProviderRow, maskKeySuffix } from '@/components/ai/ProviderRow';
 import { ActiveProviderSelector } from '@/components/ai/ActiveProviderSelector';
 import { aiStatusLabel } from '@/components/ai/providerMeta';
@@ -40,7 +41,7 @@ import { KeyboardAwareScrollView, useKeyboardAwareFocus } from '@/components/Key
 import { useToast } from '@/components/ToastProvider';
 import { formatDDMMYYYY, toLocalDateString } from '@/utils/dates';
 import { formatSen, parseMoneyToSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -378,14 +379,16 @@ export default function SettingsScreen() {
       {accounts.length === 0 && !accountsError ? (
         <Text style={styles.empty}>No accounts yet — add one to start tracking money.</Text>
       ) : (
-        accounts.map((account) => (
-          <AccountRow
-            key={account.id}
-            account={account}
-            onPress={() => setEditingAccount(account)}
-            onDelete={() => handleDelete(account)}
-          />
-        ))
+        <List testID="settings-accounts-list">
+          {accounts.map((account) => (
+            <AccountRow
+              key={account.id}
+              account={account}
+              onPress={() => setEditingAccount(account)}
+              onDelete={() => handleDelete(account)}
+            />
+          ))}
+        </List>
       )}
 
       {showForm ? (
@@ -759,11 +762,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.xl,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600' },
   email: { fontSize: typography.body, fontWeight: '700', color: colors.text },

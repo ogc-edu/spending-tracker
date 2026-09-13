@@ -1,3 +1,9 @@
+/**
+ * ExpenseRow (plan 006; plan 018 grouped-list chrome) — one expense row.
+ * Plan 018: the row no longer carries its own border/radius/shadow — it
+ * renders inside the shared `List` surface (one grouped card with hairline
+ * separators), so a 20-row history is one quiet list, not twenty cards.
+ */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Category, Expense } from '@/db/schema';
@@ -61,15 +67,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.7, backgroundColor: colors.background },
   avatar: {
     width: 40,
     height: 40,

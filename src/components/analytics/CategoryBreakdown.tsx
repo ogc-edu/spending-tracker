@@ -10,7 +10,7 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { categoryColor } from '@/components/categoryMeta';
 import type { CategorySpend } from '@/services/AnalyticsService';
 import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
 
 export function CategoryBreakdown({
   breakdown,
@@ -52,11 +52,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   title: {
     fontSize: typography.emphasis,

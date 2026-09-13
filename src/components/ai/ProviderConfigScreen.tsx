@@ -11,12 +11,12 @@
  * in memory for test/discovery calls — never rendered, never logged.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { AIService } from '@/ai/AIService';
 import type { ModelInfo, TestResult, TestStep } from '@/ai/types';
 import type { AiConfigService, ConfigurableAIProvider } from '@/services/AiConfigService';
 import { colors, spacing, typography } from '@/theme';
+import { Button } from '@/components/ui/Button';
 import { maskKeySuffix } from './ProviderRow';
 import { PROVIDER_LABELS } from './providerMeta';
 import { ModelPicker } from './ModelPicker';
@@ -263,54 +263,48 @@ export function ProviderConfigScreen({
         </Text>
       ) : null}
       <View style={styles.buttonRow}>
-        <Pressable
-          onPress={saveKey}
+        <Button
+          label={hasKey ? 'Replace key' : 'Save key'}
+          variant="primary"
+          flex
+          busy={saving}
           disabled={!keyText.trim() || saving}
-          style={({ pressed }) => [styles.button, styles.buttonPrimary, (!keyText.trim() || saving) && styles.buttonDisabled, pressed && styles.pressed]}
-          accessibilityRole="button"
+          onPress={() => void saveKey()}
           testID="ai-save-key-button"
-        >
-          <Text style={styles.buttonPrimaryLabel}>{hasKey ? 'Replace key' : 'Save key'}</Text>
-        </Pressable>
+        />
         {hasKey ? (
-          <Pressable
-            onPress={removeKey}
+          <Button
+            label="Remove"
+            variant="danger"
+            icon="trash-outline"
             disabled={removing}
-            style={({ pressed }) => [styles.button, styles.buttonDanger, pressed && styles.pressed]}
-            accessibilityRole="button"
+            onPress={removeKey}
             testID="ai-remove-key-button"
-          >
-            <Ionicons name="trash-outline" size={16} color="#fff" />
-            <Text style={styles.buttonDangerLabel}>Remove</Text>
-          </Pressable>
+          />
         ) : null}
       </View>
 
       {/* Test Connection */}
       <Text style={styles.sectionTitle}>Connection</Text>
       <View style={styles.buttonRow}>
-        <Pressable
-          onPress={runTest}
+        <Button
+          label={testing ? 'Testing…' : 'Test Connection'}
+          variant="secondary"
+          icon={testing ? undefined : 'sparkles-outline'}
+          flex
+          busy={testing}
           disabled={!effectiveKey || testing}
-          style={({ pressed }) => [styles.button, styles.buttonOutline, styles.buttonFlex, (!effectiveKey || testing) && styles.buttonDisabled, pressed && styles.pressed]}
-          accessibilityRole="button"
+          onPress={() => void runTest()}
           testID="ai-test-button"
-        >
-          {testing ? <ActivityIndicator size="small" color={colors.accent} /> : null}
-          <Text style={styles.buttonOutlineLabel}>
-            {testing ? 'Testing…' : 'Test Connection'}
-          </Text>
-        </Pressable>
+        />
         {testing ? (
-          <Pressable
+          <Button
+            label="Stop"
+            variant="secondary"
+            icon="stop-circle-outline"
             onPress={stopTest}
-            style={({ pressed }) => [styles.button, styles.buttonStop, pressed && styles.pressed]}
-            accessibilityRole="button"
             testID="ai-stop-test-button"
-          >
-            <Ionicons name="stop-circle-outline" size={18} color={colors.danger} />
-            <Text style={styles.buttonStopLabel}>Stop</Text>
-          </Pressable>
+          />
         ) : null}
       </View>
       {testing && testStep ? (
@@ -397,9 +391,9 @@ const styles = StyleSheet.create({
   stepText: { flex: 1, fontSize: typography.caption, color: colors.muted },
   stoppedText: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md },
   buttonPrimary: { backgroundColor: colors.accent, flex: 1 },
-  buttonPrimaryLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
+  buttonPrimaryLabel: { color: colors.onAccent, fontSize: typography.emphasis, fontWeight: '600' },
   buttonDanger: { backgroundColor: colors.danger, paddingHorizontal: spacing.md },
-  buttonDangerLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
+  buttonDangerLabel: { color: colors.onAccent, fontSize: typography.emphasis, fontWeight: '600' },
   buttonOutline: {
     borderWidth: 1,
     borderColor: colors.accent,

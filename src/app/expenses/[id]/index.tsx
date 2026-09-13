@@ -21,7 +21,10 @@ import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/components/ToastProvider';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { Card } from '@/components/ui/Card';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -139,7 +142,7 @@ export default function ExpenseDetailScreen() {
         </View>
       ) : null}
 
-      <View style={styles.card}>
+      <Card>
         <View style={styles.amountRow}>
           <Text
             style={styles.amount}
@@ -151,25 +154,21 @@ export default function ExpenseDetailScreen() {
           </Text>
           {!linked ? (
             <>
-              {/* Plan 016 follow-up: actions in the card header — light-gray Edit pill + trash top-right. */}
-              <Pressable
+              <Button
+                label="Edit"
+                variant="secondary"
+                icon="create-outline"
                 onPress={() => router.push(`/expenses/${expense.id}/edit` as never)}
-                style={({ pressed }) => [styles.editPill, pressed && styles.pressed]}
-                accessibilityRole="button"
                 testID="expense-detail-edit"
-              >
-                <Ionicons name="create-outline" size={15} color={colors.muted} />
-                <Text style={styles.editPillLabel}>Edit</Text>
-              </Pressable>
-              <Pressable
+              />
+              <IconButton
+                icon="trash-outline"
+                tone="danger"
+                filled
+                label="Delete expense"
                 onPress={handleDelete}
-                style={({ pressed }) => [styles.trashButton, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Delete expense"
                 testID="expense-detail-delete"
-              >
-                <Ionicons name="trash-outline" size={20} color={colors.danger} />
-              </Pressable>
+              />
             </>
           ) : null}
         </View>
@@ -190,7 +189,7 @@ export default function ExpenseDetailScreen() {
           </View>
         ) : null}
         {expense.description ? <Text style={styles.description}>{expense.description}</Text> : null}
-      </View>
+      </Card>
 
       {linked ? (
         <Text style={styles.linkedHint}>
@@ -234,16 +233,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   linkedBadgeLabel: { color: colors.warning, fontSize: typography.caption, fontWeight: '700' },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-  },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, flex: 1 },
+  amount: { fontSize: typography.display, fontWeight: '800', color: colors.text, flex: 1, fontVariant: moneyFontVariant, letterSpacing: -0.5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   rowValue: { fontSize: typography.body, color: colors.text, flex: 1 },
   description: {
@@ -253,27 +244,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   linkedHint: { fontSize: typography.caption, color: colors.muted, lineHeight: 18, marginBottom: spacing.lg },
-  editPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    borderRadius: spacing.lg,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    minHeight: 34,
-  },
-  editPillLabel: { color: colors.muted, fontSize: typography.caption, fontWeight: '600' },
-  trashButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.dangerSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   button: {
     borderWidth: 1,
     borderColor: colors.border,

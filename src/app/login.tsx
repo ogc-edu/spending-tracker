@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   buttonDisabled: { opacity: 0.7 },
-  buttonLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '700' },
+  buttonLabel: { color: colors.onAccent, fontSize: typography.emphasis, fontWeight: '700' },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
   footerText: { color: colors.muted, fontSize: typography.body, fontWeight: '500' },
   link: { color: colors.accent, fontSize: typography.body, fontWeight: '700' },

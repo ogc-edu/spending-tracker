@@ -11,11 +11,13 @@
  * remounts per open via a `key` so every open anchors to value/today.
  */
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MIN_TOUCH_TARGET, colors, radius, spacing, typography } from '@/theme';
 import { formatMonthLabel, toLocalDateString } from '@/utils/dates';
 import { CalendarGrid, type CalendarGridProps } from './CalendarGrid';
+import { Sheet } from '@/components/ui/Sheet';
+import { Button } from '@/components/ui/Button';
 
 export interface CalendarSheetProps {
   visible: boolean;
@@ -72,29 +74,16 @@ export function CalendarSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel} accessibilityViewIsModal>
-      <View style={styles.overlay}>
-        <Pressable
-          style={styles.scrim}
-          onPress={onCancel}
-          accessibilityRole="button"
-          accessibilityLabel="Close calendar"
-        />
-        <View style={styles.card} testID="calendar-sheet">
-          <View style={styles.header}>
-            <Text style={styles.title} testID="calendar-sheet-title">
-              {title}
-            </Text>
-            <Pressable
-              onPress={onCancel}
-              style={styles.closeButton}
-              accessibilityRole="button"
-              accessibilityLabel="Close calendar"
-              testID="calendar-sheet-close"
-            >
-              <Ionicons name="close" size={22} color={colors.muted} />
-            </Pressable>
-          </View>
+    <Sheet
+      visible={visible}
+      onClose={onCancel}
+      title={title}
+      showClose
+      closeLabel="Close calendar"
+      titleTestID="calendar-sheet-title"
+      closeButtonTestID="calendar-sheet-close"
+      cardTestID="calendar-sheet"
+    >
 
           {/* Month + year navigator */}
           <View style={styles.monthBar}>
@@ -141,38 +130,17 @@ export function CalendarSheet({
 
           <CalendarGrid {...gridProps} />
 
-          <Pressable
-            onPress={onCancel}
-            style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
-            accessibilityRole="button"
-            testID="calendar-cancel"
-          >
-            <Text style={styles.cancelLabel}>Cancel</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+      <Button
+        label="Cancel"
+        variant="secondary"
+        onPress={onCancel}
+        testID="calendar-cancel"
+      />
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  card: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    padding: spacing.xl,
-    paddingBottom: spacing.xxl,
-  },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg },
-  title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
-  closeButton: {
-    width: MIN_TOUCH_TARGET,
-    height: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   monthBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -189,16 +157,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   monthLabel: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
-  cancel: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    minHeight: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-    backgroundColor: colors.background,
-  },
-  cancelLabel: { color: colors.text, fontSize: typography.body, fontWeight: '600' },
-  pressed: { opacity: 0.7 },
 });

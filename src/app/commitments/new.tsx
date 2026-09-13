@@ -36,6 +36,7 @@ export default function NewCommitmentScreen() {
     setSubmitting(true);
     try {
       await service.create(input);
+      toast.show('Commitment added');
       router.back();
     } catch (error: unknown) {
       toast.show(`Could not add commitment: ${errMsg(error)}`);

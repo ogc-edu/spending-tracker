@@ -13,7 +13,7 @@
  * Empty state ("Nothing due before next month") is a first-class message, not
  * an error (plan §Edge cases).
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { UpcomingSnapshotItem } from '@/services/CashFlowService';
 import { formatDayLabel, todayLocal } from '@/utils/dates';
@@ -33,6 +33,7 @@ export function UpcomingList({
   items,
   totalSen,
   dueBeforeLabel,
+  onOpenCommitment,
 }: {
   /** Unpaid slots, due-date ascending — show the first 3. */
   items: UpcomingSnapshotItem[];
@@ -40,6 +41,8 @@ export function UpcomingList({
   totalSen: number;
   /** e.g. "01 Oct" — derived from next-month start by the screen. */
   dueBeforeLabel: string;
+  /** Plan 018: rows navigate to the commitment (tap → detail). */
+  onOpenCommitment(commitmentId: number): void;
 }) {
   const today = todayLocal();
   return (
@@ -55,7 +58,15 @@ export function UpcomingList({
           {items.slice(0, 3).map((item) => {
             const overdue = item.dueDate < today;
             return (
-              <View key={`${item.commitmentId}:${item.dueDate}`} style={styles.row}>
+              <Pressable
+                key={`${item.commitmentId}:${item.dueDate}`}
+                onPress={() => onOpenCommitment(item.commitmentId)}
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+                android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, due ${formatDayLabel(item.dueDate)}, ${spokenMoneyLabel(item.amountSen)}`}
+                testID={`upcoming-row-${item.commitmentId}`}
+              >
                 <View style={[styles.iconWrap, overdue && styles.iconWrapOverdue]}>
                   <Ionicons
                     name={(KIND_ICONS[item.frequency] ?? DEFAULT_KIND_ICON) as never}
@@ -81,7 +92,7 @@ export function UpcomingList({
                 >
                   {formatSen(item.amountSen)}
                 </Text>
-              </View>
+              </Pressable>
             );
           })}
           <View style={styles.footer} testID="upcoming-total">
@@ -107,6 +118,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  pressed: { opacity: 0.7, backgroundColor: colors.background },
   iconWrap: {
     width: 38,
     height: 38,

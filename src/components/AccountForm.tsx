@@ -9,13 +9,14 @@
  */
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 import { ACCOUNT_TYPES, type AccountInput } from '@/repositories/types';
 import { parseMoneyToSen } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
 import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS } from './accountMeta';
+import { Chip } from '@/components/ui/Chip';
+import { Button } from '@/components/ui/Button';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.\d{1,2})?$/;
@@ -82,25 +83,19 @@ export function AccountForm({
         render={({ field: { value, onChange } }) => (
           <View style={styles.field}>
             <Text style={styles.label}>Type</Text>
-            <View style={styles.segmented}>
+            <View style={styles.chipWrap}>
               {ACCOUNT_TYPES.map((type) => {
                 const selected = value === type;
-                const pressedStyle =
-                  ACCOUNT_TYPE_ICONS[type];
                 return (
-                  <Pressable
+                  <Chip
                     key={type}
+                    label={ACCOUNT_TYPE_LABELS[type]}
+                    icon={ACCOUNT_TYPE_ICONS[type] as never}
+                    iconColor={colors.muted}
+                    selected={selected}
                     onPress={() => onChange(type)}
-                    style={[styles.segment, selected && styles.segmentSelected]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
                     testID={`account-form-type-${type}`}
-                  >
-                    <Ionicons name={pressedStyle as never} size={16} color={selected ? colors.surface : colors.muted} />
-                    <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>
-                      {ACCOUNT_TYPE_LABELS[type]}
-                    </Text>
-                  </Pressable>
+                  />
                 );
               })}
             </View>
@@ -131,24 +126,22 @@ export function AccountForm({
       />
 
       <View style={styles.actions}>
-        <Pressable
+        <Button
+          label="Add account"
+          variant="primary"
+          flex
+          busy={submitting}
           onPress={handleSubmit(onValid)}
-          style={[styles.submit, submitting && styles.buttonDisabled]}
-          disabled={submitting}
-          accessibilityRole="button"
           testID="account-form-submit"
-        >
-          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitLabel}>Add account</Text>}
-        </Pressable>
-        <Pressable
-          onPress={onCancel}
-          style={styles.cancel}
+        />
+        <Button
+          label="Cancel"
+          variant="secondary"
+          flex
           disabled={submitting}
-          accessibilityRole="button"
+          onPress={onCancel}
           testID="account-form-cancel"
-        >
-          <Text style={styles.cancelLabel}>Cancel</Text>
-        </Pressable>
+        />
       </View>
     </View>
   );
@@ -164,6 +157,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   field: { marginBottom: spacing.md },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
   input: {
     borderWidth: 1,
@@ -177,38 +171,5 @@ const styles = StyleSheet.create({
   },
   inputError: { borderColor: colors.danger },
   fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
-  segmented: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  segment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.background,
-  },
-  segmentSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  segmentLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '600' },
-  segmentLabelSelected: { color: colors.surface },
   actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
-  submit: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  buttonDisabled: { opacity: 0.7 },
-  submitLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
-  cancel: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  cancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
 });

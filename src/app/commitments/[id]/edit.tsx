@@ -89,6 +89,7 @@ export default function EditCommitmentScreen() {
     setSubmitting(true);
     try {
       await service.update(commitmentId, input);
+      toast.show('Commitment saved');
       router.back();
     } catch (error: unknown) {
       toast.show(`Could not save changes: ${errMsg(error)}`);

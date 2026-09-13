@@ -15,7 +15,7 @@
  * all reload here. No SQL, no money math — services + engine only.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -28,6 +28,10 @@ import { useUiStore } from '@/store/uiStore';
 import { formatDayLabel, todayLocal } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { COMMITMENT_TYPE_ICONS, COMMITMENT_TYPE_LABELS } from '@/components/commitmentMeta';
 import { ScheduleRow } from '@/components/ScheduleRow';
 import { PaymentFlowSheet } from '@/components/PaymentFlowSheet';
@@ -134,6 +138,7 @@ export default function CommitmentDetailScreen() {
         await services.commitments.markPaid(commitmentId, payingSlot.dueDate, accountId);
         if (accountId !== null) useUiStore.getState().setLastUsedAccount(accountId);
         setPayingSlot(null);
+        toast.show('Payment marked paid');
         await load();
       } catch (error: unknown) {
         toast.show(`Could not mark payment paid: ${errMsg(error)}`);
@@ -200,11 +205,18 @@ export default function CommitmentDetailScreen() {
   const visibleUnpaid = showAllSchedule ? unpaid : unpaid.slice(0, UPCOMING_PREVIEW_COUNT);
   const hiddenUnpaid = unpaid.length - visibleUnpaid.length;
   const nextDue = unpaid[0]?.dueDate ?? null;
+  /** Plan 018: the hero tints danger while the next payment is overdue. */
+  const overdueNext = nextDue !== null && nextDue < today;
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
+        <Card>
+          <View style={{ gap: spacing.sm }}>
+            <View style={{ height: 24, width: '55%', backgroundColor: colors.border, opacity: 0.55, borderRadius: 6 }} />
+            <View style={{ height: 34, width: '40%', backgroundColor: colors.border, opacity: 0.55, borderRadius: 8 }} />
+          </View>
+        </Card>
       </View>
     );
   }
@@ -213,21 +225,15 @@ export default function CommitmentDetailScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.emptyTitle}>{loadError ?? 'Commitment not found'}</Text>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => (pressed ? [styles.button, styles.pressed] : styles.button)}
-          accessibilityRole="button"
-        >
-          <Text style={styles.buttonLabel}>Back</Text>
-        </Pressable>
+        <Button label="Back" variant="secondary" onPress={() => router.back()} />
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="commitment-detail-screen">
-      {/* Header card */}
-      <View style={styles.card}>
+      {/* Header card (plan 018: tinted hero language — red when overdue, soft green otherwise) */}
+      <Card tone={overdueNext && commitment.status === 'active' ? 'danger' : 'tint'} testID="commitment-hero">
         <View style={styles.titleRow}>
           <Ionicons
             name={(COMMITMENT_TYPE_ICONS[commitment.type as keyof typeof COMMITMENT_TYPE_ICONS] ?? 'calendar-outline') as never}
@@ -235,43 +241,39 @@ export default function CommitmentDetailScreen() {
             color={colors.text}
           />
           <Text style={styles.name}>{commitment.name}</Text>
-          {/* Plan 016 follow-up: actions live in the header — light-gray Edit pill
-              beside the name, trash icon top-right; Cancel is no longer shown. */}
           {commitment.status !== 'cancelled' && !archived ? (
-            <Pressable
-              onPress={() => router.push(`/commitments/${commitmentId}/edit`)}
-              style={({ pressed }) => [styles.editPill, pressed && styles.pressed]}
-              accessibilityRole="button"
+            <Button
+              label="Edit"
+              variant="secondary"
+              icon="create-outline"
+              onPress={() => router.push(`/commitments/${commitmentId}/edit` as never)}
               testID="commitment-edit"
-            >
-              <Ionicons name="create-outline" size={15} color={colors.muted} />
-              <Text style={styles.editPillLabel}>Edit</Text>
-            </Pressable>
+            />
           ) : null}
           {!archived ? (
-            <Pressable
+            <IconButton
+              icon="trash-outline"
+              tone="danger"
+              filled
+              label="Delete commitment"
               onPress={handleDelete}
               disabled={busy}
-              style={({ pressed }) => [styles.trashButton, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Delete commitment"
               testID="commitment-delete"
-            >
-              <Ionicons name="trash-outline" size={20} color={colors.danger} />
-            </Pressable>
+            />
           ) : null}
         </View>
         <View style={styles.badgeRow}>
-          <View style={[styles.badge, commitment.status === 'cancelled' && styles.badgeDanger]}>
-            <Text style={[styles.badgeLabel, commitment.status === 'cancelled' && styles.badgeLabelDanger]}>
-              {commitment.status === 'completed' ? 'Completed' : commitment.status === 'cancelled' ? 'Cancelled' : 'Active'}
-            </Text>
-          </View>
-          {archived ? (
-            <View style={[styles.badge, styles.badgeArchived]}>
-              <Text style={styles.badgeLabelArchived}>Archived</Text>
-            </View>
-          ) : null}
+          <Badge
+            tone={commitment.status === 'cancelled' ? 'danger' : commitment.status === 'completed' ? 'accent' : 'neutral'}
+            label={
+              commitment.status === 'completed'
+                ? 'Completed'
+                : commitment.status === 'cancelled'
+                  ? 'Cancelled'
+                  : 'Active'
+            }
+          />
+          {archived ? <Badge tone="warning" label="Archived" /> : null}
           <Text style={styles.typeLabel}>
             {COMMITMENT_TYPE_LABELS[commitment.type as keyof typeof COMMITMENT_TYPE_LABELS] ?? 'Other'}
             {commitment.frequency === 'one_time' ? ' · one-time' : ' · monthly'}
@@ -291,7 +293,7 @@ export default function CommitmentDetailScreen() {
         ) : (
           <Text style={styles.remaining}>Recurring monthly</Text>
         )}
-      </View>
+      </Card>
 
       {/* Schedule */}
       <Text style={styles.sectionTitle}>Schedule</Text>
@@ -389,15 +391,14 @@ export default function CommitmentDetailScreen() {
       {/* Status controls — Cancel is no longer shown (plan 016 follow-up); delete
           lives in the trash icon, edit in the header pill. */}
       {archived ? (
-        <Pressable
+        <Button
+          label="Restore commitment"
+          variant="secondary"
+          icon="refresh-outline"
           onPress={handleRestore}
-          style={({ pressed }) => [styles.restoreButton, pressed && styles.pressed]}
-          accessibilityRole="button"
+          disabled={busy}
           testID="commitment-restore"
-        >
-          <Ionicons name="refresh-outline" size={18} color={colors.accent} />
-          <Text style={styles.restoreLabel}>Restore commitment</Text>
-        </Pressable>
+        />
       ) : null}
 
       <PaymentFlowSheet
@@ -452,44 +453,17 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  button: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-  },
-  buttonLabel: { color: colors.text, fontSize: typography.emphasis, fontWeight: '600' },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-  },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   name: { fontSize: typography.title, fontWeight: '700', color: colors.text, flex: 1 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.md },
-  badge: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  badgeDanger: { backgroundColor: colors.dangerSoft },
-  badgeArchived: { backgroundColor: colors.warningSoft },
-  badgeLabel: { fontSize: typography.caption, fontWeight: '700', color: colors.accent },
-  badgeLabelDanger: { color: colors.danger },
-  badgeLabelArchived: { color: colors.warning },
   typeLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '600', flexShrink: 1 },
   amount: {
     fontSize: typography.money,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     fontVariant: moneyFontVariant,
     marginBottom: spacing.xs,
+    letterSpacing: -0.3,
   },
   remaining: { fontSize: typography.body, color: colors.muted },
   sectionTitle: {
@@ -528,40 +502,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   showAllLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '600' },
-  restoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md,
-    backgroundColor: colors.accentSoft,
-  },
-  restoreLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '700' },
-    editPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.xs,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.background,
-      borderRadius: spacing.lg,
-      paddingVertical: spacing.xs,
-      paddingHorizontal: spacing.md,
-      minHeight: 34,
-    },
-    editPillLabel: { color: colors.muted, fontSize: typography.caption, fontWeight: '600' },
-    trashButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.dangerSoft,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginLeft: spacing.xs,
-    },
   pressed: { opacity: 0.7 },
 });

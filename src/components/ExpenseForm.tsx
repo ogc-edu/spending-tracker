@@ -15,7 +15,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 import type { Account, Category, Expense } from '@/db/schema';
 import { DATE_RE, formatDDMMYYYY, isValidDateStr, todayLocal } from '@/utils/dates';
@@ -29,6 +29,8 @@ import { CalendarSheet } from './CalendarSheet';
 import { ConfirmSheet } from './ConfirmSheet';
 import { useKeyboardAwareFocus } from './KeyboardAwareScrollView';
 import { MoneyInput } from './MoneyInput';
+import { Chip } from '@/components/ui/Chip';
+import { Button } from '@/components/ui/Button';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.[0-9]{1,2})?$/;
@@ -181,8 +183,12 @@ export function ExpenseForm({
                 const selected = value === category.id;
                 const armed = armedDelete?.id === category.id;
                 return (
-                  <View key={category.id} style={styles.chipSlot}>
-                    <Pressable
+                  <View key={category.id} style={[styles.chipSlot, armed && styles.chipArmed]}>
+                    <Chip
+                      label={category.name}
+                      icon={category.icon as never}
+                      iconColor={categoryColor(category.id)}
+                      selected={selected}
                       onPress={() => {
                         if (armed) {
                           setArmedDelete(null); // tap again = disarm, never select
@@ -192,25 +198,8 @@ export function ExpenseForm({
                       }}
                       onLongPress={() => setArmedDelete(armed ? null : category)}
                       delayLongPress={450}
-                      style={[
-                        styles.chip,
-                        selected && styles.chipSelected,
-                        armed && styles.chipArmed,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      accessibilityHint="Long-press to delete"
                       testID={`expense-form-category-${category.id}`}
-                    >
-                      <Ionicons
-                        name={category.icon as never}
-                        size={15}
-                        color={selected ? colors.surface : categoryColor(category.id)}
-                      />
-                      <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
-                        {category.name}
-                      </Text>
-                    </Pressable>
+                    />
                     {armed ? (
                       <Pressable
                         onPress={() => setConfirmDelete(category)}
@@ -219,23 +208,20 @@ export function ExpenseForm({
                         accessibilityLabel={`Delete ${category.name}`}
                         testID={`expense-form-category-delete-${category.id}`}
                       >
-                        <Ionicons name="remove" size={14} color="#fff" />
+                        <Ionicons name="remove" size={14} color={colors.onAccent} />
                       </Pressable>
                     ) : null}
                   </View>
                 );
               })}
               {/* The "+" chip replaces the built-in "Other" chip slot. */}
-              <Pressable
+              <Chip
+                label="Add"
+                icon="add"
+                iconColor={colors.accent}
                 onPress={() => setAddOpen(true)}
-                style={[styles.chip, styles.addChip]}
-                accessibilityRole="button"
-                accessibilityLabel="Add a new category"
                 testID="expense-form-category-add"
-              >
-                <Ionicons name="add" size={15} color={colors.accent} />
-                <Text style={[styles.chipLabel, styles.addChipLabel]}>Add</Text>
-              </Pressable>
+              />
             </View>
             {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
           </View>
@@ -252,18 +238,13 @@ export function ExpenseForm({
               {accounts.map((account) => {
                 const selected = value === account.id;
                 return (
-                  <Pressable
+                  <Chip
                     key={account.id}
+                    label={account.name}
+                    selected={selected}
                     onPress={() => onChange(account.id)}
-                    style={[styles.chip, selected && styles.chipSelected]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
                     testID={`expense-form-account-${account.id}`}
-                  >
-                    <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
-                      {account.name}
-                    </Text>
-                  </Pressable>
+                  />
                 );
               })}
             </View>
@@ -328,24 +309,22 @@ export function ExpenseForm({
       />
 
       <View style={styles.actions}>
-        <Pressable
+        <Button
+          label={submitLabel}
+          variant="primary"
+          flex
+          busy={submitting}
           onPress={handleSubmit(onValid)}
-          style={[styles.submit, submitting && styles.buttonDisabled]}
-          disabled={submitting}
-          accessibilityRole="button"
           testID="expense-form-submit"
-        >
-          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitLabel}>{submitLabel}</Text>}
-        </Pressable>
-        <Pressable
-          onPress={onCancel}
-          style={styles.cancel}
+        />
+        <Button
+          label="Cancel"
+          variant="secondary"
+          flex
           disabled={submitting}
-          accessibilityRole="button"
+          onPress={onCancel}
           testID="expense-form-cancel"
-        >
-          <Text style={styles.cancelLabel}>Cancel</Text>
-        </Pressable>
+        />
       </View>
 
       <CalendarSheet
@@ -451,21 +430,8 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chipSlot: { position: 'relative' },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.lg,
-    minHeight: 44, // touch target (plan 016 a11y)
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipArmed: { borderColor: colors.danger, borderWidth: 1.5, backgroundColor: colors.background },
+  chipSlot: { position: 'relative', borderRadius: 999 },
+  chipArmed: { borderColor: colors.danger, borderWidth: 1.5, padding: 1 },
   minusBadge: {
     position: 'absolute',
     top: -8,
@@ -483,24 +449,17 @@ const styles = StyleSheet.create({
   addChipLabel: { color: colors.accent },
   chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
   chipLabelSelected: { color: colors.surface },
-  projected: { marginTop: spacing.sm, fontSize: typography.caption, color: colors.muted },
+  projected: {
+    marginTop: spacing.sm,
+    fontSize: typography.caption,
+    color: colors.accent,
+    fontWeight: '600',
+    backgroundColor: colors.accentSoft,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
   actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
-  submit: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  buttonDisabled: { opacity: 0.7 },
-  submitLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
-  cancel: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  cancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
 });

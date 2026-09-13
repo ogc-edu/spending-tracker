@@ -42,4 +42,12 @@ export const shadows = {
     shadowRadius: 10,
     elevation: 6,
   },
+  /** Plan 018: the accent hero surface (dashboard headline). */
+  hero: {
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 5,
+  },
 } as const;

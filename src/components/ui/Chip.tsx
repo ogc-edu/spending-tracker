@@ -20,14 +20,29 @@ export interface ChipProps {
   /** Icon color when idle (e.g. the category color); white when selected. */
   iconColor?: string;
   onPress(): void;
+  /** Plan 018: the expense form's long-press-to-delete arming. */
+  onLongPress?(): void;
+  delayLongPress?: number;
   disabled?: boolean;
   testID?: string;
 }
 
-export function Chip({ label, selected = false, icon, iconColor, onPress, disabled = false, testID }: ChipProps) {
+export function Chip({
+  label,
+  selected = false,
+  icon,
+  iconColor,
+  onPress,
+  onLongPress,
+  delayLongPress,
+  disabled = false,
+  testID,
+}: ChipProps) {
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={delayLongPress}
       disabled={disabled}
       style={({ pressed }) => [styles.chip, selected && styles.selected, pressed && styles.pressed]}
       android_ripple={{ color: selected ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)', borderless: false }}

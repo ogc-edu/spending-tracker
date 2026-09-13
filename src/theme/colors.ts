@@ -22,6 +22,10 @@ export const colors = {
   dangerSoft: '#FEE2E2',
   warning: '#B45309', // amber-700 (darkened from #D97706 for AA)
   warningSoft: '#FEF3C7',
+  /** Plan 018: one scrim for every modal sheet (was rgba(0,0,0,.4/.45) literals). */
+  scrim: 'rgba(15,23,42,0.45)',
+  /** Plan 018: text/icons on accent or danger fills (reads as surface today). */
+  onAccent: '#FFFFFF',
   /** 12 category colors, index-aligned with the default category seed order */
   categoryPalette: [
     '#16A34A', '#0EA5E9', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899',

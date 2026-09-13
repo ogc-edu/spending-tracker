@@ -17,7 +17,7 @@
  * trends, AI-3). Empty month → button hidden, not an error.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -40,9 +40,11 @@ import { CategoryBreakdown } from '@/components/analytics/CategoryBreakdown';
 import { StatGrid } from '@/components/analytics/StatGrid';
 import { EmptyState } from '@/components/EmptyState';
 import { InlineError } from '@/components/ui/InlineError';
+import { List, ListRow } from '@/components/ui/List';
+import { SkeletonGrid, SkeletonHome } from '@/components/ui/Skeleton';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -69,6 +71,7 @@ export default function AnalyticsScreen() {
 
   const [snapshot, setSnapshot] = useState<SpendingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ---- Plan 014 — the AI analysis drive state (tap-time capture). ----
@@ -98,6 +101,15 @@ export default function AnalyticsScreen() {
       void load();
     }, [load]),
   );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   /**
    * Run one analysis against the TAP-TIME payload. Both `label` and `payload`
@@ -152,8 +164,9 @@ export default function AnalyticsScreen() {
       {error ? <InlineError message={error} testID="analytics-error" /> : null}
 
       {loading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator />
+        <View style={styles.centerBox} testID="analytics-loading">
+          <SkeletonHome />
+          <SkeletonGrid />
         </View>
       ) : snapshot === null ? null : isEmpty ? (
         <EmptyState
@@ -164,7 +177,10 @@ export default function AnalyticsScreen() {
           testID="analytics-empty"
         />
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />}
+        >
           {/* Header card: month total + MoM change + the 014 action. */}
           <View style={styles.totalCard} testID="analytics-total-card">
             <Text style={styles.totalLabel}>Total spent</Text>
@@ -210,19 +226,25 @@ export default function AnalyticsScreen() {
           {/* Top 5 largest expenses (amounts/date/category — no descriptions, A6). */}
           <View style={styles.section} testID="analytics-top-expenses">
             <Text style={styles.sectionTitle}>Top expenses</Text>
-            {snapshot.largest.map((row) => (
-              <View key={row.id} style={styles.expenseRow}>
-                <View style={styles.rankDot}>
-                  <Text style={styles.rankText}>{row.categoryName.charAt(0)}</Text>
-                </View>
-                <Text style={styles.expenseMeta}>
-                  {formatDayLabel(row.date)} · {row.categoryName}
-                </Text>
-                <Text style={styles.expenseAmount} numberOfLines={1} accessibilityLabel={`${row.categoryName}, ${spokenMoneyLabel(row.amountSen)}`}>
-                  {formatSen(row.amountSen)}
-                </Text>
-              </View>
-            ))}
+            <List style={styles.expenseList} testID="analytics-top-list">
+              {snapshot.largest.map((row) => (
+                <ListRow
+                  key={row.id}
+                  onPress={() => router.push(`/expenses/${row.id}` as never)}
+                  testID={`analytics-top-expense-${row.id}`}
+                >
+                  <View style={styles.rankDot}>
+                    <Text style={styles.rankText}>{row.categoryName.charAt(0)}</Text>
+                  </View>
+                  <Text style={styles.expenseMeta}>
+                    {formatDayLabel(row.date)} · {row.categoryName}
+                  </Text>
+                  <Text style={styles.expenseAmount} numberOfLines={1} accessibilityLabel={`${row.categoryName}, ${spokenMoneyLabel(row.amountSen)}`}>
+                    {formatSen(row.amountSen)}
+                  </Text>
+                </ListRow>
+              ))}
+            </List>
           </View>
 
           <View style={styles.spacer} />
@@ -244,11 +266,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   totalLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   totalAmount: { fontSize: typography.display, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.5 },
@@ -278,11 +296,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   sectionTitle: {
     fontSize: typography.emphasis,
@@ -291,14 +305,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     letterSpacing: -0.2,
   },
-  expenseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+  expenseList: { marginTop: 0, marginHorizontal: 0, borderWidth: 0, shadowOpacity: 0 },
   rankDot: {
     width: 28,
     height: 28,

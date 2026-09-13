@@ -22,7 +22,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { MIN_TOUCH_TARGET, colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { MIN_TOUCH_TARGET, colors, moneyFontVariant, shadows, spacing, typography } from '@/theme';
 
 /** What the headline shows while hidden (never derived from the amount — its
  *  length would leak the magnitude). */
@@ -122,11 +122,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 5,
+    ...shadows.hero,
   },
   header: {
     flexDirection: 'row',

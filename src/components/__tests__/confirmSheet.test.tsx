@@ -39,7 +39,15 @@ async function press(tree: ReactTestRenderer, testID: string): Promise<void> {
 
 const base = { title: 'Delete expense', message: 'Reverses the balance change.' };
 
-/** Flatten a Pressable-style FUNCTION (test renderer sees the function, not its result). */
+/** Flatten a Pressable-style FUNCTION (test renderer sees the function, not its result).
+ *  Plan 018: the testID sits on BOTH the Button component element and its inner
+ *  Pressable — resolve the deepest match (the Pressable carries the style fn). */
+function pressableOf(tree: ReactTestRenderer, testID: string): ReactTestInstance {
+  const matches = tree.root.findAllByProps({ testID });
+  const withStyleFn = matches.filter((el) => typeof el.props.style === 'function');
+  return withStyleFn[withStyleFn.length - 1]!;
+}
+
 function flattenedStyle(button: ReactTestInstance): { minHeight: number } {
   const styleFn = button.props.style as (state: { pressed: boolean }) => unknown;
   return StyleSheet.flatten(styleFn({ pressed: false })) as { minHeight: number };
@@ -79,7 +87,7 @@ describe('ConfirmSheet (plan 016)', () => {
   it('keeps ≥44pt touch targets on both buttons', async () => {
     const tree = await render(<ConfirmSheet visible {...base} onConfirm={() => {}} onCancel={() => {}} />);
     for (const testID of ['confirm-sheet-confirm', 'confirm-sheet-cancel']) {
-      const button = tree.root.findByProps({ testID });
+      const button = pressableOf(tree, testID);
       expect(flattenedStyle(button).minHeight).toBeGreaterThanOrEqual(44);
     }
   });

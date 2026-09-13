@@ -8,7 +8,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { SpendingSnapshot } from '@/services/AnalyticsService';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
 
 function StatCell({
   label,
@@ -92,11 +92,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...shadows.card,
   },
   label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
   value: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, letterSpacing: -0.3 },

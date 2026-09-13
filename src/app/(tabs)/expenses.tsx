@@ -68,6 +68,7 @@ export default function ExpensesScreen() {
   const [totals, setTotals] = useState<ExpenseTotals>({ count: 0, totalSen: 0 });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Stale-request guard: a rapid filter change discards the earlier load's
   // result (out-of-order responses must never clobber the newest filter).
@@ -130,6 +131,15 @@ export default function ExpensesScreen() {
 
   /** True while more batches exist: loaded rows so far < filtered count (EXP-6). */
   const hasMore = filter.offset + expenses.length < totals.count;
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   const handleEndReached = useCallback(() => {
     if (!hasMore || endReachedLockRef.current) return;
@@ -210,6 +220,8 @@ export default function ExpensesScreen() {
           accounts={accounts}
           hasMore={hasMore}
           onEndReached={handleEndReached}
+          onRefresh={() => void handleRefresh()}
+          refreshing={refreshing}
           onPressRow={(expense) => router.push(`/expenses/${expense.id}` as never)}
         />
       ) : null}

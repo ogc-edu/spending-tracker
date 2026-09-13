@@ -8,12 +8,13 @@
  * validated (empty name / duplicate surfaced inline; the service is the
  * source of truth — errors bubble to `error`).
  */
-import { useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/theme';
-import { useKeyboardInset } from './keyboardInset';
 import { CATEGORY_ICON_CHOICES } from './categoryMeta';
+import { Sheet } from '@/components/ui/Sheet';
+import { Button } from '@/components/ui/Button';
 
 export interface CategoryAddSheetProps {
   visible: boolean;
@@ -26,10 +27,6 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
   const [name, setName] = useState('');
   const [icon, setIcon] = useState<string>(CATEGORY_ICON_CHOICES[0] ?? 'grid-outline');
   const [error, setError] = useState<string | null>(null);
-  // The sheet is bottom-anchored, so the keyboard's covered strip becomes the
-  // overlay's bottom padding: the card rides up by exactly the keyboard height.
-  const overlayRef = useRef<View>(null);
-  const keyboardInset = useKeyboardInset(overlayRef);
   const [saving, setSaving] = useState(false);
 
   const reset = (): void => {
@@ -64,13 +61,14 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} accessibilityViewIsModal>
-      <View ref={overlayRef} style={[styles.overlay, { paddingBottom: keyboardInset }]} collapsable={false}>
-        <Pressable style={styles.scrim} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
-        <View style={styles.card} testID="category-add-sheet">
-          <Text style={styles.title} testID="category-add-title">
-            Add category
-          </Text>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Add category"
+      titleTestID="category-add-title"
+      closeLabel="Close"
+      cardTestID="category-add-sheet"
+    >
 
           <Text style={styles.label} nativeID="category-add-label-name">
             Name
@@ -114,41 +112,26 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
             })}
           </View>
 
-          <Pressable
-            onPress={() => void onSavePress()}
-            style={[styles.save, (saving || name.trim() === '') && styles.buttonDisabled]}
-            disabled={saving || name.trim() === ''}
-            accessibilityRole="button"
-            testID="category-add-save"
-          >
-            <Text style={styles.saveLabel}>{saving ? 'Saving…' : 'Save category'}</Text>
-          </Pressable>
-          <Pressable
-            onPress={onClose}
-            style={styles.cancel}
-            disabled={saving}
-            accessibilityRole="button"
-            testID="category-add-cancel"
-          >
-            <Text style={styles.cancelLabel}>Cancel</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+        <Button
+          label="Save category"
+          variant="primary"
+          busy={saving}
+          disabled={saving || name.trim() === ''}
+          onPress={() => void onSavePress()}
+          testID="category-add-save"
+        />
+        <Button
+          label="Cancel"
+          variant="secondary"
+          disabled={saving}
+          onPress={onClose}
+          testID="category-add-cancel"
+        />
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  card: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    padding: spacing.xl,
-    paddingBottom: spacing.xxl,
-  },
-  title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.lg },
   label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs, marginTop: spacing.md },
   input: {
     borderWidth: 1,
@@ -175,25 +158,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   iconSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  save: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-  },
-  saveLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
-  cancel: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.md,
-    backgroundColor: colors.background,
-  },
-  cancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.7 },
 });

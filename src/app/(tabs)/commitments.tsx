@@ -18,7 +18,7 @@
  * Restore action — hidden from the main list, never deleted data.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -39,6 +39,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { Fab } from '@/components/ui/Fab';
 import { InlineError } from '@/components/ui/InlineError';
+import { List } from '@/components/ui/List';
+import { SkeletonRow } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ToastProvider';
 
 function errMsg(error: unknown): string {
@@ -78,6 +80,7 @@ export default function CommitmentsScreen() {
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [payments, setPayments] = useState<CommitmentPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -104,6 +107,15 @@ export default function CommitmentsScreen() {
       void load();
     }, [load]),
   );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   /** dueDate of the first unpaid slot, or null (all paid / no schedule). */
   const nextDue = useCallback(
@@ -205,11 +217,16 @@ export default function CommitmentsScreen() {
       {error ? <InlineError message={error} testID="commitments-error" /> : null}
 
       {loading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator />
+        <View style={styles.centerBox} testID="commitments-loading">
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />}
+        >
           {commitments.length === 0 ? (
             <EmptyState
               icon="calendar-outline"
@@ -219,7 +236,7 @@ export default function CommitmentsScreen() {
               testID="commitments-empty"
             />
           ) : (
-            orderedCommitments.map(renderRow)
+            <List testID="commitments-list">{orderedCommitments.map(renderRow)}</List>
           )}
 
           {archived.length > 0 ? (
@@ -289,13 +306,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   archivedHeader: {
     flexDirection: 'row',
