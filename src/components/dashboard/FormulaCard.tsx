@@ -19,6 +19,7 @@ import type { CashFlowBreakdownItem } from '@/engine/cashflow';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { AIAnalysisCard, type AIAnalysisState } from '@/components/AIAnalysisCard';
+import { Card } from '@/components/ui/Card';
 
 export function FormulaCard({
   breakdown,
@@ -37,7 +38,7 @@ export function FormulaCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <View style={styles.card} testID="formula-card">
+    <Card testID="formula-card">
       <Pressable
         onPress={() => setExpanded((open) => !open)}
         accessibilityRole="button"
@@ -99,25 +100,11 @@ export function FormulaCard({
         <Ionicons name="sparkles-outline" size={16} color={colors.text} />
         <Text style={styles.explainLabel}>Explain my allowance</Text>
       </Pressable>
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -162,7 +149,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     backgroundColor: colors.accentSoft,
-    borderRadius: 12,
+    borderRadius: 999,
+    minHeight: 44,
     paddingVertical: spacing.md,
     marginTop: spacing.xs,
   },

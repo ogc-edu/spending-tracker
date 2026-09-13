@@ -80,7 +80,7 @@ export function FilterBar({
           style={styles.searchInput}
           value={searchInput}
           onChangeText={handleSearchChange}
-          placeholder="Search description"
+          placeholder="Search expenses"
           placeholderTextColor={colors.muted}
           autoCapitalize="none"
           autoCorrect={false}
@@ -108,19 +108,20 @@ export function FilterBar({
 }
 
 const styles = StyleSheet.create({
-  bar: { paddingTop: spacing.lg },
+  bar: { paddingTop: spacing.md },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: spacing.sm,
+    borderRadius: 12,
     backgroundColor: colors.surface,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    minHeight: 44,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
   },
-  searchInput: { flex: 1, fontSize: typography.body, color: colors.text, padding: 0 },
+  searchInput: { flex: 1, fontSize: typography.body, color: colors.text, padding: 0, minHeight: 40 },
 });

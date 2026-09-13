@@ -16,6 +16,7 @@ import { budgetMetrics, type BudgetMetrics } from '@/engine/budgets';
 import { formatSen } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { ProgressBar } from './ProgressBar';
+import { Badge } from '@/components/ui/Badge';
 
 function MetricsRow({ metrics }: { metrics: BudgetMetrics }) {
   return (
@@ -63,9 +64,7 @@ export function BudgetCard({
       <View style={styles.header}>
         <Text style={styles.title}>Monthly budget</Text>
         {metrics.overBudget ? (
-          <View style={styles.overBadge} testID="budget-overall-over">
-            <Text style={styles.overBadgeLabel}>Over budget</Text>
-          </View>
+          <Badge tone="danger" label="Over budget" testID="budget-overall-over" />
         ) : null}
       </View>
 
@@ -122,14 +121,7 @@ const styles = StyleSheet.create({
   cardPressed: { opacity: 0.85 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
   title: { fontSize: typography.caption, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  overBadge: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: 6,
-    paddingVertical: 3,
-    paddingHorizontal: spacing.sm,
-  },
-  overBadgeLabel: { color: colors.danger, fontSize: typography.caption, fontWeight: '700' },
-  amount: { fontSize: 30, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.4 },
+  amount: { fontSize: typography.money, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.4 },
   metricsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
   metricText: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
   pctText: { fontSize: typography.body, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant },

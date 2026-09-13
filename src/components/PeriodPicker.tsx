@@ -1,17 +1,19 @@
 /**
- * PeriodPicker (plan 006) — date-range filter: five presets (Today / This
- * Week / This Month / Last Month / All) + a Custom from/to pair. Week starts
- * Monday (local calendar, plan §UI). Interaction matches the category chips:
- * tapping the ACTIVE preset clears to All; tapping another replaces it.
- * The custom inputs mount only while period === 'custom' and prefill from
- * the applied custom range (or this month → today the first time).
- * A custom range with from > to is rejected here AND at the service
- * boundary (plan §Edge cases).
+ * PeriodPicker (plan 006; plan 017 — shared Chip) — date-range filter: five
+ * presets (Today / This Week / This Month / Last Month / All) + a Custom
+ * from/to pair. Week starts Monday (local calendar, plan §UI). Interaction
+ * matches the category chips: tapping the ACTIVE preset clears to All;
+ * tapping another replaces it. The custom inputs mount only while
+ * period === 'custom' and prefill from the applied custom range (or this
+ * month → today the first time). A custom range with from > to is rejected
+ * here AND at the service boundary (plan §Edge cases). Preset chips are
+ * ≥44 pt touch targets via the shared Chip.
  */
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { PeriodPreset } from '@/utils/dates';
 import { DATE_RE, isValidDateStr, monthStartDate, PERIOD_PRESETS, todayLocal } from '@/utils/dates';
+import { Chip } from '@/components/ui/Chip';
 import { colors, spacing, typography } from '@/theme';
 
 const PRESET_LABELS: Record<PeriodPreset, string> = {
@@ -73,23 +75,15 @@ export function PeriodPicker({ period, customFrom, customTo, onSelect, onApplyCu
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chipRow}
       >
-        {PERIOD_PRESETS.map((preset) => {
-          const selected = period === preset;
-          return (
-            <Pressable
-              key={preset}
-              onPress={() => handlePreset(preset)}
-              style={[styles.chip, selected && styles.chipSelected]}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              testID={`period-${preset}`}
-            >
-              <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
-                {PRESET_LABELS[preset]}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {PERIOD_PRESETS.map((preset) => (
+          <Chip
+            key={preset}
+            label={PRESET_LABELS[preset]}
+            selected={period === preset}
+            onPress={() => handlePreset(preset)}
+            testID={`period-${preset}`}
+          />
+        ))}
       </ScrollView>
 
       {customActive ? (
@@ -149,35 +143,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.sm,
   },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.lg,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
-  chipLabelSelected: { color: colors.surface },
   customBox: { paddingHorizontal: spacing.xl, paddingBottom: spacing.sm },
   customFields: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   dateInput: {
     flex: 1,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.md,
     fontSize: typography.body,
     color: colors.text,
     backgroundColor: colors.surface,
+    minHeight: 44,
   },
   customDash: { color: colors.muted, fontSize: typography.body },
   applyButton: {
     borderWidth: 1,
     borderColor: colors.accent,
-    borderRadius: spacing.sm,
+    borderRadius: 999,
+    minHeight: 44,
+    justifyContent: 'center',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.accentSoft,

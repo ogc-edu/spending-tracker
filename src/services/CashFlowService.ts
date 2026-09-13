@@ -50,6 +50,8 @@ export interface UpcomingSnapshotItem {
   /** `YYYY-MM-DD` — the derived due date (ARCH §7). */
   dueDate: string;
   amountSen: number;
+  /** 'monthly' | 'one_time' — plan 017: drives the row's leading glyph. */
+  frequency: 'monthly' | 'one_time';
 }
 
 /** One row of the category summary (DASH-2) — id + total; names resolved by the UI. */
@@ -199,6 +201,7 @@ export class CashFlowService {
           name: nameById.get(item.commitment.id) ?? String(item.commitment.id),
           dueDate: item.dueDate,
           amountSen: item.amountSen,
+          frequency: item.commitment.frequency,
         }))
         .sort(byDueDateAsc),
       bufferSen,

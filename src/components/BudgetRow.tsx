@@ -18,6 +18,7 @@ import { formatSen } from '@/utils/money';
 import { categoryColor } from './categoryMeta';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { ProgressBar } from './ProgressBar';
+import { Badge } from '@/components/ui/Badge';
 
 export function BudgetRow({
   category,
@@ -58,9 +59,7 @@ export function BudgetRow({
           <View style={styles.titleLine}>
             <Text style={styles.name}>{category.name}</Text>
             {metrics.overBudget ? (
-              <View style={styles.overBadge} testID={`budget-row-${category.id}-over`}>
-                <Text style={styles.overBadgeLabel}>Over</Text>
-              </View>
+              <Badge tone="danger" label="Over" testID={`budget-row-${category.id}-over`} />
             ) : null}
           </View>
           <Text style={styles.spent} testID={`budget-row-${category.id}-spent`}>
@@ -132,13 +131,6 @@ const styles = StyleSheet.create({
   info: { flex: 1 },
   titleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   name: { fontSize: typography.body, fontWeight: '700', color: colors.text },
-  overBadge: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: 6,
-    paddingVertical: 1,
-    paddingHorizontal: 6,
-  },
-  overBadgeLabel: { color: colors.danger, fontSize: 10, fontWeight: '700' },
   spent: { fontSize: typography.caption, color: colors.muted, marginTop: 2, fontWeight: '500' },
   trailing: { alignItems: 'flex-end', gap: 4, marginLeft: spacing.sm },
   budgetAmount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant },

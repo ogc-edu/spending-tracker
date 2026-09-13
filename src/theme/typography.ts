@@ -13,6 +13,7 @@ export const typography = {
   body: 15,
   emphasis: 17,
   title: 22,
+  display: 34, // the two headline money figures (hero, analytics total)
   money: 28, // headline money amounts
   moneySmall: 18,
 } as const;

@@ -101,7 +101,7 @@ export function AIAnalysisCard({
           </Text>
           {result.points.map((point, index) => (
             <View key={index} style={styles.pointRow} testID={`ai-analysis-point-${index}`}>
-              <Text style={styles.pointBullet}>•</Text>
+              <View style={styles.pointDot} />
               <Text style={styles.pointText}>{point}</Text>
             </View>
           ))}
@@ -133,8 +133,14 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   retryLabel: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  summary: { fontSize: typography.body, color: colors.text, lineHeight: 21 },
-  pointRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  pointBullet: { fontSize: typography.body, color: colors.muted },
+  summary: { fontSize: typography.body, color: colors.text, lineHeight: 21, fontWeight: '500' },
+  pointRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm },
+  pointDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+    marginTop: 7,
+  },
   pointText: { flex: 1, fontSize: typography.body, color: colors.muted, lineHeight: 21 },
 });

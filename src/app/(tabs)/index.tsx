@@ -24,7 +24,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -39,8 +38,9 @@ import { createAIService } from '@/ai/AIService';
 import { AIUnavailableError, toAIError } from '@/ai/errors';
 import type { AIResult } from '@/ai/types';
 import { formatDayLabel, nextMonthStartDate } from '@/utils/dates';
-import { colors, spacing, typography } from '@/theme';
+import { colors, spacing } from '@/theme';
 import { EmptyState } from '@/components/EmptyState';
+import { InlineError } from '@/components/ui/InlineError';
 import { HeroCard } from '@/components/dashboard/HeroCard';
 import { SafeToSpendCard } from '@/components/dashboard/SafeToSpendCard';
 import { FormulaCard } from '@/components/dashboard/FormulaCard';
@@ -172,7 +172,7 @@ export default function DashboardScreen() {
   if (error && !snapshot) {
     return (
       <View style={styles.centerBox}>
-        <Text style={styles.errorText}>{error}</Text>
+        <InlineError message={error} testID="dashboard-error" />
       </View>
     );
   }
@@ -207,7 +207,7 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content} refreshControl={refreshControl} testID="dashboard-screen">
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <InlineError message={error} testID="dashboard-error" /> : null}
 
       {noData ? (
         <EmptyState
@@ -270,12 +270,6 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
   content: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
-  errorText: {
-    fontSize: typography.body,
-    color: colors.danger,
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-  },
   emptyWrap: {
     flexGrow: 1,
     alignItems: 'center',

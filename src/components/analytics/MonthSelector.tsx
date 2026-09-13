@@ -33,11 +33,13 @@ export function MonthSelector({
         accessibilityLabel="Previous month"
         testID="analytics-month-prev"
       >
-        <Ionicons name="chevron-back" size={22} color={colors.text} />
+        <Ionicons name="chevron-back" size={22} color={colors.accent} />
       </Pressable>
-      <Text style={styles.label} testID="analytics-month-label">
-        {formatMonthLabel(month.year, month.month)}
-      </Text>
+      <View style={styles.labelPill}>
+        <Text style={styles.label} testID="analytics-month-label">
+          {formatMonthLabel(month.year, month.month)}
+        </Text>
+      </View>
       <Pressable
         onPress={() => shift(1)}
         hitSlop={8}
@@ -45,7 +47,7 @@ export function MonthSelector({
         accessibilityLabel="Next month"
         testID="analytics-month-next"
       >
-        <Ionicons name="chevron-forward" size={22} color={colors.text} />
+        <Ionicons name="chevron-forward" size={22} color={colors.accent} />
       </Pressable>
     </View>
   );
@@ -62,5 +64,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: colors.border,
   },
-  label: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
+  label: { fontSize: typography.emphasis, fontWeight: '700', color: colors.accent },
+  labelPill: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: 999,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.lg,
+  },
 });

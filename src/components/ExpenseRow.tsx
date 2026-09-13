@@ -5,6 +5,7 @@ import { categoryColor } from '@/components/categoryMeta';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { Badge } from '@/components/ui/Badge';
 
 export interface ExpenseRowProps {
   expense: Expense;
@@ -22,6 +23,7 @@ export function ExpenseRow({ expense, category, accountName, onPress }: ExpenseR
     <Pressable
       onPress={onPress}
       style={({ pressed }) => (pressed ? [styles.row, styles.pressed] : styles.row)}
+      android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
       accessibilityRole="button"
       testID={`expense-row-${expense.id}`}
     >
@@ -46,10 +48,7 @@ export function ExpenseRow({ expense, category, accountName, onPress }: ExpenseR
             {accountName ? ` · ${accountName}` : ''}
           </Text>
           {linked ? (
-            <View style={styles.linkedChip}>
-              <Ionicons name="link-outline" size={11} color={colors.warning} />
-              <Text style={styles.linkedChipLabel}>commitment</Text>
-            </View>
+            <Badge tone="warning" label="commitment" icon="link-outline" />
           ) : null}
         </View>
       </View>
@@ -90,16 +89,5 @@ const styles = StyleSheet.create({
   },
   rowBottom: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
   rowMeta: { fontSize: typography.caption, color: colors.muted, fontWeight: '500', flex: 1 },
-  linkedChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginLeft: spacing.xs,
-    backgroundColor: colors.warningSoft,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  linkedChipLabel: { fontSize: 10, color: colors.warning, fontWeight: '700' },
   chevron: { marginLeft: spacing.xs },
 });

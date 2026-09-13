@@ -32,6 +32,7 @@ import { AccountRow } from '@/components/AccountRow';
 import { PayrollAllocationSheet } from '@/components/PayrollAllocationSheet';
 import { CategoryAddSheet } from '@/components/CategoryAddSheet';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { ProviderRow, maskKeySuffix } from '@/components/ai/ProviderRow';
 import { ActiveProviderSelector } from '@/components/ai/ActiveProviderSelector';
 import { aiStatusLabel } from '@/components/ai/providerMeta';
@@ -366,7 +367,7 @@ export default function SettingsScreen() {
       ) : null}
 
       {/* Plan 004: Accounts section. */}
-      <Text style={styles.sectionTitle}>Accounts</Text>
+      <SectionHeader title="Accounts" />
 
       {accountsError ? (
         <Text style={styles.errorText} testID="accounts-error">
@@ -406,11 +407,10 @@ export default function SettingsScreen() {
       ) : null}
 
       {/* Payroll in — the standing split, and the button that applies it. */}
-      <Text style={styles.sectionTitle}>Payroll</Text>
-      <Text style={styles.note}>
-        Split each payroll across your accounts, then press Payroll in when you are paid — every
-        account below is credited by its amount. Balances move; your expense history does not.
-      </Text>
+      <SectionHeader
+        title="Payroll"
+        note="Split each payroll across your accounts, then press Payroll in when you are paid — every account below is credited by its amount. Balances move; your expense history does not."
+      />
 
       {payroll && payroll.lines.length > 0 ? (
         <View style={styles.card}>
@@ -547,10 +547,10 @@ export default function SettingsScreen() {
       />
 
       {/* Plan 016 (SET-1): safety-buffer editor — the promised SET-1 surface. */}
-      <Text style={styles.sectionTitle}>Safety buffer</Text>
-      <Text style={styles.note}>
-        Reserved from your available money before safe-to-spend is calculated. RM0 means no buffer.
-      </Text>
+      <SectionHeader
+        title="Safety buffer"
+        note="Reserved from your available money before safe-to-spend is calculated. RM0 means no buffer."
+      />
       <View style={styles.card}>
         <Text style={styles.label}>Current buffer</Text>
         <Text
@@ -600,39 +600,42 @@ export default function SettingsScreen() {
         (multi-select), Delete appears on the header row; the "+" chip
         (Other's slot) opens the add sheet. Delete is list-only: existing
         expenses/budgets keep their category label (never a cascade). */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Categories</Text>
-        {selecting ? (
-          <>
-            <Pressable
-              onPress={() => setConfirmDeleteCats(true)}
-              disabled={selectedCats.size === 0 || categoryBusy}
-              style={({ pressed }) => [
-                styles.headerDelete,
-                selectedCats.size === 0 && styles.headerDeleteDisabled,
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-              testID="settings-categories-delete"
-            >
-              <Ionicons name="trash-outline" size={15} color={colors.surface} />
-              <Text style={styles.headerDeleteLabel}>Delete ({selectedCats.size})</Text>
-            </Pressable>
-            <Pressable
-              onPress={exitSelect}
-              style={({ pressed }) => [styles.headerDone, pressed && styles.pressed]}
-              accessibilityRole="button"
-              testID="settings-categories-exit"
-            >
-              <Text style={styles.headerDoneLabel}>Done</Text>
-            </Pressable>
-          </>
-        ) : null}
-      </View>
-      <Text style={styles.note}>
-        Long-press to select categories, then Delete — tap more to multi-select. Deleting removes them from the
-        pickers only; expenses and budgets using them keep their label.
-      </Text>
+      <SectionHeader
+        title="Categories"
+        note={
+          selecting
+            ? 'Tap more chips to multi-select, then Delete.'
+            : 'Long-press to select categories, then Delete — tap more to multi-select. Deleting removes them from the pickers only; expenses and budgets using them keep their label.'
+        }
+        trailing={
+          selecting ? (
+            <>
+              <Pressable
+                onPress={() => setConfirmDeleteCats(true)}
+                disabled={selectedCats.size === 0 || categoryBusy}
+                style={({ pressed }) => [
+                  styles.headerDelete,
+                  selectedCats.size === 0 && styles.headerDeleteDisabled,
+                  pressed && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                testID="settings-categories-delete"
+              >
+                <Ionicons name="trash-outline" size={15} color={colors.surface} />
+                <Text style={styles.headerDeleteLabel}>Delete ({selectedCats.size})</Text>
+              </Pressable>
+              <Pressable
+                onPress={exitSelect}
+                style={({ pressed }) => [styles.headerDone, pressed && styles.pressed]}
+                accessibilityRole="button"
+                testID="settings-categories-exit"
+              >
+                <Text style={styles.headerDoneLabel}>Done</Text>
+              </Pressable>
+            </>
+          ) : undefined
+        }
+      />
       <View style={styles.chipWrap}>
         {visibleCategories.map((category) => {
           const selected = selecting && selectedCats.has(category.id);
@@ -688,24 +691,25 @@ export default function SettingsScreen() {
       />
 
       {/* Plan 013: AI Providers (BYOK — Gemini + DeepSeek). */}
-      <Text style={styles.sectionTitle}>AI Provider</Text>
-      <Text style={styles.note}>
-        Bring your own API key to analyze your finances with AI. Keys are stored securely on this
-        device and sent only to the provider.
-      </Text>
-      {/* Plan 016 (SET-2): the AI status line — key presence per provider (013's config). */}
-      <Text
-        style={[styles.aiStatus, aiSuffixes.gemini !== null && styles.aiStatusConfigured]}
-        testID="settings-ai-status-gemini"
-      >
-        {aiStatusLabel('gemini', aiSuffixes.gemini !== null)}
-      </Text>
-      <Text
-        style={[styles.aiStatus, aiSuffixes.deepseek !== null && styles.aiStatusConfigured]}
-        testID="settings-ai-status-deepseek"
-      >
-        {aiStatusLabel('deepseek', aiSuffixes.deepseek !== null)}
-      </Text>
+      <SectionHeader
+        title="AI Provider"
+        note="Bring your own API key to analyze your finances with AI. Keys are stored securely on this device and sent only to the provider."
+      />
+      {/* Plan 016 (SET-2): the AI status pills — key presence per provider (013's config). */}
+      <View style={styles.aiStatusRow}>
+        <Text
+          style={[styles.aiStatus, aiSuffixes.gemini !== null && styles.aiStatusConfigured]}
+          testID="settings-ai-status-gemini"
+        >
+          {aiStatusLabel('gemini', aiSuffixes.gemini !== null)}
+        </Text>
+        <Text
+          style={[styles.aiStatus, aiSuffixes.deepseek !== null && styles.aiStatusConfigured]}
+          testID="settings-ai-status-deepseek"
+        >
+          {aiStatusLabel('deepseek', aiSuffixes.deepseek !== null)}
+        </Text>
+      </View>
       <ProviderRow
         provider="gemini"
         configured={aiSuffixes.gemini !== null}
@@ -731,9 +735,11 @@ export default function SettingsScreen() {
       <Pressable
         onPress={logout}
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+        android_ripple={{ color: 'rgba(0,0,0,0.06)', borderless: false }}
         accessibilityRole="button"
         testID="settings-logout"
       >
+        <Ionicons name="log-out-outline" size={18} color={colors.danger} />
         <Text style={styles.buttonLabel}>Log out</Text>
       </Pressable>
 
@@ -761,14 +767,6 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600' },
   email: { fontSize: typography.body, fontWeight: '700', color: colors.text },
-  sectionTitle: {
-    fontSize: typography.emphasis,
-    fontWeight: '800',
-    color: colors.text,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    letterSpacing: -0.2,
-  },
   empty: { fontSize: typography.body, color: colors.muted, marginBottom: spacing.md },
   errorText: { fontSize: typography.body, color: colors.danger, marginBottom: spacing.md },
   addButton: {
@@ -869,7 +867,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   headerDelete: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -897,13 +894,19 @@ const styles = StyleSheet.create({
   addChip: { borderStyle: 'dashed', borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.background },
   addChipLabel: { color: colors.accent },
   button: {
-    backgroundColor: colors.danger,
-    borderRadius: 12,
-    paddingVertical: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: colors.dangerSoft,
+    borderRadius: 12,
+    minHeight: 48,
+    paddingVertical: spacing.md,
     marginTop: spacing.lg,
   },
-  buttonLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '700' },
+  buttonLabel: { color: colors.danger, fontSize: typography.emphasis, fontWeight: '700' },
   pressed: { opacity: 0.8 },
   footNote: { marginTop: spacing.lg, fontSize: typography.caption, color: colors.muted, textAlign: 'center' },
   bufferCurrent: { fontSize: typography.moneySmall, fontWeight: '800', color: colors.text, marginBottom: spacing.sm, fontVariant: moneyFontVariant },
@@ -931,6 +934,22 @@ const styles = StyleSheet.create({
   },
   bufferSaveLabel: { color: colors.surface, fontSize: typography.body, fontWeight: '700' },
   fieldError: { fontSize: typography.caption, color: colors.danger, marginBottom: spacing.sm },
-  aiStatus: { fontSize: typography.caption, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs },
-  aiStatusConfigured: { color: colors.accent },
+  aiStatusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
+  aiStatus: {
+    fontSize: typography.caption,
+    color: colors.muted,
+    fontWeight: '600',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    overflow: 'hidden',
+  },
+  aiStatusConfigured: {
+    color: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentSoft,
+  },
 });

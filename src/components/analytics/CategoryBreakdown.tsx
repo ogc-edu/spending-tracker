@@ -30,7 +30,10 @@ export function CategoryBreakdown({
           <View key={row.categoryId} style={styles.row} testID={`analytics-breakdown-row-${row.categoryId}`}>
             <View style={styles.rowHeader}>
               <Text style={styles.name}>{row.categoryName}</Text>
-              <Text style={styles.amount}>{formatSen(row.amountSen)}</Text>
+              <View style={styles.amountWrap}>
+                <Text style={styles.amount}>{formatSen(row.amountSen)}</Text>
+                <Text style={styles.share}>{share.toFixed(1)}%</Text>
+              </View>
             </View>
             <ProgressBar pct={share} color={categoryColor(row.categoryId)} />
           </View>
@@ -69,6 +72,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xs + 2,
   },
-  name: { fontSize: typography.body, color: colors.text, fontWeight: '600' },
+  name: { fontSize: typography.body, color: colors.text, fontWeight: '600', flexShrink: 1 },
+  amountWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1, marginLeft: spacing.md },
   amount: { fontSize: typography.body, color: colors.text, fontWeight: '700', fontVariant: moneyFontVariant },
+  share: { fontSize: typography.caption, color: colors.muted, fontWeight: '700' },
 });

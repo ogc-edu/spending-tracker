@@ -34,6 +34,8 @@ import { BudgetForm } from '@/components/BudgetForm';
 import { BudgetRow } from '@/components/BudgetRow';
 import { EmptyState } from '@/components/EmptyState';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { InlineError } from '@/components/ui/InlineError';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useToast } from '@/components/ToastProvider';
 import { categoryColor } from '@/components/categoryMeta';
 import { colors, spacing, typography } from '@/theme';
@@ -173,11 +175,13 @@ export default function BudgetsScreen() {
           accessibilityLabel="Previous month"
           testID="budgets-month-prev"
         >
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
+          <Ionicons name="chevron-back" size={22} color={colors.accent} />
         </Pressable>
-        <Text style={styles.monthLabel} testID="budgets-month-label">
-          {formatMonthLabel(selectedMonth.year, selectedMonth.month)}
-        </Text>
+        <View style={styles.monthLabelPill}>
+          <Text style={styles.monthLabel} testID="budgets-month-label">
+            {formatMonthLabel(selectedMonth.year, selectedMonth.month)}
+          </Text>
+        </View>
         <Pressable
           onPress={() => setSelectedMonth(shiftMonth(selectedMonth, 1))}
           hitSlop={11}
@@ -185,11 +189,11 @@ export default function BudgetsScreen() {
           accessibilityLabel="Next month"
           testID="budgets-month-next"
         >
-          <Ionicons name="chevron-forward" size={22} color={colors.text} />
+          <Ionicons name="chevron-forward" size={22} color={colors.accent} />
         </Pressable>
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <InlineError message={error} testID="budgets-error" /> : null}
 
       {loading ? (
         <View style={styles.centerBox}>
@@ -217,10 +221,10 @@ export default function BudgetsScreen() {
             busy={busy}
           />
 
-          <Text style={styles.sectionTitle}>Category budgets</Text>
-          <Text style={styles.sectionNote}>
-            Informational only — the overall monthly budget is what your cash flow reserves.
-          </Text>
+          <SectionHeader
+            title="Category budgets"
+            note="Informational only — the overall monthly budget is what your cash flow reserves."
+          />
           {/* Only categories WITH a budget get a row — no more walls of unset "—" rows. */}
           {categories
             .filter((category) => byCategory.has(category.id))
@@ -341,15 +345,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: colors.border,
   },
-  monthLabel: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, letterSpacing: -0.2 },
-  content: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
-  errorText: {
-    fontSize: typography.body,
-    color: colors.danger,
-    paddingHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+  monthLabelPill: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: 999,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.lg,
   },
+  monthLabel: { fontSize: typography.emphasis, fontWeight: '800', color: colors.accent, letterSpacing: -0.2 },
+  content: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
   centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
   sectionTitle: {
     fontSize: typography.emphasis,

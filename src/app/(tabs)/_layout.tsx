@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { colors } from '@/theme';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View, type ColorValue } from 'react-native';
 
 /**
  * Tabs gate — unreachable while signed out (plan 003 gate).
@@ -11,9 +11,7 @@ import { ActivityIndicator, View } from 'react-native';
  * signedOut we push the user to /login; the login screen's own redirect
  * brings them back after auth.
  */
-import { Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { ColorValue } from 'react-native';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -64,15 +62,17 @@ export default function TabLayout() {
           paddingTop: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10.5,
           fontWeight: '600',
         },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Dashboard', tabBarIcon: tabIcon('home', 'home-outline') }} />
+      <Tabs.Screen name="index" options={{ title: 'Dashboard', tabBarLabel: 'Home', tabBarIcon: tabIcon('home', 'home-outline') }} />
       <Tabs.Screen name="expenses" options={{ title: 'Expenses', tabBarIcon: tabIcon('receipt', 'receipt-outline') }} />
       <Tabs.Screen name="budgets" options={{ title: 'Budgets', tabBarIcon: tabIcon('pie-chart', 'pie-chart-outline') }} />
-      <Tabs.Screen name="commitments" options={{ title: 'Commitments', tabBarIcon: tabIcon('calendar', 'calendar-outline') }} />
+      {/* "Commitments" truncates on narrow screens — the short tab label keeps
+          the domain term in the header title (plan 017). */}
+      <Tabs.Screen name="commitments" options={{ title: 'Commitments', tabBarLabel: 'Recurring', tabBarIcon: tabIcon('calendar', 'calendar-outline') }} />
       <Tabs.Screen name="analytics" options={{ title: 'Analytics', tabBarIcon: tabIcon('stats-chart', 'stats-chart-outline') }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings', 'settings-outline') }} />
     </Tabs>

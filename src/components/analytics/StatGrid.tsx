@@ -99,6 +99,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-  value: { fontSize: 20, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, letterSpacing: -0.3 },
+  value: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, letterSpacing: -0.3 },
   sub: { fontSize: typography.caption, color: colors.muted, marginTop: spacing.xs, fontWeight: '500' },
 });

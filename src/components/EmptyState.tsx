@@ -25,7 +25,9 @@ export interface EmptyStateProps {
 export function EmptyState({ icon, title, body, action, testID }: EmptyStateProps) {
   return (
     <View style={styles.box} testID={testID}>
-      <Ionicons name={icon} size={44} color={colors.muted} style={styles.icon} />
+      <View style={styles.iconCircle}>
+        <Ionicons name={icon} size={30} color={colors.accent} />
+      </View>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
       {action ? (
@@ -45,7 +47,15 @@ export function EmptyState({ icon, title, body, action, testID }: EmptyStateProp
 
 const styles = StyleSheet.create({
   box: { alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: spacing.xl },
-  icon: { marginBottom: spacing.md },
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
   title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
   body: { fontSize: typography.body, color: colors.muted, textAlign: 'center', lineHeight: 21, marginBottom: spacing.lg },
   action: {

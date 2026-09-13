@@ -1,6 +1,13 @@
 /**
- * HeroCard (plan 010 DASH-1) — the top line of the dashboard: available money
- * (the headline, money font), spent this month, and remaining monthly budget.
+ * HeroCard (plan 010 DASH-1, restyled by plan 017) — the top line of the
+ * dashboard: available money (the headline, money font), spent this month,
+ * and remaining monthly budget.
+ *
+ * Plan 017 design: the ONE hero surface on the screen — accent-filled card,
+ * white text (white on `#15803D` is the theme's AA-asserted 5.0:1 pair) — so
+ * the headline reads as the product's answer at a glance; every other card
+ * stays white. Stat rows are separated by translucent hairlines instead of
+ * filled panels (filled panels would drop white-text contrast below AA).
  *
  * The eye button beside the label hides the headline behind asterisks — for
  * checking the app in public. It is a local view preference: nothing is stored
@@ -54,7 +61,7 @@ export function HeroCard({
           <Ionicons
             name={hidden ? 'eye-off-outline' : 'eye-outline'}
             size={20}
-            color={colors.muted}
+            color={colors.surface}
           />
         </Pressable>
       </View>
@@ -68,7 +75,7 @@ export function HeroCard({
       </Text>
 
       <View style={styles.row}>
-        <View style={styles.statPanel}>
+        <View style={[styles.statPanel, styles.statPanelStart]}>
           <Text style={styles.rowLabel}>Spent this month</Text>
           <Text
             style={styles.rowValue}
@@ -110,18 +117,16 @@ export function HeroCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
+    backgroundColor: colors.accent,
+    borderRadius: 20,
+    padding: spacing.xl,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 5,
   },
   header: {
     flexDirection: 'row',
@@ -130,12 +135,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   labelBadge: {
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(15,23,42,0.14)', // dark-translucent: white text ≥ AA on the blend
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6,
   },
-  label: { fontSize: typography.caption, fontWeight: '600', color: colors.muted },
+  label: { fontSize: typography.caption, fontWeight: '700', color: colors.surface, letterSpacing: 0.4 },
   eyeButton: {
     width: MIN_TOUCH_TARGET,
     height: MIN_TOUCH_TARGET,
@@ -145,32 +150,32 @@ const styles = StyleSheet.create({
     marginVertical: -spacing.sm, // keeps the header its original height
   },
   available: {
-    fontSize: 32,
+    fontSize: typography.display,
     fontWeight: '800',
-    color: colors.accent,
+    color: colors.surface,
     marginVertical: spacing.sm,
     letterSpacing: -0.5,
     fontVariant: moneyFontVariant,
   },
-  /** Masked: muted and letter-spaced so the asterisks read as a deliberate cover. */
-  availableHidden: { color: colors.muted, letterSpacing: 2 },
+  /** Masked: letter-spaced so the asterisks read as a deliberate cover. */
+  availableHidden: { letterSpacing: 2 },
   row: {
     flexDirection: 'row',
-    gap: spacing.md,
     marginTop: spacing.sm,
   },
   statPanel: {
     flex: 1,
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: spacing.md,
+    paddingLeft: spacing.lg,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255,255,255,0.28)',
   },
-  rowLabel: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '500' },
-  rowValue: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant, flexShrink: 1 },
+  statPanelStart: { paddingLeft: 0, borderLeftWidth: 0, marginRight: spacing.lg },
+  rowLabel: { fontSize: typography.caption, color: colors.surface, marginBottom: spacing.xs, fontWeight: '600', opacity: 1 },
+  rowValue: { fontSize: typography.moneySmall, fontWeight: '800', color: colors.surface, fontVariant: moneyFontVariant, flexShrink: 1 },
   setBudgetLink: {
     fontSize: typography.caption,
-    fontWeight: '600',
-    color: colors.accent,
+    fontWeight: '700',
+    color: colors.surface,
     textDecorationLine: 'underline',
     marginTop: 2,
   },

@@ -14,8 +14,7 @@
  * with the list (tested).
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -30,6 +29,8 @@ import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { FilterBar } from '@/components/FilterBar';
 import { ExpenseList } from '@/components/ExpenseList';
 import { EmptyState } from '@/components/EmptyState';
+import { InlineError } from '@/components/ui/InlineError';
+import { Fab } from '@/components/ui/Fab';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 /** Batch size for "load more" pagination (plan §UI — 50/batch). */
@@ -163,7 +164,7 @@ export default function ExpensesScreen() {
         </Text>
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <InlineError message={error} testID="expenses-error" /> : null}
 
       {!error && loading ? (
         <View style={styles.centerBox}>
@@ -213,15 +214,7 @@ export default function ExpensesScreen() {
         />
       ) : null}
 
-      <Pressable
-        onPress={() => router.push('/expenses/new' as never)}
-        style={({ pressed }) => (pressed ? [styles.fab, styles.fabPressed] : styles.fab)}
-        accessibilityRole="button"
-        accessibilityLabel="Add expense"
-        testID="add-expense-fab"
-      >
-        <Ionicons name="add" size={30} color="#fff" />
-      </Pressable>
+      <Fab onPress={() => router.push('/expenses/new' as never)} label="Add expense" testID="add-expense-fab" />
     </View>
   );
 }
@@ -257,28 +250,5 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 6,
   },
-  errorText: {
-    fontSize: typography.body,
-    color: colors.danger,
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-  },
   centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
-  fab: {
-    position: 'absolute',
-    right: spacing.xl,
-    bottom: spacing.xl,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 6,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  fabPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
 });

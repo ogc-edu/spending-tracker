@@ -319,8 +319,8 @@ describe('CashFlowService.snapshot — PRD §8.5 canonical fixture', () => {
     const snap = await f.cashflow.snapshot(now);
 
     expect(snap.upcomingItems).toEqual([
-      { commitmentId: expect.any(Number), name: 'Rent', dueDate: '2026-09-01', amountSen: 50000 },
-      { commitmentId: expect.any(Number), name: 'Phone bill', dueDate: '2026-09-15', amountSen: 30000 },
+      { commitmentId: expect.any(Number), name: 'Rent', dueDate: '2026-09-01', amountSen: 50000, frequency: 'monthly' },
+      { commitmentId: expect.any(Number), name: 'Phone bill', dueDate: '2026-09-15', amountSen: 30000, frequency: 'one_time' },
     ]);
     // Category totals desc: Debt/Repayment 60000, Food 40000, Transport 16000.
     expect(snap.categorySummary).toEqual([

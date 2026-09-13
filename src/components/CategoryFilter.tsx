@@ -1,15 +1,16 @@
 /**
- * CategoryFilter (plan 006, F1) — horizontal single-select chip row:
- * "All" + the 12 seeded categories. Tapping the ACTIVE chip clears it back
- * to All (one tap clears); tapping another chip replaces the selection.
- * NO multi-select (F1 decision; multi-select is future). Presentational —
- * selection lives in uiStore via the screen's callbacks.
+ * CategoryFilter (plan 006, F1; plan 017 — shared Chip) — horizontal
+ * single-select chip row: "All" + the 12 seeded categories. Tapping the
+ * ACTIVE chip clears it back to All (one tap clears); tapping another chip
+ * replaces the selection. NO multi-select (F1 decision; multi-select is
+ * future). Presentational — selection lives in uiStore via the screen's
+ * callbacks. Chips are ≥44 pt touch targets via the shared Chip.
  */
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ScrollView, StyleSheet } from 'react-native';
 import type { Category } from '@/db/schema';
 import { categoryColor } from '@/components/categoryMeta';
-import { colors, spacing, typography } from '@/theme';
+import { Chip } from '@/components/ui/Chip';
+import { spacing } from '@/theme';
 
 export interface CategoryFilterProps {
   categories: Category[];
@@ -24,7 +25,6 @@ export function CategoryFilter({ categories, selectedId, onSelect }: CategoryFil
     onSelect(categoryId === selectedId ? null : categoryId);
   };
 
-  const allSelected = selectedId == null;
   return (
     <ScrollView
       horizontal
@@ -32,53 +32,27 @@ export function CategoryFilter({ categories, selectedId, onSelect }: CategoryFil
       contentContainerStyle={styles.chipRow}
       testID="category-filter"
     >
-      <Pressable
+      <Chip
+        label="All"
+        selected={selectedId == null}
         onPress={() => handlePress(null)}
-        style={[styles.chip, allSelected && styles.chipSelected]}
-        accessibilityRole="button"
-        accessibilityState={{ selected: allSelected }}
         testID="category-filter-all"
-      >
-        <Text style={[styles.chipLabel, allSelected && styles.chipLabelSelected]}>All</Text>
-      </Pressable>
-      {categories.map((category) => {
-        const selected = selectedId === category.id;
-        return (
-          <Pressable
-            key={category.id}
-            onPress={() => handlePress(category.id)}
-            style={[styles.chip, selected && styles.chipSelected]}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            testID={`category-filter-${category.id}`}
-          >
-            <Ionicons
-              name={category.icon as never}
-              size={14}
-              color={selected ? colors.surface : categoryColor(category.id)}
-            />
-            <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{category.name}</Text>
-          </Pressable>
-        );
-      })}
+      />
+      {categories.map((category) => (
+        <Chip
+          key={category.id}
+          label={category.name}
+          icon={category.icon as never}
+          iconColor={categoryColor(category.id)}
+          selected={selectedId === category.id}
+          onPress={() => handlePress(category.id)}
+          testID={`category-filter-${category.id}`}
+        />
+      ))}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingBottom: spacing.sm },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.lg,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
-  chipLabelSelected: { color: colors.surface },
 });

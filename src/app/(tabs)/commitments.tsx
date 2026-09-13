@@ -36,6 +36,9 @@ import { colors, spacing, typography } from '@/theme';
 import { COMMITMENT_TYPE_ICONS } from '@/components/commitmentMeta';
 import { categoryColor } from '@/components/categoryMeta';
 import { EmptyState } from '@/components/EmptyState';
+import { Badge } from '@/components/ui/Badge';
+import { Fab } from '@/components/ui/Fab';
+import { InlineError } from '@/components/ui/InlineError';
 import { useToast } from '@/components/ToastProvider';
 
 function errMsg(error: unknown): string {
@@ -156,6 +159,7 @@ export default function CommitmentsScreen() {
         key={commitment.id}
         onPress={() => router.push(`/commitments/${commitment.id}` as never)}
         style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+        android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
         accessibilityRole="button"
         testID={`commitment-row-${commitment.id}`}
       >
@@ -186,9 +190,10 @@ export default function CommitmentsScreen() {
           </View>
         </View>
         {commitment.status !== 'active' ? (
-          <View style={[styles.statusBadge, commitment.status === 'cancelled' && styles.statusCancelled]}>
-            <Text style={styles.statusLabel}>{commitment.status === 'completed' ? 'Done' : 'Cancelled'}</Text>
-          </View>
+          <Badge
+            tone={commitment.status === 'completed' ? 'accent' : 'danger'}
+            label={commitment.status === 'completed' ? 'Done' : 'Cancelled'}
+          />
         ) : null}
         <Ionicons name="chevron-forward" size={18} color={colors.muted} />
       </Pressable>
@@ -197,7 +202,7 @@ export default function CommitmentsScreen() {
 
   return (
     <View style={styles.container} testID="commitments-screen">
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <InlineError message={error} testID="commitments-error" /> : null}
 
       {loading ? (
         <View style={styles.centerBox}>
@@ -271,15 +276,7 @@ export default function CommitmentsScreen() {
         </ScrollView>
       )}
 
-      <Pressable
-        onPress={() => router.push('/commitments/new' as never)}
-        style={({ pressed }) => (pressed ? [styles.fab, styles.fabPressed] : styles.fab)}
-        accessibilityRole="button"
-        accessibilityLabel="Add commitment"
-        testID="add-commitment-fab"
-      >
-        <Ionicons name="add" size={30} color="#fff" />
-      </Pressable>
+      <Fab onPress={() => router.push('/commitments/new' as never)} label="Add commitment" testID="add-commitment-fab" />
     </View>
   );
 }
@@ -287,13 +284,6 @@ export default function CommitmentsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingTop: spacing.md, paddingBottom: spacing.xxl * 2 },
-  errorText: {
-    fontSize: typography.body,
-    color: colors.danger,
-    paddingHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
   centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
   row: {
     flexDirection: 'row',
@@ -352,15 +342,6 @@ const styles = StyleSheet.create({
   },
   statusCancelled: { backgroundColor: colors.dangerSoft },
   statusLabel: { fontSize: typography.caption, fontWeight: '700', color: colors.accent },
-  sectionTitle: {
-    fontSize: typography.emphasis,
-    fontWeight: '800',
-    color: colors.text,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
-    letterSpacing: -0.2,
-  },
   sectionNote: {
     fontSize: typography.caption,
     color: colors.muted,
@@ -384,22 +365,5 @@ const styles = StyleSheet.create({
   restoreButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   restoreLabel: { color: colors.accent, fontSize: typography.caption, fontWeight: '700' },
   spacer: { height: spacing.lg },
-  fab: {
-    position: 'absolute',
-    right: spacing.xl,
-    bottom: spacing.xl,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 6,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  fabPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
   pressed: { opacity: 0.7 },
 });

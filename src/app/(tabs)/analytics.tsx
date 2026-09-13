@@ -39,6 +39,7 @@ import { MoMChip } from '@/components/analytics/MoMChip';
 import { CategoryBreakdown } from '@/components/analytics/CategoryBreakdown';
 import { StatGrid } from '@/components/analytics/StatGrid';
 import { EmptyState } from '@/components/EmptyState';
+import { InlineError } from '@/components/ui/InlineError';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
@@ -148,7 +149,7 @@ export default function AnalyticsScreen() {
     <View style={styles.container} testID="analytics-screen">
       <MonthSelector month={selectedMonth} onChange={setSelectedMonth} />
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <InlineError message={error} testID="analytics-error" /> : null}
 
       {loading ? (
         <View style={styles.centerBox}>
@@ -211,11 +212,14 @@ export default function AnalyticsScreen() {
             <Text style={styles.sectionTitle}>Top expenses</Text>
             {snapshot.largest.map((row) => (
               <View key={row.id} style={styles.expenseRow}>
-                <Text style={styles.expenseAmount} numberOfLines={1} accessibilityLabel={`${row.categoryName}, ${spokenMoneyLabel(row.amountSen)}`}>
-                  {formatSen(row.amountSen)}
-                </Text>
+                <View style={styles.rankDot}>
+                  <Text style={styles.rankText}>{row.categoryName.charAt(0)}</Text>
+                </View>
                 <Text style={styles.expenseMeta}>
                   {formatDayLabel(row.date)} · {row.categoryName}
+                </Text>
+                <Text style={styles.expenseAmount} numberOfLines={1} accessibilityLabel={`${row.categoryName}, ${spokenMoneyLabel(row.amountSen)}`}>
+                  {formatSen(row.amountSen)}
                 </Text>
               </View>
             ))}
@@ -230,13 +234,6 @@ export default function AnalyticsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  errorText: {
-    fontSize: typography.body,
-    color: colors.danger,
-    paddingHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
   centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
   content: { paddingBottom: spacing.xxl },
   totalCard: {
@@ -254,7 +251,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   totalLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  totalAmount: { fontSize: 32, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.5 },
+  totalAmount: { fontSize: typography.display, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.5 },
   momRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -296,11 +293,22 @@ const styles = StyleSheet.create({
   },
   expenseRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    gap: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  expenseAmount: { fontSize: typography.body, color: colors.text, fontWeight: '700', fontVariant: moneyFontVariant },
-  expenseMeta: { fontSize: typography.caption, color: colors.muted, fontWeight: '500' },
+  rankDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankText: { fontSize: typography.caption, fontWeight: '800', color: colors.muted },
+  expenseAmount: { fontSize: typography.body, color: colors.text, fontWeight: '700', fontVariant: moneyFontVariant, marginLeft: 'auto', flexShrink: 1 },
+  expenseMeta: { fontSize: typography.caption, color: colors.muted, fontWeight: '500', flexShrink: 1 },
   spacer: { height: spacing.lg },
 });

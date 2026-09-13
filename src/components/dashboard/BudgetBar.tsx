@@ -1,8 +1,10 @@
 /**
- * BudgetBar (plan 010 DASH-1, 007 metrics) — the overall monthly budget shown
- * as a progress bar: spent vs budget, percentage, over-budget danger state
- * (color + label, never a notification — BUD-2..4). All metrics are
- * engine-computed (snapshot.budgetMetrics); no math here.
+ * BudgetBar (plan 010 DASH-1, 007 metrics; restyled by plan 017) — the
+ * overall monthly budget shown as a progress bar: spent vs budget,
+ * percentage, over-budget danger state (color + label, never a notification
+ * — BUD-2..4). All metrics are engine-computed (snapshot.budgetMetrics); no
+ * math here. The over-budget badge is the shared soft Badge; the progress
+ * bar is 8 px with the shared ProgressBar.
  *
  * No overall budget → a "Set a budget" prompt (PRD §8.4 treats a missing
  * budget as term 0 in the cash-flow math — this is the dashboard's prompt,
@@ -13,6 +15,8 @@ import type { Budget } from '@/db/schema';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { ProgressBar } from '@/components/ProgressBar';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 
 export function BudgetBar({
   budget,
@@ -36,7 +40,7 @@ export function BudgetBar({
 }) {
   if (!budget) {
     return (
-      <View style={styles.card} testID="budget-bar-empty">
+      <Card testID="budget-bar-empty">
         <Text style={styles.title}>Monthly budget</Text>
         <Text style={styles.emptyBody}>
           No monthly budget set — cash flow treats it as RM0 reserved.
@@ -44,25 +48,22 @@ export function BudgetBar({
         <Pressable
           onPress={onSetBudget}
           style={({ pressed }) => [styles.setButton, pressed && styles.pressed]}
+          android_ripple={{ color: 'rgba(0,0,0,0.06)', borderless: false }}
           accessibilityRole="button"
           accessibilityLabel="Set a monthly budget"
           testID="budget-bar-set"
         >
           <Text style={styles.setLabel}>Set a budget</Text>
         </Pressable>
-      </View>
+      </Card>
     );
   }
 
   return (
-    <View style={styles.card} testID="budget-bar">
+    <Card testID="budget-bar">
       <View style={styles.header}>
         <Text style={styles.title}>Monthly budget</Text>
-        {overBudget ? (
-          <View style={styles.overBadge} testID="budget-bar-over">
-            <Text style={styles.overLabel}>Over budget</Text>
-          </View>
-        ) : null}
+        {overBudget ? <Badge tone="danger" label="Over budget" testID="budget-bar-over" /> : null}
       </View>
       <Text style={styles.amount} numberOfLines={1} accessibilityLabel={`Monthly budget, ${spokenMoneyLabel(budget.amountSen)}`}>
         {formatSen(budget.amountSen)}
@@ -83,41 +84,20 @@ export function BudgetBar({
         {' · '}Remaining {formatSen(remainingSen)}
         {pctUsed !== null ? <Text style={styles.pct}> · {pctUsed.toFixed(1)}%</Text> : null}
       </Text>
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
-  title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
-  overBadge: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: 8,
-    paddingVertical: 3,
-    paddingHorizontal: spacing.sm,
-  },
-  overLabel: { color: colors.danger, fontSize: typography.caption, fontWeight: '700' },
+  title: { fontSize: typography.caption, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
   amount: {
-    fontSize: 22,
+    fontSize: typography.title,
     fontWeight: '800',
     color: colors.text,
     marginBottom: spacing.sm,
@@ -132,7 +112,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginTop: spacing.md,
     backgroundColor: colors.accentSoft,
-    borderRadius: 10,
+    borderRadius: 999,
+    minHeight: 44,
+    justifyContent: 'center',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
