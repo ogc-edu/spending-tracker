@@ -108,7 +108,11 @@ export class DeepSeekProvider implements AIProvider {
         'No DeepSeek model selected — pick one in Settings',
       );
     }
-    const userContent = `Financial snapshot (JSON):\n${request.snapshot}`;
+    // Plan 019 — the user's question (when present) is appended to the user
+    // message; the fixed system message is never interpolated.
+    const userContent = request.question
+      ? `Financial snapshot (JSON):\n${request.snapshot}\n\nUser question: ${request.question}`
+      : `Financial snapshot (JSON):\n${request.snapshot}`;
     const messages = [
       { role: 'system', content: request.systemPrompt },
       { role: 'user', content: userContent },

@@ -130,17 +130,28 @@ export class GeminiProvider implements AIProvider {
         'No Gemini model selected — pick one in Settings',
       );
     }
+    // Plan 019 — the user's question (when present) is a DISTINCT part after
+    // the snapshot; the fixed systemInstruction is never interpolated.
+    const parts = [{ text: `Financial snapshot (JSON):\n${request.snapshot}` }];
+    if (request.question) parts.push({ text: `User question: ${request.question}` });
     const body = await this.guarded(
       this.generateContent(request.key, request.modelId, {
-        contents: [{ parts: [{ text: `Financial snapshot (JSON):\n${request.snapshot}` }] }],
+        contents: [{ parts }],
         systemInstruction: { parts: [{ text: request.systemPrompt }] },
         generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 2048 },
       }),
     );
     const candidates = (body as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
+      candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
     })?.candidates;
-    const text = candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+    // Plan 019 fix — drop reasoning/thought parts. A thinking model can return a
+    // `thought: true` part before the answer; joining it with the JSON would
+    // corrupt the payload (invalidResponse).
+    const text =
+      candidates?.[0]?.content?.parts
+        ?.filter((p) => p.thought !== true)
+        .map((p) => p.text ?? '')
+        .join('') ?? '';
     if (!text.trim()) {
       throw fromInvalidResponse('Gemini returned no text content');
     }

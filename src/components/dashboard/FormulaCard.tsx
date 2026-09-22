@@ -7,10 +7,9 @@
  * card data sums back to safe" acceptance criterion. Tapping the header
  * toggles the breakdown; the arithmetic is never performed here.
  *
- * "Explain my allowance" (015 / DASH-4) sits below the card, always visible
- * while the card is; tapping it expands the breakdown and the shared
- * AIAnalysisCard (pending / typed error + Retry / validated result) renders
- * inside the expanded body.
+ * "Explain my allowance" moved out of this card in plan 019 — the Dashboard's
+ * dedicated AskAiCard now owns all AI interaction. This card is purely the
+ * formula: tap the header to reveal the signed terms.
  */
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -18,22 +17,15 @@ import { Ionicons } from '@expo/vector-icons';
 import type { CashFlowBreakdownItem } from '@/engine/cashflow';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
-import { AIAnalysisCard, type AIAnalysisState } from '@/components/AIAnalysisCard';
 import { Card } from '@/components/ui/Card';
 
 export function FormulaCard({
   breakdown,
   safeSen,
-  onExplain,
-  ai,
 }: {
   /** Signed labelled terms from engine.cashFlowBreakdown (Σ = safeSen). */
   breakdown: CashFlowBreakdownItem[];
   safeSen: number;
-  /** "Explain my allowance" → 015: start a fresh analysis (guarded upstream). */
-  onExplain(): void;
-  /** The analysis UI state (015) — rendered inside the expanded card. */
-  ai: AIAnalysisState;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -81,25 +73,8 @@ export function FormulaCard({
               {formatSen(safeSen)}
             </Text>
           </View>
-
-          <AIAnalysisCard {...ai} />
         </View>
       ) : null}
-
-      <Pressable
-        onPress={() => {
-          // The analysis lives inside the expanded card — reveal it (015).
-          setExpanded(true);
-          onExplain();
-        }}
-        style={({ pressed }) => [styles.explainButton, pressed && styles.pressed]}
-        accessibilityRole="button"
-        accessibilityLabel="Explain my allowance"
-        testID="explain-allowance-button"
-      >
-        <Ionicons name="sparkles-outline" size={16} color={colors.text} />
-        <Text style={styles.explainLabel}>Explain my allowance</Text>
-      </Pressable>
     </Card>
   );
 }
@@ -143,17 +118,4 @@ const styles = StyleSheet.create({
   },
   equalsLabel: { fontSize: typography.body, fontWeight: '700', color: colors.text },
   equalsAmount: { fontSize: typography.emphasis, fontWeight: '800', color: colors.accent, fontVariant: moneyFontVariant, flexShrink: 1, marginLeft: spacing.md },
-  explainButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.accentSoft,
-    borderRadius: 999,
-    minHeight: 44,
-    paddingVertical: spacing.md,
-    marginTop: spacing.xs,
-  },
-  pressed: { opacity: 0.75 },
-  explainLabel: { fontSize: typography.body, fontWeight: '700', color: colors.accent },
 });

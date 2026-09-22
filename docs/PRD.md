@@ -57,7 +57,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 4. **Create a commitment** — Commitments → new → name, type, total/amount, frequency (monthly or one-time), dates → app derives the payment schedule → mark payments paid as they happen (each paid payment records an expense in **Debt / Repayment**).
 5. **Understand obligations** — Commitments → "Analyze my debt" → app computes upcoming-payment totals, AI explains them.
 6. **Understand spending** — Analytics → month view → "Analyze my spending" → app computes the numbers, AI interprets them.
-7. **Understand allowance** — Cash Flow view → "Explain my allowance" → app shows the formula components, AI optionally narrates.
+7. **Understand allowance** — Cash Flow view → **"Ask about your money"** box (type any question, or tap a common prompt like "Explain my allowance") → app shows the formula components, AI answers using the computed numbers.
 
 ## 6. Confirmed Decisions (2026-09-01)
 
@@ -90,7 +90,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | DASH-1 | Show, for the current calendar month: available money, total spent, monthly budget, remaining budget, upcoming commitments (unpaid, due before next month start), safe-to-spend, daily allowance. |
 | DASH-2 | Show spending grouped by category for the current month (sorted by amount). |
 | DASH-3 | Allow expanding the cash-flow section into a component breakdown of the safe-to-spend formula (Available − Commitments − Remaining budget − Buffer). |
-| DASH-4 | Optional: "Explain my allowance" contextual AI action on the cash-flow section. |
+| DASH-4 | Optional: an **"Ask about your money"** contextual AI box on the cash-flow section — free-text question (capped) plus one-tap common prompts (e.g. "Explain my allowance", "Explain my next month commitment"), answered from the computed snapshot only. |
 | DASH-5 | Every dashboard value is computed deterministically by the financial engine (see §8). |
 
 ### 7.2 Expenses
@@ -142,7 +142,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | ID | Requirement |
 |---|---|
 | AI-1 | AI is accessed exclusively through an application-level `AIService` abstraction → the **active provider** (`GeminiProvider` or `DeepSeekProvider`) → provider API. UI never talks to a provider directly. |
-| AI-2 | AI actions available where context exists: Commitments → analyze debt; Analytics → analyze spending; Cash Flow → explain allowance. |
+| AI-2 | AI actions available where context exists: Commitments → analyze debt; Analytics → analyze spending; Cash Flow → ask about allowance/money (plan 019: a capped free-text question sent as a distinct field, never interpolated into the fixed prompt). |
 | AI-3 | AI receives only already-calculated structured financial data; it must not invent transactions, amounts, or trends. Its output is presentation, never authoritative financial data. |
 | AI-4 | When the network/API is unavailable, AI actions show a clear error and nothing else is blocked. |
 | AI-5 | Provider architecture: `GeminiProvider` and `DeepSeekProvider` implement the same capability interface (test connection, model discovery, generate); adding/switching providers never touches the financial engine or analysis UI. |

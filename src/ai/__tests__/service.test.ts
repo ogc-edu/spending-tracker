@@ -9,13 +9,18 @@ import { describe, expect, it } from '@jest/globals';
 import { createAIService, SYSTEM_PROMPTS } from '../AIService';
 import { FakeProvider } from '../providers/fake';
 import { AIUnavailableError } from '../errors';
+import { MAX_POINTS, MAX_QUESTION_CHARS } from '../types';
 import type {
   AIErrorReason,
+  AIProvider,
   AIProviderName,
   AllowanceSnapshot,
   AIContext,
+  AskSnapshot,
   DebtSnapshot,
+  ModelInfo,
   SpendingSnapshot,
+  TestResult,
 } from '../types';
 
 const debtSnapshot: DebtSnapshot = {
@@ -56,15 +61,36 @@ const allowanceSnapshot: AllowanceSnapshot = {
   hasBudget: true,
 };
 
+const askSnapshot: AskSnapshot = {
+  month: '2026-08',
+  monthLabel: 'August 2026',
+  availableSen: 500_000,
+  spentSen: 300_000,
+  hasBudget: true,
+  budgetSen: 600_000,
+  remainingBudgetSen: 300_000,
+  bufferSen: 50_000,
+  safeSen: 250_000,
+  dailyAllowanceSen: 8_333,
+  daysRemaining: 30,
+  deficit: false,
+  upcomingThisMonthSen: 200_000,
+  upcomingThisMonth: [{ name: 'Rent', dueDate: '2026-08-25', amountSen: 200_000 }],
+  nextMonthSen: 120_000,
+  nextMonth: [{ name: 'Phone', dueDate: '2026-09-05', amountSen: 120_000 }],
+  topCategories: [{ name: 'Food', amountSen: 120_000 }],
+};
+
 const SNAPSHOTS: Record<AIContext, unknown> = {
   debt: debtSnapshot,
   spending: spendingSnapshot,
   allowance: allowanceSnapshot,
+  ask: askSnapshot,
 };
 
 /** Every snapshot is a pure, JSON-serializable DTO (plan §Requirements). */
 describe('snapshot serialization', () => {
-  it.each(['debt', 'spending', 'allowance'] as const)(
+  it.each(['debt', 'spending', 'allowance', 'ask'] as const)(
     '%s snapshot round-trips through JSON without loss',
     (context) => {
       const snapshot = SNAPSHOTS[context];
@@ -77,6 +103,7 @@ describe('prompt registry', () => {
   it('has a fixed template for every context', () => {
     expect(Object.keys(SYSTEM_PROMPTS).sort()).toEqual([
       'allowance',
+      'ask',
       'debt',
       'spending',
     ]);
@@ -93,10 +120,13 @@ describe('prompt registry', () => {
     await svc.analyze('debt', debtSnapshot);
     await svc.analyze('spending', spendingSnapshot);
     await svc.analyze('allowance', allowanceSnapshot);
+    await svc.analyze('ask', askSnapshot, { question: 'How much can I spend?' });
 
-    const sent = [0, 1, 2].map((i) => fake.lastRequest).filter(Boolean);
+    const sent = [0, 1, 2, 3].map((i) => fake.lastRequest).filter(Boolean);
     for (const req of sent) {
       expect(req?.systemPrompt).toBe(SYSTEM_PROMPTS[req!.context]);
+      // The free-text question is NEVER part of the fixed instruction.
+      expect(req?.systemPrompt).not.toContain('How much can I spend');
     }
   });
 
@@ -183,6 +213,118 @@ describe('AIService.analyze — happy path', () => {
       svc.analyze('debt', { ...debtSnapshot, totalRemainingSen: 'oops' } as never),
     ).rejects.toThrow(TypeError);
     expect(fake.lastRequest).toBeUndefined();
+  });
+});
+
+describe('AIService.analyze — optional question (plan 019)', () => {
+  it('forwards the trimmed question as a distinct field', async () => {
+    const fake = new FakeProvider();
+    const svc = createAIService('fake', { fake });
+
+    await svc.analyze('ask', askSnapshot, { question: '  What is my next month commitment?  ' });
+
+    expect(fake.lastRequest?.question).toBe('What is my next month commitment?');
+    expect(fake.lastRequest?.context).toBe('ask');
+    expect(JSON.parse(fake.lastRequest!.snapshot)).toEqual(askSnapshot);
+  });
+
+  it('omits the field entirely when no question is supplied (013-015 unchanged)', async () => {
+    const fake = new FakeProvider();
+    const svc = createAIService('fake', { fake });
+
+    await svc.analyze('allowance', allowanceSnapshot);
+
+    expect(fake.lastRequest).not.toHaveProperty('question');
+  });
+
+  it('drops a whitespace-only question', async () => {
+    const fake = new FakeProvider();
+    const svc = createAIService('fake', { fake });
+
+    await svc.analyze('ask', askSnapshot, { question: '   ' });
+
+    expect(fake.lastRequest).not.toHaveProperty('question');
+  });
+
+  it('rejects a question over the length cap before calling the provider', async () => {
+    const fake = new FakeProvider();
+    const svc = createAIService('fake', { fake });
+
+    await expect(
+      svc.analyze('ask', askSnapshot, { question: 'x'.repeat(MAX_QUESTION_CHARS + 1) }),
+    ).rejects.toThrow(TypeError);
+    expect(fake.lastRequest).toBeUndefined();
+  });
+});
+
+describe('AIService.analyze — tolerant output parsing (plan 019 fix)', () => {
+  /** A provider that returns a fixed RAW string — exercises the facade parser. */
+  class RawProvider implements AIProvider {
+    readonly name = 'fake' as const;
+    constructor(private readonly raw: string) {}
+    async testConnection(): Promise<TestResult> {
+      return { ok: true };
+    }
+    async listModels(): Promise<ModelInfo[]> {
+      return [];
+    }
+    async analyze(): Promise<string> {
+      return this.raw;
+    }
+  }
+
+  const runRaw = (raw: string) =>
+    createAIService('fake', { fake: new RawProvider(raw) }).analyze('debt', debtSnapshot);
+
+  it('parses JSON wrapped in a markdown fence', async () => {
+    await expect(
+      runRaw('```json\n{"summary":"ok","points":["a","b"]}\n```'),
+    ).resolves.toEqual({ summary: 'ok', points: ['a', 'b'] });
+  });
+
+  it('extracts JSON from surrounding prose (e.g. a thought part)', async () => {
+    await expect(
+      runRaw('Let me think about this. {"summary":"ok","points":["a"]} Hope it helps.'),
+    ).resolves.toEqual({ summary: 'ok', points: ['a'] });
+  });
+
+  it('truncates more than MAX_POINTS points instead of failing the request', async () => {
+    const raw = JSON.stringify({
+      summary: 'ok',
+      points: Array.from({ length: MAX_POINTS + 3 }, (_, i) => `p${i}`),
+    });
+    const result = await runRaw(raw);
+    expect(result.points).toHaveLength(MAX_POINTS);
+    expect(result.summary).toBe('ok');
+  });
+
+  it('accepts points returned as a single string', async () => {
+    await expect(runRaw('{"summary":"ok","points":"only one"}')).resolves.toEqual({
+      summary: 'ok',
+      points: ['only one'],
+    });
+  });
+
+  it('unwraps a single-element array-wrapped object', async () => {
+    await expect(runRaw('[{"summary":"ok","points":["a"]}]')).resolves.toEqual({
+      summary: 'ok',
+      points: ['a'],
+    });
+  });
+
+  it('still rejects a missing points list (012 shape contract preserved)', async () => {
+    await expect(runRaw('{"summary":"ok"}')).rejects.toMatchObject({
+      reason: 'invalidResponse',
+    });
+  });
+
+  it('still rejects genuinely invalid output', async () => {
+    await expect(runRaw('not json at all')).rejects.toMatchObject({
+      reason: 'invalidResponse',
+    });
+    await expect(runRaw('{"points":["a"]}')).rejects.toMatchObject({
+      reason: 'invalidResponse',
+    });
   });
 });
 

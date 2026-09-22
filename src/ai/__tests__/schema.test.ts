@@ -8,6 +8,7 @@ import { describe, expect, it } from '@jest/globals';
 import {
   AIResultSchema,
   AllowanceSnapshotSchema,
+  AskSnapshotSchema,
   DebtSnapshotSchema,
   SpendingSnapshotSchema,
 } from '../schema';
@@ -216,5 +217,54 @@ describe('AllowanceSnapshotSchema', () => {
         remainingBudgetSen: 0,
       }).success,
     ).toBe(true);
+  });
+});
+
+/** Hand-computed ask snapshot fixture (plan 019). */
+const ask = {
+  month: '2026-08',
+  monthLabel: 'August 2026',
+  availableSen: 500_000,
+  spentSen: 300_000,
+  hasBudget: true,
+  budgetSen: 600_000,
+  remainingBudgetSen: 300_000,
+  bufferSen: 50_000,
+  safeSen: 250_000,
+  dailyAllowanceSen: 8_333,
+  daysRemaining: 30,
+  deficit: false,
+  upcomingThisMonthSen: 200_000,
+  upcomingThisMonth: [{ name: 'Rent', dueDate: '2026-08-25', amountSen: 200_000 }],
+  nextMonthSen: 120_000,
+  nextMonth: [{ name: 'Phone', dueDate: '2026-09-05', amountSen: 120_000 }],
+  topCategories: [{ name: 'Food', amountSen: 120_000 }],
+};
+
+describe('AskSnapshotSchema', () => {
+  it('accepts the ask fixture', () => {
+    expect(AskSnapshotSchema.safeParse(ask).success).toBe(true);
+  });
+
+  it('accepts a null budgetSen (no overall budget)', () => {
+    expect(AskSnapshotSchema.safeParse({ ...ask, budgetSen: null }).success).toBe(true);
+  });
+
+  it('rejects a missing nextMonth (the shape is fixed)', () => {
+    const { nextMonth: _omit, ...rest } = ask;
+    expect(AskSnapshotSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it('rejects a malformed commitment due date', () => {
+    expect(
+      AskSnapshotSchema.safeParse({
+        ...ask,
+        nextMonth: [{ name: 'Phone', dueDate: '05/09/2026', amountSen: 1 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a non-integer sen', () => {
+    expect(AskSnapshotSchema.safeParse({ ...ask, availableSen: 1.5 }).success).toBe(false);
   });
 });

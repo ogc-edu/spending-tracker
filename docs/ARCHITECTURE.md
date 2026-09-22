@@ -141,19 +141,19 @@ Screen (Dashboard) → CashFlowService.snapshot(now)
   → typed snapshot {available, spent, budget, remaining, upcoming, safe, daily, breakdown[{label, amount}]}
 ```
 
-The snapshot is what the UI renders and what "Explain my allowance" sends to AI (with the formula's components).
+The snapshot is what the UI renders and what the Dashboard **"Ask about your money"** box sends to AI (mapped to the ask payload, with the formula's components and next month's commitments).
 
 ## 9. AI Service
 
 ```ts
 interface AIService {
-  analyze(context: "debt" | "spending" | "allowance", snapshot: FinancialSnapshot): Promise<AIResult>;
+  analyze(context: "debt" | "spending" | "allowance" | "ask", snapshot: FinancialSnapshot, options?: { question?: string }): Promise<AIResult>;
 }
 ```
 
 - Two providers behind the abstraction (A14): `GeminiProvider` (**API-key auth** via `x-goog-api-key`, never OAuth — AQ-format keys live-verified 2026-09-01; v1beta REST) and `DeepSeekProvider` (OpenAI-compatible `chat/completions` + `GET /models` at `api.deepseek.com`, `Authorization: Bearer` — API shape verified from official docs; live check when a user key is added). Both implement `testConnection` / `listModels` / `generate`; **no models are hardcoded — discovery only**, with manual model-ID entry as the fallback.
-- **Input hygiene:** AI receives aggregates and category names only — raw free-text descriptions are **not** sent (reduces sensitive data leakage and prompt-injection surface).
-- **Output hygiene:** response parsed and Zod-validated (`AIResult {summary, points[]}` — presentation only, never merged into financial state). Failures map to a typed `AIUnavailableError` (offline/timeout/HTTP/key).
+- **Input hygiene:** AI receives aggregates and category names only — raw free-text descriptions are **not** sent (reduces sensitive data leakage and prompt-injection surface). Plan 019 adds one exception, made safe: the Dashboard **"Ask about your money"** box sends a user-typed `question` (≤ `MAX_QUESTION_CHARS`) as a **separate, length-capped field** after the snapshot. It is never interpolated into the fixed system instruction, which explicitly tells the model to treat the question as data — not as an instruction that changes the contract — and still forbids raw descriptions.
+- **Output hygiene:** response parsed and Zod-validated (`AIResult {summary, points[]}` — presentation only, never merged into financial state). The parser is tolerant of benign provider variance before validation: markdown fences/prose and single-object array wrappers are unwrapped, a string `points` is coerced, and a list longer than `MAX_POINTS` is truncated — only genuinely malformed output maps to `invalidResponse`. Failures map to a typed `AIUnavailableError` (offline/timeout/HTTP/key).
 - **Keys (BYOK):** user-supplied, per local user, in **expo-secure-store** (`key:{provider}:{userId}`) — never SQLite/Zustand/AsyncStorage; masked in UI; never logged or committed. No bundled key, no OAuth. Active provider + per-provider selected model persist as non-secret preferences in the `settings` table (010). **No automatic fallback** — the user explicitly picks the active provider; with none configured, AI actions show "No AI provider configured" and the app works fully.
 - Adding a future provider = new class behind `AIService`; the engine and UI never change (PRD AI-5).
 

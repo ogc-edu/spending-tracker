@@ -30,6 +30,8 @@ const base = (overrides: Partial<CashFlowSnapshot> = {}): CashFlowSnapshot => ({
   remainingSen: 184_000,
   upcomingSen: 80_000,
   upcomingItems: [],
+  nextMonthSen: 0,
+  nextMonthItems: [],
   bufferSen: 30_000,
   safeSen: 6_000,
   deficit: false,

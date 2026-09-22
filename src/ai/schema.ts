@@ -78,11 +78,43 @@ export const AllowanceSnapshotSchema = z.object({
   hasBudget: z.boolean(),
 });
 
+/* ------------------------------------------------------------------ *
+ * Ask context (plan 019) — aggregates + names only (A6).
+ * ------------------------------------------------------------------ */
+
+const AskCommitmentItemSchema = z.object({
+  name: z.string(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  amountSen: sen,
+});
+
+export const AskSnapshotSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  monthLabel: z.string(),
+  availableSen: sen,
+  spentSen: sen,
+  hasBudget: z.boolean(),
+  budgetSen: z.number().int().nullable(),
+  remainingBudgetSen: sen,
+  bufferSen: sen,
+  safeSen: sen,
+  dailyAllowanceSen: sen,
+  daysRemaining: z.number().int(),
+  deficit: z.boolean(),
+  upcomingThisMonthSen: sen,
+  upcomingThisMonth: z.array(AskCommitmentItemSchema),
+  nextMonthSen: sen,
+  nextMonth: z.array(AskCommitmentItemSchema),
+  // Category-name totals only — no free-text descriptions (A6).
+  topCategories: z.array(z.object({ name: z.string(), amountSen: sen })),
+});
+
 /** Snapshot schema for each context. */
 export const AIContextSnapshotSchema: Record<AIContext, z.ZodType> = {
   debt: DebtSnapshotSchema,
   spending: SpendingSnapshotSchema,
   allowance: AllowanceSnapshotSchema,
+  ask: AskSnapshotSchema,
 };
 
 export function getSnapshotSchema(context: AIContext): z.ZodType {

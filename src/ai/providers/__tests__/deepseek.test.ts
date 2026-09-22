@@ -184,6 +184,21 @@ describe('DeepSeekProvider.analyze', () => {
     expect(body.stream).toBe(false);
   });
 
+  it('appends the optional question to the user message, never the system message (plan 019)', async () => {
+    const { fetchImpl, calls } = mockFetch({
+      json: { choices: [{ message: { content: '{"summary":"x","points":[]}' } }] },
+    });
+    const provider = createDeepseekProvider(fetchImpl);
+
+    await provider.analyze(analyzeRequest({ question: 'How much can I spend?' }));
+
+    const body = bodyOf(calls[0]!) as { messages: { role: string; content: string }[] };
+    expect(body.messages[0]).toEqual({ role: 'system', content: analyzeRequest().systemPrompt });
+    expect(body.messages[0]?.content).not.toContain('How much can I spend');
+    expect(body.messages[1]?.content).toContain('Financial snapshot (JSON)');
+    expect(body.messages[1]?.content).toContain('User question: How much can I spend?');
+  });
+
   it('retries WITHOUT response_format on 400 and tolerantly extracts the JSON block', async () => {
     const fenced = '```json\n{"summary":"Fallback","points":["extracted"]}\n```';
     const { fetchImpl, calls } = mockFetch(

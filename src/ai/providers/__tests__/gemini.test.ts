@@ -264,9 +264,47 @@ describe('GeminiProvider.analyze', () => {
     expect(body.generationConfig.responseMimeType).toBe('application/json');
   });
 
+  it('appends the optional question as a DISTINCT part after the snapshot (plan 019)', async () => {
+    const { fetchImpl, calls } = mockFetch({
+      json: { candidates: [{ content: { parts: [{ text: '{"summary":"x","points":[]}' }] } }] },
+    });
+    const provider = createGeminiProvider(fetchImpl);
+
+    await provider.analyze(analyzeRequest({ question: 'What is my next month commitment?' }));
+
+    const body = bodyOf(calls[0]!) as {
+      contents: { parts: { text: string }[] }[];
+      systemInstruction: { parts: { text: string }[] };
+    };
+    const parts = body.contents[0]!.parts;
+    expect(parts[0]?.text).toContain('Financial snapshot (JSON)');
+    expect(parts[1]?.text).toBe('User question: What is my next month commitment?');
+    // Never interpolated into the fixed system instruction.
+    expect(body.systemInstruction.parts[0]?.text).not.toContain('next month commitment');
+  });
+
   it('joins multi-part candidate text', async () => {
     const { fetchImpl } = mockFetch({
       json: { candidates: [{ content: { parts: [{ text: '{"sum' }, { text: 'mary":"x","points":[]}' }] } }] },
+    });
+    const provider = createGeminiProvider(fetchImpl);
+    await expect(provider.analyze(analyzeRequest())).resolves.toBe('{"summary":"x","points":[]}');
+  });
+
+  it('drops thought parts and returns only the answer JSON (plan 019 fix)', async () => {
+    const { fetchImpl } = mockFetch({
+      json: {
+        candidates: [
+          {
+            content: {
+              parts: [
+                { text: 'Let me reason about the numbers… ', thought: true },
+                { text: '{"summary":"x","points":[]}' },
+              ],
+            },
+          },
+        ],
+      },
     });
     const provider = createGeminiProvider(fetchImpl);
     await expect(provider.analyze(analyzeRequest())).resolves.toBe('{"summary":"x","points":[]}');

@@ -82,6 +82,14 @@ export interface CashFlowSnapshot {
   upcomingSen: number;
   /** The upcoming slots, due-date ascending — the dashboard's "next 3" list. */
   upcomingItems: UpcomingSnapshotItem[];
+  /**
+   * Plan 019 — Σ unpaid commitment slots due in the NEXT calendar month
+   * (the ask box's "total commitment next month"). Derived from the same
+   * rows/engine call as `upcomingSen`; never rendered by the dashboard.
+   */
+  nextMonthSen: number;
+  /** The next calendar month's unpaid slots — ask-box context (plan 019). */
+  nextMonthItems: UpcomingSnapshotItem[];
   /** The safety buffer term (SET-1; default RM300 until edited). */
   bufferSen: number;
   /** available − upcoming − remaining − buffer; MAY be negative (deficit). */
@@ -160,6 +168,18 @@ export class CashFlowService {
       windowEnd,
     );
 
+    // Plan 019 — the NEXT calendar month's unpaid slots, for the ask box.
+    // Same rows, one window further out; filtering at `windowEnd` drops
+    // overdue/this-month slots, so `nextMonth` is exactly next month.
+    const [nextYear, nextMonthNumber] = windowEnd.split('-').map(Number);
+    const nextWindow = upcomingCommitments(
+      commitments as CommitmentLike[],
+      paidPayments,
+      nextMonthStartDate(nextYear as number, nextMonthNumber as number),
+    );
+    const nextMonthItems = nextWindow.items.filter((item) => item.dueDate >= windowEnd);
+    const nextMonthSen = nextMonthItems.reduce((sum, item) => sum + item.amountSen, 0);
+
     const safe = safeToSpend({
       availableSen,
       upcomingSen: upcoming.totalSen,
@@ -196,6 +216,16 @@ export class CashFlowService {
       remainingSen,
       upcomingSen: upcoming.totalSen,
       upcomingItems: upcoming.items
+        .map((item) => ({
+          commitmentId: item.commitment.id,
+          name: nameById.get(item.commitment.id) ?? String(item.commitment.id),
+          dueDate: item.dueDate,
+          amountSen: item.amountSen,
+          frequency: item.commitment.frequency,
+        }))
+        .sort(byDueDateAsc),
+      nextMonthSen,
+      nextMonthItems: nextMonthItems
         .map((item) => ({
           commitmentId: item.commitment.id,
           name: nameById.get(item.commitment.id) ?? String(item.commitment.id),

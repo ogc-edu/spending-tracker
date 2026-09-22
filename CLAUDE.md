@@ -61,6 +61,9 @@ Non-negotiable invariants — breaking one breaks tests and the migration story:
    (`src/utils/dates.ts`, incl. day-of-month clamping for months that lack the anchor day).
 6. **AI is an adapter.** It receives computed aggregates and category names only — never raw expense
    descriptions — and its Zod-validated output is presentation-only, never merged into financial state.
+   Plan 019 adds one exception, made safe: the Dashboard "Ask about your money" box sends a capped
+   user `question` as a **distinct field** after the snapshot; it is never interpolated into the fixed
+   system instruction (which tells the model to treat it as data, not as an instruction).
 
 ### Database
 

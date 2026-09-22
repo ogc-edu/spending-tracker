@@ -1,26 +1,26 @@
 /**
- * Plan 015 — Dashboard "Explain my allowance" (DASH-4) integration:
- *   - tap → analyze() receives the REAL mapped AllowanceSnapshot (exact
- *     payload, incl. hasBudget variants) with the fixed 'allowance' prompt;
- *   - deficit snapshot → canned explanation renders inside the expanded card;
+ * Plan 019 — Dashboard "Ask about your money" integration:
+ *   - typing a question → analyze() receives the REAL mapped AskSnapshot
+ *     (exact payload, incl. next-month commitments) with the fixed 'ask'
+ *     prompt and the question as a distinct field;
+ *   - tapping a suggestion submits it in one tap;
  *   - no-budget snapshot → hasBudget false (the AI never invents a budget);
- *   - offline / invalidKey → typed error + Retry → retry succeeds;
- *   - rapid double-tap → exactly ONE analyze call (pending guard).
- *
- * Plus the dashboard's CARD ORDER, which only shows up on the mounted screen.
+ *   - deficit snapshot → honest explanation renders in the shared card;
+ *   - offline / invalidKey → typed error + Retry (same question) → recovers;
+ *   - rapid double-submit → exactly ONE analyze call (pending guard);
+ *   - idle → input + suggestions visible, result card absent.
  *
  * Module-mock stack: DB/auth/router/repos are inert doubles; CashFlowService
  * returns a fixture snapshot; the real createAIService + real facade run with
  * a FakeProvider injected (source of canned output + lastRequest assertions).
- * The mapper is the REAL toAllowanceSnapshot — the payload asserted is the
- * production mapping, not a test double.
+ * The mapper is the REAL toAskSnapshot — the payload asserted is production.
  */
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { FakeProvider } from '@/ai/providers/fake';
 import { SYSTEM_PROMPTS } from '@/ai/AIService';
 import { AI_ERROR_LABELS } from '@/components/AIAnalysisCard';
-import { toAllowanceSnapshot } from '@/services/toAllowanceSnapshot';
+import { toAskSnapshot } from '@/services/toAskSnapshot';
 import {
   daysRemainingInMonthInclusive,
   monthEndDate,
@@ -179,8 +179,18 @@ async function renderDashboard(fixture: CashFlowSnapshot): Promise<ReactTestRend
   return tree;
 }
 
-async function pressExplain(tree: ReactTestRenderer): Promise<void> {
-  await press(tree, 'explain-allowance-button');
+/** Type a question into the ask box (controlled TextInput). */
+async function typeQuestion(tree: ReactTestRenderer, question: string): Promise<void> {
+  const input = byTestID(tree.root, 'ask-ai-input');
+  await act(async () => {
+    (input.props as { onChangeText: (t: string) => void }).onChangeText(question);
+  });
+}
+
+/** Type a question and press send, then flush the analyze promise. */
+async function askViaInput(tree: ReactTestRenderer, question: string): Promise<void> {
+  await typeQuestion(tree, question);
+  await press(tree, 'ask-ai-send');
   await act(async () => {}); // flush analyze + setState
 }
 
@@ -216,6 +226,8 @@ function buildFixture(overrides: Partial<CashFlowSnapshot> = {}): CashFlowSnapsh
     remainingSen: 184_000,
     upcomingSen: 80_000,
     upcomingItems: [],
+    nextMonthSen: 0,
+    nextMonthItems: [],
     bufferSen: 30_000,
     safeSen: 6_000,
     deficit: false,
@@ -260,6 +272,25 @@ function noBudgetFixture(): CashFlowSnapshot {
   });
 }
 
+/** Next month has a real commitment — the user's "total commitment next month". */
+function nextMonthFixture(): CashFlowSnapshot {
+  const now = new Date();
+  const nextMonth = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
+  const nextYear = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+  return buildFixture({
+    nextMonthSen: 120_000,
+    nextMonthItems: [
+      {
+        commitmentId: 7,
+        name: 'Car loan',
+        dueDate: `${nextYear}-${String(nextMonth).padStart(2, '0')}-05`,
+        amountSen: 120_000,
+        frequency: 'monthly',
+      },
+    ],
+  });
+}
+
 const DEFAULT_RESULT = {
   summary: 'Your safe-to-spend is RM60.00 for the rest of the month.',
   points: ['Upcoming commitments come first.', 'You can spend about RM2.00 a day.'],
@@ -269,37 +300,71 @@ const DEFAULT_RESULT = {
  * Tests
  * ------------------------------------------------------------------ */
 
-describe('Dashboard — Explain my allowance (plan 015)', () => {
+describe('Dashboard — Ask about your money (plan 019)', () => {
   beforeEach(() => {
     const fake = testFake();
     fake.setMode({ kind: 'success' });
     fake.setResult(DEFAULT_RESULT);
   });
 
-  it('sends the mapped AllowanceSnapshot (exact payload) with the fixed allowance prompt on tap', async () => {
+  // Spies wrap the shared fake across tests — restore between them so call
+  // counts are per-test.
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('sends the mapped AskSnapshot with the typed question and the fixed ask prompt', async () => {
     const fake = testFake();
     const fixture = buildFixture();
     const tree = await renderDashboard(fixture);
 
-    await pressExplain(tree);
+    await askViaInput(tree, 'How much can I spend this month?');
 
     const request = fake.lastRequest;
-    expect(request?.context).toBe('allowance');
-    expect(request?.systemPrompt).toBe(SYSTEM_PROMPTS.allowance);
+    expect(request?.context).toBe('ask');
+    expect(request?.systemPrompt).toBe(SYSTEM_PROMPTS.ask);
+    expect(request?.question).toBe('How much can I spend this month?');
 
-    const sent = JSON.parse(request!.snapshot) as ReturnType<typeof toAllowanceSnapshot>;
+    const sent = JSON.parse(request!.snapshot) as ReturnType<typeof toAskSnapshot>;
     // The production mapping, run with the same reference date — plus literal
     // pins so a silently-broken mapper cannot compound.
-    expect(sent).toEqual(toAllowanceSnapshot(fixture, new Date()));
+    expect(sent).toEqual(toAskSnapshot(fixture, new Date(), []));
     expect(sent.hasBudget).toBe(true);
-    expect(sent.remainingBudgetSen).toBe(184_000);
     expect(sent.safeSen).toBe(6_000);
     expect(sent.daysRemaining).toBeGreaterThan(0);
 
-    // The canned explanation renders inside the (auto-expanded) formula card.
+    // The canned explanation renders inside the ask card, labelled with the
+    // submitted question.
     expect(hasTestID(tree.root, 'ai-analysis-result')).toBe(true);
     expect(textOf(tree.root, 'ai-analysis-result')).toContain(DEFAULT_RESULT.summary);
-    expect(textOf(tree.root, 'ai-analysis-point-0')).toContain(DEFAULT_RESULT.points[0]);
+    expect(textOf(tree.root, 'ai-analysis-label')).toContain('How much can I spend this month?');
+  });
+
+  it('includes next month’s commitment total so "next month" questions are answerable', async () => {
+    const fake = testFake();
+    const tree = await renderDashboard(nextMonthFixture());
+
+    await askViaInput(tree, 'Tell me what is my total commitment next month');
+
+    const sent = JSON.parse(fake.lastRequest!.snapshot) as ReturnType<typeof toAskSnapshot>;
+    expect(sent.nextMonthSen).toBe(120_000);
+    expect(sent.nextMonth).toEqual([
+      expect.objectContaining({ name: 'Car loan', amountSen: 120_000 }),
+    ]);
+  });
+
+  it('submits a prebuilt suggestion in one tap', async () => {
+    const fake = testFake();
+    const spy = jest.spyOn(fake, 'analyze');
+    const tree = await renderDashboard(buildFixture());
+
+    // ASK_SUGGESTIONS[2] = "Explain my next month commitment".
+    await press(tree, 'ask-ai-suggestion-2');
+    await act(async () => {});
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(fake.lastRequest?.question).toBe('Explain my next month commitment');
+    expect(textOf(tree.root, 'ai-analysis-result')).toContain(DEFAULT_RESULT.summary);
   });
 
   it('passes hasBudget false with a zero remaining budget when no budget is set (UI "—")', async () => {
@@ -307,12 +372,12 @@ describe('Dashboard — Explain my allowance (plan 015)', () => {
     const fixture = noBudgetFixture();
     const tree = await renderDashboard(fixture);
 
-    await pressExplain(tree);
+    await askViaInput(tree, 'Explain my allowance');
 
-    const sent = JSON.parse(fake.lastRequest!.snapshot) as ReturnType<typeof toAllowanceSnapshot>;
+    const sent = JSON.parse(fake.lastRequest!.snapshot) as ReturnType<typeof toAskSnapshot>;
     expect(sent.hasBudget).toBe(false);
     expect(sent.remainingBudgetSen).toBe(0);
-    expect(sent).toEqual(toAllowanceSnapshot(fixture, new Date()));
+    expect(sent).toEqual(toAskSnapshot(fixture, new Date(), []));
     expect(hasTestID(tree.root, 'ai-analysis-result')).toBe(true);
   });
 
@@ -325,7 +390,7 @@ describe('Dashboard — Explain my allowance (plan 015)', () => {
     });
     const tree = await renderDashboard(deficitFixture());
 
-    await pressExplain(tree);
+    await askViaInput(tree, 'Explain my allowance');
 
     expect(JSON.parse(fake.lastRequest!.snapshot).safeSen).toBe(-10_000);
     expect(textOf(tree.root, 'ai-analysis-result')).toContain('negative');
@@ -333,33 +398,34 @@ describe('Dashboard — Explain my allowance (plan 015)', () => {
   });
 
   it.each(['offline', 'invalidKey'] as AIErrorReason[])(
-    'shows a typed %s error + Retry, and Retry recovers after the provider is reachable',
+    'shows a typed %s error + Retry, and Retry resends the same question then recovers',
     async (reason) => {
       const fake = testFake();
       fake.setMode({ kind: 'fail', reason });
       const tree = await renderDashboard(buildFixture());
 
-      await pressExplain(tree);
+      await askViaInput(tree, 'Am I on track this month?');
 
-      // Non-blocking inline error (AI-4): the card shows the SHARED fixed
-      // label for the typed reason (014 contract), never raw provider text.
+      // Non-blocking inline error (AI-4): the shared fixed label for the typed
+      // reason, never raw provider text.
       expect(hasTestID(tree.root, 'ai-analysis-error')).toBe(true);
       expect(textOf(tree.root, 'ai-analysis-error')).toContain(AI_ERROR_LABELS[reason]);
       expect(textOf(tree.root, 'ai-analysis-error')).not.toContain('FakeProvider failure');
       expect(hasTestID(tree.root, 'ai-analysis-pending')).toBe(false);
 
-      // Retry succeeds once the provider recovers.
+      // Retry succeeds once the provider recovers — with the SAME question.
       fake.setMode({ kind: 'success' });
       fake.setResult(DEFAULT_RESULT);
       await press(tree, 'ai-analysis-retry');
       await act(async () => {});
 
+      expect(fake.lastRequest?.question).toBe('Am I on track this month?');
       expect(hasTestID(tree.root, 'ai-analysis-error')).toBe(false);
       expect(textOf(tree.root, 'ai-analysis-result')).toContain(DEFAULT_RESULT.summary);
     },
   );
 
-  it('drops a rapid double-tap — exactly one analyze call while pending', async () => {
+  it('drops a rapid double-submit — exactly one analyze call while pending', async () => {
     const fake = testFake();
     const spy = jest.spyOn(fake, 'analyze');
     let release!: (raw: string) => void;
@@ -371,10 +437,11 @@ describe('Dashboard — Explain my allowance (plan 015)', () => {
     );
     const tree = await renderDashboard(buildFixture());
 
-    await press(tree, 'explain-allowance-button');
-    await press(tree, 'explain-allowance-button');
+    await typeQuestion(tree, 'Where is most of my money going?');
+    await press(tree, 'ask-ai-send');
+    await press(tree, 'ask-ai-send');
 
-    // The first request is still in flight — the second tap is ignored.
+    // The first request is still in flight — the second submit is ignored.
     expect(spy).toHaveBeenCalledTimes(1);
     expect(hasTestID(tree.root, 'ai-analysis-pending')).toBe(true);
 
@@ -384,18 +451,35 @@ describe('Dashboard — Explain my allowance (plan 015)', () => {
     expect(textOf(tree.root, 'ai-analysis-result')).toContain(DEFAULT_RESULT.summary);
   });
 
-  it('hides the AI card until the first tap (no idle placeholder)', async () => {
+  it('shows the input + suggestions while idle, with no result card', async () => {
     const tree = await renderDashboard(buildFixture());
+    expect(hasTestID(tree.root, 'ask-ai-card')).toBe(true);
+    expect(hasTestID(tree.root, 'ask-ai-input')).toBe(true);
+    expect(hasTestID(tree.root, 'ask-ai-suggestion-0')).toBe(true);
     expect(hasTestID(tree.root, 'ai-analysis-card')).toBe(false);
-    expect(hasTestID(tree.root, 'explain-allowance-button')).toBe(true);
+  });
+
+  it('disables send until the input has non-whitespace text', async () => {
+    const tree = await renderDashboard(buildFixture());
+    const sendOf = (): { disabled?: boolean } =>
+      (byTestID(tree.root, 'ask-ai-send').props as {
+        accessibilityState?: { disabled?: boolean };
+      }).accessibilityState ?? {};
+
+    expect(sendOf().disabled).toBe(true);
+    await typeQuestion(tree, '   ');
+    expect(sendOf().disabled).toBe(true);
+    await typeQuestion(tree, 'Why is my allowance low?');
+    expect(sendOf().disabled).toBe(false);
   });
 });
+
 /* ------------------------------------------------------------------ *
  * Card order — committed/spent money first, derived guidance after.
  * ------------------------------------------------------------------ */
 
 describe('Dashboard card order', () => {
-  it('renders hero → upcoming → by category → safe-to-spend → formula → budget bar', async () => {
+  it('renders hero → upcoming → by category → safe-to-spend → formula → ask → budget bar', async () => {
     const tree = await renderDashboard(
       buildFixture({
         categorySummary: [
@@ -411,6 +495,7 @@ describe('Dashboard card order', () => {
       'category-summary',
       'safe-to-spend',
       'formula-card',
+      'ask-ai-card',
       'budget-bar',
     ];
     const rendered = tree.root

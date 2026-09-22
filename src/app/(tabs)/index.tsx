@@ -32,10 +32,10 @@ import type { Category } from '@/db/schema';
 import { CashFlowService, type CashFlowSnapshot } from '@/services/CashFlowService';
 import { CategoryService } from '@/services/CategoryService';
 import { AiConfigService, aiServiceOptions } from '@/services/AiConfigService';
-import { toAllowanceSnapshot } from '@/services/toAllowanceSnapshot';
+import { toAskSnapshot } from '@/services/toAskSnapshot';
 import { createAIService } from '@/ai/AIService';
 import { AIUnavailableError, toAIError } from '@/ai/errors';
-import type { AIResult } from '@/ai/types';
+import type { AIResult, AskSnapshot } from '@/ai/types';
 import { formatDayLabel, nextMonthStartDate } from '@/utils/dates';
 import { colors, spacing } from '@/theme';
 import { EmptyState } from '@/components/EmptyState';
@@ -46,13 +46,18 @@ import { useUiStore } from '@/store/uiStore';
 import { HeroCard } from '@/components/dashboard/HeroCard';
 import { SafeToSpendCard } from '@/components/dashboard/SafeToSpendCard';
 import { FormulaCard } from '@/components/dashboard/FormulaCard';
+import { AskAiCard } from '@/components/dashboard/AskAiCard';
 import { UpcomingList } from '@/components/dashboard/UpcomingList';
 import { BudgetBar } from '@/components/dashboard/BudgetBar';
 import { CategorySummary } from '@/components/dashboard/CategorySummary';
+import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/** Retry is a no-op while there is nothing to retry (idle/pending/result). */
+const NOOP_RETRY = (): void => {};
 
 export default function DashboardScreen() {
   const { authService } = useAuth();
@@ -91,11 +96,14 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // "Explain my allowance" UI state (015) — pending / typed error / result.
+  // "Ask about your money" UI state (019) — pending / typed error / result,
+  // plus the exact question + payload captured at submit time for Retry.
   const [aiPending, setAiPending] = useState(false);
   const [aiError, setAiError] = useState<AIUnavailableError | null>(null);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
-  // Pending guard for rapid taps: one request in flight per snapshot (013/015
+  const [aiQuestion, setAiQuestion] = useState<string | null>(null);
+  const [aiPayload, setAiPayload] = useState<AskSnapshot | null>(null);
+  // Pending guard for rapid submits: one request in flight per snapshot (013
   // behaviour — a double-tap must never fire a second analyze).
   const aiBusyRef = useRef(false);
 
@@ -134,31 +142,56 @@ export default function DashboardScreen() {
   }, [load]);
 
   /**
-   * "Explain my allowance" (015 / DASH-4): map the CURRENT snapshot (010) to
-   * the allowance payload — no recomputation — and dispatch to the active
-   * provider via AIService (012/013). The pending guard drops rapid
-   * double-taps: only one request may be in flight at a time.
+   * "Ask about your money" (019 / DASH-4): map the CURRENT snapshot (010) to
+   * the ask payload at submit time — no recomputation — and dispatch to the
+   * active provider via AIService (012/013) with the user's question. The
+   * pending guard drops rapid double-submits: only one request in flight.
    */
-  const explainAllowance = useCallback(async () => {
-    if (aiBusyRef.current) return;
-    if (!snapshot || !snapshotAt) return;
-    aiBusyRef.current = true;
-    setAiPending(true);
-    setAiError(null);
-    setAiResult(null);
-    try {
-      const allowance = toAllowanceSnapshot(snapshot, snapshotAt);
-      const result = await aiService.analyze('allowance', allowance);
-      setAiResult(result);
-    } catch (err: unknown) {
-      // analyze() already throws typed AIUnavailableError; toAIError keeps it
-      // typed if anything unexpected slips through (012 contract).
-      setAiError(toAIError(err));
-    } finally {
-      aiBusyRef.current = false;
-      setAiPending(false);
-    }
-  }, [aiService, snapshot, snapshotAt]);
+  const runAsk = useCallback(
+    async (question: string, payload: AskSnapshot) => {
+      if (aiBusyRef.current) return;
+      aiBusyRef.current = true;
+      setAiPending(true);
+      setAiError(null);
+      setAiResult(null);
+      setAiQuestion(question);
+      setAiPayload(payload);
+      try {
+        const result = await aiService.analyze('ask', payload, { question });
+        setAiResult(result);
+      } catch (err: unknown) {
+        // analyze() already throws typed AIUnavailableError; toAIError keeps it
+        // typed if anything unexpected slips through (012 contract).
+        setAiError(toAIError(err));
+      } finally {
+        aiBusyRef.current = false;
+        setAiPending(false);
+      }
+    },
+    [aiService],
+  );
+
+  const onAsk = useCallback(
+    (question: string) => {
+      if (!snapshot || !snapshotAt) return;
+      void runAsk(question, toAskSnapshot(snapshot, snapshotAt, categories));
+    },
+    [snapshot, snapshotAt, categories, runAsk],
+  );
+
+  const onAskRetry = useCallback(() => {
+    if (aiQuestion && aiPayload) void runAsk(aiQuestion, aiPayload);
+  }, [aiQuestion, aiPayload, runAsk]);
+
+  const aiState = useMemo(
+    () => ({
+      pending: aiPending,
+      error: aiError,
+      result: aiResult,
+      onRetry: aiError ? onAskRetry : NOOP_RETRY,
+    }),
+    [aiPending, aiError, aiResult, onAskRetry],
+  );
 
   const refreshControl = (
     <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />
@@ -209,7 +242,7 @@ export default function DashboardScreen() {
   const goToAnalytics = () => router.navigate('/analytics' as never);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} refreshControl={refreshControl} testID="dashboard-screen">
+    <KeyboardAwareScrollView contentContainerStyle={styles.content} refreshControl={refreshControl} testID="dashboard-screen">
       {error ? <InlineError message={error} testID="dashboard-error" /> : null}
 
       {noData ? (
@@ -258,8 +291,13 @@ export default function DashboardScreen() {
       <FormulaCard
         breakdown={snapshot.breakdown}
         safeSen={snapshot.safeSen}
-        onExplain={() => void explainAllowance()}
-        ai={{ pending: aiPending, error: aiError, result: aiResult, onRetry: () => void explainAllowance() }}
+      />
+
+      <AskAiCard
+        ai={aiState}
+        label={aiQuestion ? `You asked: ${aiQuestion}` : null}
+        onSubmit={onAsk}
+        disabled={snapshot === null}
       />
 
       <BudgetBar
@@ -275,7 +313,7 @@ export default function DashboardScreen() {
 
       {/* Plan 018: the dashboard's most common write — record an expense. */}
       <Fab onPress={() => router.push('/expenses/new' as never)} label="Add expense" testID="dashboard-add-expense-fab" />
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

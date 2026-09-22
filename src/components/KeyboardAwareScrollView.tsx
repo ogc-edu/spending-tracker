@@ -30,6 +30,7 @@ import {
   useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type RefreshControlProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -96,6 +97,8 @@ export interface KeyboardAwareScrollViewProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
+  /** Passed straight to the inner ScrollView (dashboard pull-to-refresh). */
+  refreshControl?: React.ReactElement<RefreshControlProps>;
   testID?: string;
 }
 
@@ -103,6 +106,7 @@ export function KeyboardAwareScrollView({
   children,
   style,
   contentContainerStyle,
+  refreshControl,
   testID,
 }: KeyboardAwareScrollViewProps) {
   const { height: windowHeight } = useWindowDimensions();
@@ -159,6 +163,7 @@ export function KeyboardAwareScrollView({
           // Taps on chips/buttons work on the first tap while the keyboard is up.
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          refreshControl={refreshControl}
           testID={testID}
         >
           {children}

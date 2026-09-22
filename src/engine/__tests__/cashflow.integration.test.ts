@@ -329,6 +329,26 @@ describe('CashFlowService.snapshot — PRD §8.5 canonical fixture', () => {
       { categoryId: f.categories[2]!.id, totalSen: 16000 },
     ]);
   });
+
+  it('derives the NEXT calendar month\u2019s unpaid slots for the ask box (plan 019)', async () => {
+    const f = await makeFixture();
+    await seedCanonicalFixture(f);
+    const snap = await f.cashflow.snapshot(now);
+
+    // October 2026: ongoing Rent (10-01, 50000) + the fixed Loan's second,
+    // still-unpaid installment (10-01, 60000). The one-time Phone bill does
+    // not recur, and every paid September slot is excluded.
+    expect(snap.nextMonthSen).toBe(110000);
+    expect(snap.nextMonthItems).toHaveLength(2);
+    // Both are due 2026-10-01; the tie order follows the repository's row
+    // order, so assert membership rather than a positional order.
+    expect(snap.nextMonthItems).toEqual(
+      expect.arrayContaining([
+        { commitmentId: expect.any(Number), name: 'Rent', dueDate: '2026-10-01', amountSen: 50000, frequency: 'monthly' },
+        { commitmentId: expect.any(Number), name: 'Loan', dueDate: '2026-10-01', amountSen: 60000, frequency: 'monthly' },
+      ]),
+    );
+  });
 });
 
 describe('CashFlowService.snapshot — deficit state', () => {

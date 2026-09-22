@@ -11,8 +11,8 @@
  * (fake / gemini / deepseek) can implement it without importing the facade.
  */
 
-/** Fixed set of contextual AI actions (PRD AI-2 / ARCH §9). */
-export type AIContext = 'debt' | 'spending' | 'allowance';
+/** Fixed set of contextual AI actions (PRD AI-2 / ARCH §9; 'ask' = plan 019). */
+export type AIContext = 'debt' | 'spending' | 'allowance' | 'ask';
 
 /** Providers behind the facade (AI-5). Only `fake` is real in plan 012. */
 export type AIProviderName = 'fake' | 'gemini' | 'deepseek';
@@ -36,6 +36,13 @@ export interface AIResult {
 /** Capped response size to keep the UI tight (plan Decisions). */
 export const MAX_SUMMARY_CHARS = 2000;
 export const MAX_POINTS = 5;
+
+/**
+ * Plan 019 — cap on the free-text question the dashboard ask box may send.
+ * The system instruction is fixed; the question is data supplied as its own
+ * user message, never interpolated into the prompt template.
+ */
+export const MAX_QUESTION_CHARS = 500;
 
 /* ------------------------------------------------------------------ *
  * Debt context — produced by CommitmentService (plan 008).
@@ -109,11 +116,57 @@ export interface AllowanceSnapshot {
   hasBudget: boolean;
 }
 
+/* ------------------------------------------------------------------ *
+ * Ask context — produced by the Dashboard ask box (plan 019).
+ * ------------------------------------------------------------------ */
+
+/** One commitment slot surfaced to the AI (name + due date + amount only). */
+export interface AskCommitmentItem {
+  name: string;
+  /** `YYYY-MM-DD`. */
+  dueDate: string;
+  amountSen: number;
+}
+
+/**
+ * Plan 019 — the dashboard "Ask about your money" payload. A superset of the
+ * allowance aggregates PLUS the next calendar month's unpaid commitment slots
+ * and category-name spend totals, so free-form questions ("what is my total
+ * commitment next month?") are answerable. Aggregates + names only — never a
+ * raw expense description (A6).
+ */
+export interface AskSnapshot {
+  /** `YYYY-MM` of the current month. */
+  month: string;
+  /** Display label, e.g. "September 2026". */
+  monthLabel: string;
+  availableSen: number;
+  spentSen: number;
+  hasBudget: boolean;
+  /** The overall budget amount, or null when none is set. */
+  budgetSen: number | null;
+  remainingBudgetSen: number;
+  bufferSen: number;
+  safeSen: number;
+  dailyAllowanceSen: number;
+  daysRemaining: number;
+  deficit: boolean;
+  /** Σ unpaid commitments due before next month (the dashboard's "upcoming"). */
+  upcomingThisMonthSen: number;
+  upcomingThisMonth: AskCommitmentItem[];
+  /** Σ unpaid commitment slots due in the NEXT calendar month. */
+  nextMonthSen: number;
+  nextMonth: AskCommitmentItem[];
+  /** Category-name spend totals for the current month (no descriptions). */
+  topCategories: TopCategory[];
+}
+
 /** Snapshot associated with each context. */
 export interface AIContextSnapshotMap {
   debt: DebtSnapshot;
   spending: SpendingSnapshot;
   allowance: AllowanceSnapshot;
+  ask: AskSnapshot;
 }
 
 /* ------------------------------------------------------------------ *
@@ -138,6 +191,12 @@ export interface AIAnalyzeRequest {
    * real providers reject its absence at generate time.
    */
   modelId?: string;
+  /**
+   * Plan 019 — an optional free-text question from the user (≤
+   * MAX_QUESTION_CHARS). Providers render it as a DISTINCT user message after
+   * the snapshot; it is never interpolated into the fixed system instruction.
+   */
+  question?: string;
 }
 
 /* ------------------------------------------------------------------ *

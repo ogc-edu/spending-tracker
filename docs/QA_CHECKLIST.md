@@ -113,7 +113,7 @@ locally) · ⚠️ deviation (explained inline)
 | Step | Expected | Status |
 |---|---|---|
 | Configure a Gemini key (Settings → AI Provider → Gemini → save key → Test Connection). | "Gemini · key configured" status line; Test Connection distinguishes invalid key/quota/model/network. | |
-| Commitments → "Analyze my debt"; Analytics → "Analyze my spending"; Dashboard → "Explain my allowance". | Card shows pending → validated result (summary + points) built only from supplied snapshot values. | |
+| Commitments → "Analyze my debt"; Analytics → "Analyze my spending"; Dashboard → "Ask about your money" (type a question, or tap a common prompt). | Card shows pending → validated result (summary + points) built only from supplied snapshot values, labelled with the asked question. | |
 | No provider configured. | AI action shows "No AI provider configured" inline; everything else works. | |
 
 ## DoD 16 — Every non-AI feature with network disabled; AI shows a clear error
