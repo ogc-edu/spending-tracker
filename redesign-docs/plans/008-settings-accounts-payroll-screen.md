@@ -2,13 +2,14 @@
 
 | | |
 |---|---|
-| **Status** | Ready for Session |
+| **Status** | Completed |
 | **Version** | 1.0 |
 | **Date** | 2026-10-06 |
+| **Completed At** | 2026-10-06 |
 | **Phase** | Phase 3: Screen Overhaul (Screen 6) |
 | **Dependencies** | 001 (Tokens), 002 (Primitives) |
 | **Source Specification** | `ui-redesign.pdf` (§ Screen 6: Settings, Accounts, and Payroll, pp. 17–18) |
-| **Target Files** | `src/app/(tabs)/settings.tsx`, `src/components/AccountRow.tsx`, `src/components/AccountModal.tsx` |
+| **Target Files** | `src/app/(tabs)/settings.tsx`, `src/components/AccountRow.tsx` |
 
 ---
 

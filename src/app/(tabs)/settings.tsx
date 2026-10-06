@@ -16,6 +16,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
 import type { Account, Category } from '@/db/schema';
@@ -33,7 +34,6 @@ import { PayrollAllocationSheet } from '@/components/PayrollAllocationSheet';
 import { CategoryAddSheet } from '@/components/CategoryAddSheet';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { List } from '@/components/ui/List';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/Card';
 import { ProviderRow, maskKeySuffix } from '@/components/ai/ProviderRow';
@@ -53,6 +53,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { user, logout, authService } = useAuth();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
 
   // Services built once auth is available; repositories() needs the initialized DB.
   const services = useMemo(() => {
@@ -354,10 +355,10 @@ export default function SettingsScreen() {
   return (
     <KeyboardAwareScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: Math.max(spacing.xxl, insets.bottom + spacing.xxl) }]}
       testID="settings-screen"
     >
-        <Text style={styles.title}>Settings</Text>
+      <Text style={styles.title}>Settings</Text>
 
       {/* Account 003: signed-in user + logout. */}
       {user ? (
@@ -378,101 +379,126 @@ export default function SettingsScreen() {
         </Card>
       ) : null}
 
-      {/* Plan 004: Accounts section. */}
-      <SectionHeader title="Accounts" />
+      {/* Plan 008: Connected Accounts Stack */}
+      <View testID="accounts-stack" className="mb-2">
+        <SectionHeader title="Connected Accounts" />
 
-      {accountsError ? (
-        <Text style={styles.errorText} testID="accounts-error">
-          {accountsError}
-        </Text>
-      ) : null}
+        {accountsError ? (
+          <Text style={styles.errorText} testID="accounts-error">
+            {accountsError}
+          </Text>
+        ) : null}
 
-      {accounts.length === 0 && !accountsError ? (
-        <Text style={styles.empty}>No accounts yet — add one to start tracking money.</Text>
-      ) : (
-        <List testID="settings-accounts-list">
-          {accounts.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              onPress={() => setEditingAccount(account)}
-              onDelete={() => handleDelete(account)}
-            />
-          ))}
-        </List>
-      )}
+        {accounts.length === 0 && !accountsError ? (
+          <Text style={styles.empty} className="px-4">No accounts yet — add one to start tracking money.</Text>
+        ) : (
+          <View testID="settings-accounts-list" className="px-4 mb-2">
+            {accounts.map((account) => (
+              <AccountRow
+                key={account.id}
+                account={account}
+                onPress={() => setEditingAccount(account)}
+                onDelete={() => handleDelete(account)}
+              />
+            ))}
+          </View>
+        )}
 
-      {showForm ? (
-        <AccountForm onSubmit={handleAdd} submitting={submitting} onCancel={() => setShowForm(false)} />
-      ) : (
-        <Pressable
-          onPress={() => setShowForm(true)}
-          style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-          testID="add-account-button"
-        >
-          <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
-          <Text style={styles.addButtonLabel}>Add account</Text>
-        </Pressable>
-      )}
+        {showForm ? (
+          <View className="px-4">
+            <AccountForm onSubmit={handleAdd} submitting={submitting} onCancel={() => setShowForm(false)} />
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => setShowForm(true)}
+            style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            testID="add-account-button"
+          >
+            <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
+            <Text style={styles.addButtonLabel}>Add account</Text>
+          </Pressable>
+        )}
 
-      {accounts.some((a) => a.type === 'credit_card') ? (
-        <Text style={styles.note}>Credit-card accounts show the amount owed and count negatively.</Text>
-      ) : null}
+        {accounts.some((a) => a.type === 'credit_card') ? (
+          <Text style={styles.note} className="px-4">Credit-card accounts show the amount owed and count negatively.</Text>
+        ) : null}
+      </View>
 
-      {/* Payroll in — the standing split, and the button that applies it. */}
+      {/* Plan 008: Standing Payroll Allocation Engine */}
       <SectionHeader
-        title="Payroll"
+        title="Standing Payroll"
         note="Split each payroll across your accounts, then press Payroll in when you are paid — every account below is credited by its amount. Balances move; your expense history does not."
       />
 
       {payroll && payroll.lines.length > 0 ? (
-        <View style={styles.card}>
-          {payroll.lines.map((line) => (
-            <View key={line.allocation.id} style={styles.payrollRow} testID={`payroll-line-${line.account.id}`}>
-              <Pressable
-                onPress={() =>
-                  setPayrollSheet({
-                    mode: 'edit',
-                    accountId: line.account.id,
-                    amountSen: line.allocation.amountSen,
-                  })
-                }
-                style={({ pressed }) => [styles.payrollRowMain, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`${line.account.name}, ${formatSen(line.allocation.amountSen)} per payroll`}
-                accessibilityHint="Edit this allocation"
-                testID={`payroll-line-edit-${line.account.id}`}
-              >
-                <Text style={styles.payrollName} numberOfLines={1}>
-                  {line.account.name}
-                </Text>
-                <Text style={styles.payrollAmount}>{formatSen(line.allocation.amountSen)}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void handleRemoveAllocation(line.account.id)}
-                style={({ pressed }) => [styles.payrollRemove, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${line.account.name} from the payroll split`}
-                testID={`payroll-line-remove-${line.account.id}`}
-              >
-                <Ionicons name="close-circle-outline" size={18} color={colors.muted} />
-              </Pressable>
+        <View className="px-4 mb-2">
+          {/* Split visualizer: percentage pills showing target distribution */}
+          {payroll.totalSen > 0 ? (
+            <View className="flex-row flex-wrap gap-1.5 mb-3">
+              {payroll.lines.map((line) => {
+                const pct = Math.round((line.allocation.amountSen / payroll.totalSen) * 100);
+                return (
+                  <View
+                    key={line.allocation.id}
+                    className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-full px-2.5 py-0.5 flex-row items-center gap-1"
+                  >
+                    <Text className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                      {line.account.name}: {pct}%
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
-          ))}
-          <View style={styles.payrollTotalRow}>
-            <Text style={styles.payrollTotalLabel}>Total per payroll</Text>
-            <Text
-              style={styles.payrollTotalValue}
-              accessibilityLabel={`Total per payroll, ${spokenMoneyLabel(payroll.totalSen)}`}
-              testID="payroll-total"
-            >
-              {formatSen(payroll.totalSen)}
-            </Text>
+          ) : null}
+
+          <View style={styles.card}>
+            {payroll.lines.map((line) => (
+              <View key={line.allocation.id} style={styles.payrollRow} testID={`payroll-line-${line.account.id}`}>
+                <Pressable
+                  onPress={() =>
+                    setPayrollSheet({
+                      mode: 'edit',
+                      accountId: line.account.id,
+                      amountSen: line.allocation.amountSen,
+                    })
+                  }
+                  style={({ pressed }) => [styles.payrollRowMain, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${line.account.name}, ${formatSen(line.allocation.amountSen)} per payroll`}
+                  accessibilityHint="Edit this allocation"
+                  testID={`payroll-line-edit-${line.account.id}`}
+                >
+                  <Text style={styles.payrollName} numberOfLines={1}>
+                    {line.account.name}
+                  </Text>
+                  <Text style={styles.payrollAmount}>{formatSen(line.allocation.amountSen)}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleRemoveAllocation(line.account.id)}
+                  style={({ pressed }) => [styles.payrollRemove, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${line.account.name} from the payroll split`}
+                  testID={`payroll-line-remove-${line.account.id}`}
+                >
+                  <Ionicons name="close-circle-outline" size={18} color={colors.muted} />
+                </Pressable>
+              </View>
+            ))}
+            <View style={styles.payrollTotalRow}>
+              <Text style={styles.payrollTotalLabel}>Total per payroll</Text>
+              <Text
+                style={styles.payrollTotalValue}
+                accessibilityLabel={`Total per payroll, ${spokenMoneyLabel(payroll.totalSen)}`}
+                testID="payroll-total"
+              >
+                {formatSen(payroll.totalSen)}
+              </Text>
+            </View>
           </View>
         </View>
       ) : (
-        <Text style={styles.empty} testID="payroll-empty">
+        <Text style={styles.empty} className="px-4" testID="payroll-empty">
           No allocations yet — add one to tell the app where your pay goes.
         </Text>
       )}
@@ -480,7 +506,7 @@ export default function SettingsScreen() {
       {/* Two compact pills rather than full-width slabs: the deposit moves real
           money, so it should take a deliberate tap, not a thumb brushing a
           banner. It still confirms before anything is written. */}
-      <View style={styles.payrollActions}>
+      <View style={styles.payrollActions} className="px-4">
         <Pressable
           onPress={() => setPayrollSheet({ mode: 'add' })}
           style={({ pressed }) => [styles.payrollAddButton, pressed && styles.pressed]}
@@ -492,30 +518,33 @@ export default function SettingsScreen() {
           <Text style={styles.payrollAddLabel}>Add allocation</Text>
         </Pressable>
 
-        <Pressable
-          onPress={() => setConfirmPayroll(true)}
-          disabled={payrollDisabled}
-          style={({ pressed }) => [
-            styles.payrollButton,
-            payrollDisabled && styles.buttonDisabled,
-            pressed && styles.pressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={
-            payroll && payroll.lines.length > 0
-              ? `Payroll in, add ${formatSen(payroll.totalSen)} across your accounts`
-              : 'Payroll in, no allocations yet'
-          }
-          accessibilityHint="Asks you to confirm first"
-          testID="payroll-in-button"
-        >
-          <Ionicons name="download-outline" size={16} color={colors.surface} />
-          <Text style={styles.payrollButtonLabel}>Payroll in</Text>
-        </Pressable>
+        {/* trigger-payroll-btn wraps payroll-in-button per plan 008 spec */}
+        <View testID="trigger-payroll-btn">
+          <Pressable
+            onPress={() => setConfirmPayroll(true)}
+            disabled={payrollDisabled}
+            style={({ pressed }) => [
+              styles.payrollButton,
+              payrollDisabled && styles.buttonDisabled,
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              payroll && payroll.lines.length > 0
+                ? `Payroll in, add ${formatSen(payroll.totalSen)} across your accounts`
+                : 'Payroll in, no allocations yet'
+            }
+            accessibilityHint="Asks you to confirm first"
+            testID="payroll-in-button"
+          >
+            <Ionicons name="download-outline" size={16} color={colors.surface} />
+            <Text style={styles.payrollButtonLabel}>Payroll in</Text>
+          </Pressable>
+        </View>
       </View>
 
       {payroll?.lastRunAt ? (
-        <Text style={styles.note} testID="payroll-last-run">
+        <Text style={styles.note} className="px-4" testID="payroll-last-run">
           Last payroll in: {formatDDMMYYYY(toLocalDateString(new Date(payroll.lastRunAt)))}
         </Text>
       ) : null}
@@ -704,47 +733,50 @@ export default function SettingsScreen() {
         onCancel={() => setConfirmDeleteCats(false)}
       />
 
-      {/* Plan 013: AI Providers (BYOK — Gemini + DeepSeek). */}
-      <SectionHeader
-        title="AI Provider"
-        note="Bring your own API key to analyze your finances with AI. Keys are stored securely on this device and sent only to the provider."
-      />
-      {/* Plan 016 (SET-2): the AI status pills — key presence per provider (013's config). */}
-      <View style={styles.aiStatusRow}>
-        <Text
-          style={[styles.aiStatus, aiSuffixes.gemini !== null && styles.aiStatusConfigured]}
-          testID="settings-ai-status-gemini"
-        >
-          {aiStatusLabel('gemini', aiSuffixes.gemini !== null)}
-        </Text>
-        <Text
-          style={[styles.aiStatus, aiSuffixes.deepseek !== null && styles.aiStatusConfigured]}
-          testID="settings-ai-status-deepseek"
-        >
-          {aiStatusLabel('deepseek', aiSuffixes.deepseek !== null)}
+      {/* Plan 008: AI Provider Config — testID="ai-config-section" wrapper */}
+      <View testID="ai-config-section">
+        {/* Plan 013: AI Providers (BYOK — Gemini + DeepSeek). */}
+        <SectionHeader
+          title="AI Provider"
+          note="Bring your own API key to analyze your finances with AI. Keys are stored securely on this device and sent only to the provider."
+        />
+        {/* Plan 016 (SET-2): the AI status pills — key presence per provider (013's config). */}
+        <View style={styles.aiStatusRow}>
+          <Text
+            style={[styles.aiStatus, aiSuffixes.gemini !== null && styles.aiStatusConfigured]}
+            testID="settings-ai-status-gemini"
+          >
+            {aiStatusLabel('gemini', aiSuffixes.gemini !== null)}
+          </Text>
+          <Text
+            style={[styles.aiStatus, aiSuffixes.deepseek !== null && styles.aiStatusConfigured]}
+            testID="settings-ai-status-deepseek"
+          >
+            {aiStatusLabel('deepseek', aiSuffixes.deepseek !== null)}
+          </Text>
+        </View>
+        <ProviderRow
+          provider="gemini"
+          configured={aiSuffixes.gemini !== null}
+          suffix={aiSuffixes.gemini ?? null}
+          onPress={() => router.push('/settings/ai/gemini' as never)}
+        />
+        <ProviderRow
+          provider="deepseek"
+          configured={aiSuffixes.deepseek !== null}
+          suffix={aiSuffixes.deepseek ?? null}
+          onPress={() => router.push('/settings/ai/deepseek' as never)}
+        />
+        <Text style={styles.activeLabel}>Active AI provider</Text>
+        <ActiveProviderSelector
+          configured={configuredProviders}
+          active={aiActive}
+          onSelect={handleSelectActive}
+        />
+        <Text style={styles.note}>
+          Analysis actions use the active provider only — there is no automatic fallback.
         </Text>
       </View>
-      <ProviderRow
-        provider="gemini"
-        configured={aiSuffixes.gemini !== null}
-        suffix={aiSuffixes.gemini ?? null}
-        onPress={() => router.push('/settings/ai/gemini' as never)}
-      />
-      <ProviderRow
-        provider="deepseek"
-        configured={aiSuffixes.deepseek !== null}
-        suffix={aiSuffixes.deepseek ?? null}
-        onPress={() => router.push('/settings/ai/deepseek' as never)}
-      />
-      <Text style={styles.activeLabel}>Active AI provider</Text>
-      <ActiveProviderSelector
-        configured={configuredProviders}
-        active={aiActive}
-        onSelect={handleSelectActive}
-      />
-      <Text style={styles.note}>
-        Analysis actions use the active provider only — there is no automatic fallback.
-      </Text>
 
       <Pressable
         onPress={logout}
