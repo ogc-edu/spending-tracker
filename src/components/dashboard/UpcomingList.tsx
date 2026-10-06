@@ -1,158 +1,212 @@
 /**
- * UpcomingList (plan 010 DASH-1/10, PRD COM-5; restyled by plan 017) — the
- * next unpaid commitments due before next-month start: up to 3 slots plus a
- * total-due line. Items arrive from CashFlowService already sorted by due
- * date; names come from the DB rows (UpcomingSnapshotItem).
+ * UpcomingList (plan 010 DASH-1/10, redesigned Plan 003) — Upcoming commitments countdown tile:
+ * Next 2 maturing bills with countdown chips, quick-settle trigger,
+ * and a total due before next month line.
  *
- * Plan 017: per-row leading icon circles (per-type glyphs), and an OVERDUE
- * tone — a due date in the past gets the danger color + an "Overdue" badge,
- * mirroring the commitments tab's urgency language. The engine's snapshot
- * already carries the data; "overdue" here is the same presentation
- * comparison the commitments tab makes (dueDate < today, local strings).
- *
- * Empty state ("Nothing due before next month") is a first-class message, not
- * an error (plan §Edge cases).
+ * Plan 003 Bento redesign:
+ * - Upcoming commitments countdown tile with testID="upcoming-bills-card"
+ *   (and retaining upcoming-card, upcoming-empty, upcoming-total, upcoming-row-{item.commitmentId}).
+ * - Next 2 maturing bills with countdown chips and quick-settle trigger.
+ * - Overdue rows show the Overdue badge and danger styling.
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { UpcomingSnapshotItem } from '@/services/CashFlowService';
 import { formatDayLabel, todayLocal } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, typography } from '@/theme';
 import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { cn } from '@/lib/utils';
 
-/** Per-kind glyph for the leading circle (plan 017 — data from the snapshot). */
-const KIND_ICONS = {
-  monthly: 'repeat-outline',
-  one_time: 'flag-outline',
-} as const;
-const DEFAULT_KIND_ICON: keyof typeof Ionicons.glyphMap = 'calendar-outline';
+export interface UpcomingListProps {
+  /** Unpaid slots, due-date ascending — show up to 2 in the bento tile. */
+  items: UpcomingSnapshotItem[];
+  /** Σ of every item — the "total due" line. */
+  totalSen: number;
+  /** e.g. "01 Oct" — derived from next-month start by the screen. */
+  dueBeforeLabel: string;
+  /** Navigates to or triggers commitment settlement. */
+  onOpenCommitment(commitmentId: number): void;
+}
 
 export function UpcomingList({
   items,
   totalSen,
   dueBeforeLabel,
   onOpenCommitment,
-}: {
-  /** Unpaid slots, due-date ascending — show the first 3. */
-  items: UpcomingSnapshotItem[];
-  /** Σ of every item (incl. beyond the first 3) — the "total due" line. */
-  totalSen: number;
-  /** e.g. "01 Oct" — derived from next-month start by the screen. */
-  dueBeforeLabel: string;
-  /** Plan 018: rows navigate to the commitment (tap → detail). */
-  onOpenCommitment(commitmentId: number): void;
-}) {
+}: UpcomingListProps) {
   const today = todayLocal();
-  return (
-    <Card testID="upcoming-card">
-      <Text className="text-base font-bold text-foreground mb-2" style={styles.title}>Upcoming</Text>
 
-      {items.length === 0 ? (
-        <Text className="text-sm text-muted-foreground font-medium" style={styles.empty} testID="upcoming-empty">
-          Nothing due before next month
-        </Text>
-      ) : (
-        <>
-          {items.slice(0, 3).map((item) => {
-            const overdue = item.dueDate < today;
-            return (
-              <Pressable
-                key={`${item.commitmentId}:${item.dueDate}`}
-                onPress={() => onOpenCommitment(item.commitmentId)}
-                className="flex-row items-center gap-3 py-3 border-t border-border min-h-[48px]"
-                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-                android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.name}, due ${formatDayLabel(item.dueDate)}, ${spokenMoneyLabel(item.amountSen)}`}
-                testID={`upcoming-row-${item.commitmentId}`}
-              >
-                <View className={`w-9 h-9 rounded-full items-center justify-center ${overdue ? 'bg-destructive/10' : 'bg-accent/10'}`} style={[styles.iconWrap, overdue && styles.iconWrapOverdue]}>
-                  <Ionicons
-                    name={(KIND_ICONS[item.frequency] ?? DEFAULT_KIND_ICON) as never}
-                    size={18}
-                    color={overdue ? colors.danger : colors.accent}
-                  />
-                </View>
-                <View className="flex-1 mr-1" style={styles.rowMain}>
-                  <Text className="text-sm font-semibold text-foreground" style={styles.name} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <View className="flex-row items-center gap-2 mt-0.5" style={styles.dateRow}>
-                    {overdue ? <Badge tone="danger" label="Overdue" /> : null}
-                    <Text className={`text-xs ${overdue ? 'text-destructive font-semibold' : 'text-muted-foreground font-medium'}`} style={[styles.date, overdue && styles.dateOverdue]}>
-                      {formatDayLabel(item.dueDate)}
-                    </Text>
-                  </View>
-                </View>
-                <Text
-                  className={`text-base font-bold flex-shrink ml-2 ${overdue ? 'text-destructive' : 'text-foreground'}`}
-                  style={[styles.amount, overdue && styles.amountOverdue]}
-                  numberOfLines={1}
-                  accessibilityLabel={`${item.name}, ${spokenMoneyLabel(item.amountSen)}`}
-                >
-                  {formatSen(item.amountSen)}
-                </Text>
-              </Pressable>
-            );
-          })}
-          <View className="flex-row justify-between items-center border-t border-border mt-1 pt-3" style={styles.footer} testID="upcoming-total">
-            <Text className="text-xs text-muted-foreground font-medium" style={styles.footerLabel}>Due before {dueBeforeLabel}</Text>
-            <Text className="text-base font-extrabold text-foreground flex-shrink ml-3" style={styles.footerAmount} numberOfLines={1} accessibilityLabel={`Due before ${dueBeforeLabel}, ${spokenMoneyLabel(totalSen)}`}>
-              {formatSen(totalSen)}
-            </Text>
+  return (
+    <View testID="upcoming-bills-card" className="flex-1">
+      <BentoCard testID="upcoming-card" className="p-4 border border-border/60 bg-card h-full justify-between">
+        <View className="flex-1">
+          {/* Header */}
+          <View className="flex-row items-center justify-between mb-2">
+            <View className="flex-row items-center gap-1.5">
+              <Ionicons name="calendar-outline" size={14} color={colors.accent} />
+              <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground" style={styles.title}>
+                Commitments
+              </Text>
+            </View>
+            {items.length > 0 && (
+              <Text className="text-[10px] font-bold text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded-full">
+                {items.length} due
+              </Text>
+            )}
           </View>
-        </>
-      )}
-    </Card>
+
+          {/* List or Empty State */}
+          {items.length === 0 ? (
+            <View className="py-3 items-center justify-center">
+              <Text
+                className="text-xs text-muted-foreground font-medium text-center"
+                style={styles.empty}
+                testID="upcoming-empty"
+              >
+                Nothing due before next month
+              </Text>
+            </View>
+          ) : (
+            <View className="gap-2">
+              {items.slice(0, 2).map((item) => {
+                const isOverdue = item.dueDate < today;
+                const dueTime = new Date(item.dueDate + 'T00:00:00').getTime();
+                const todayTime = new Date(today + 'T00:00:00').getTime();
+                const diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
+
+                let countdownText = `${diffDays}d`;
+                if (diffDays === 0) countdownText = 'Today';
+                else if (diffDays === 1) countdownText = 'Tomorrow';
+                else if (diffDays > 1) countdownText = `in ${diffDays}d`;
+
+                return (
+                  <Pressable
+                    key={`${item.commitmentId}:${item.dueDate}`}
+                    onPress={() => onOpenCommitment(item.commitmentId)}
+                    className={cn(
+                      'flex-row items-center justify-between py-2 px-2.5 rounded-xl border min-h-[44px]',
+                      isOverdue
+                        ? 'bg-destructive/10 border-destructive/30'
+                        : 'bg-muted/20 border-border/40'
+                    )}
+                    style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.name}, due ${formatDayLabel(item.dueDate)}, ${spokenMoneyLabel(item.amountSen)}`}
+                    testID={`upcoming-row-${item.commitmentId}`}
+                  >
+                    <View className="flex-1 mr-2" style={styles.rowMain}>
+                      <Text
+                        className="text-xs font-bold text-foreground"
+                        style={styles.name}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      <View className="flex-row items-center gap-1.5 mt-0.5" style={styles.dateRow}>
+                        {isOverdue ? (
+                          <Badge tone="danger" label="Overdue" />
+                        ) : (
+                          <Text className="text-[10px] font-semibold text-muted-foreground">
+                            {countdownText}
+                          </Text>
+                        )}
+                        <Text
+                          className={cn(
+                            'text-[10px]',
+                            isOverdue
+                              ? 'text-destructive font-semibold'
+                              : 'text-muted-foreground font-medium'
+                          )}
+                          style={[styles.date, isOverdue && styles.dateOverdue]}
+                        >
+                          {formatDayLabel(item.dueDate)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View className="flex-row items-center gap-1.5">
+                      <Text
+                        className={cn(
+                          'text-xs font-bold font-mono',
+                          isOverdue ? 'text-destructive' : 'text-foreground'
+                        )}
+                        style={[styles.amount, isOverdue && styles.amountOverdue]}
+                        numberOfLines={1}
+                        accessibilityLabel={`${item.name}, ${spokenMoneyLabel(item.amountSen)}`}
+                      >
+                        {formatSen(item.amountSen)}
+                      </Text>
+                      {/* Quick-settle trigger */}
+                      <Pressable
+                        onPress={() => onOpenCommitment(item.commitmentId)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Quick settle ${item.name}`}
+                        testID={`upcoming-settle-${item.commitmentId}`}
+                        className="w-6 h-6 rounded-full bg-primary/10 items-center justify-center ml-0.5"
+                      >
+                        <Ionicons name="checkmark-sharp" size={13} color={colors.primary} />
+                      </Pressable>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* Total due line */}
+        <View
+          className="flex-row justify-between items-center border-t border-border/40 mt-2.5 pt-2"
+          style={styles.footer}
+          testID="upcoming-total"
+        >
+          <Text className="text-[11px] text-muted-foreground font-medium" style={styles.footerLabel}>
+            Due before {dueBeforeLabel}
+          </Text>
+          <Text
+            className="text-xs font-extrabold font-mono text-foreground"
+            style={styles.footerAmount}
+            numberOfLines={1}
+            accessibilityLabel={`Due before ${dueBeforeLabel}, ${spokenMoneyLabel(totalSen)}`}
+          >
+            {formatSen(totalSen)}
+          </Text>
+        </View>
+      </BentoCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  empty: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  pressed: { opacity: 0.7, backgroundColor: colors.background },
-  iconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconWrapOverdue: { backgroundColor: colors.dangerSoft },
-  rowMain: { flex: 1, marginRight: spacing.xs },
-  name: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 },
-  date: { fontSize: typography.caption, color: colors.muted, fontWeight: '500' },
+  title: { fontSize: typography.caption, fontWeight: '700', color: colors.muted },
+  empty: { fontSize: typography.caption, color: colors.muted, fontWeight: '500' },
+  row: {},
+  pressed: { opacity: 0.75 },
+  rowMain: { flex: 1 },
+  name: { fontSize: typography.caption, fontWeight: '600', color: colors.text },
+  dateRow: { flexDirection: 'row', alignItems: 'center' },
+  date: { fontSize: typography.caption, color: colors.muted },
   dateOverdue: { color: colors.danger, fontWeight: '600' },
   amount: {
-    fontSize: typography.emphasis,
+    fontSize: typography.caption,
     fontWeight: '700',
     color: colors.text,
     fontVariant: moneyFontVariant,
-    flexShrink: 1,
-    marginLeft: spacing.sm,
   },
   amountOverdue: { color: colors.danger },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    marginTop: spacing.xs,
-    paddingTop: spacing.md,
   },
   footerLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '500' },
-  footerAmount: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, flexShrink: 1, marginLeft: spacing.md },
+  footerAmount: {
+    fontSize: typography.caption,
+    fontWeight: '800',
+    color: colors.text,
+    fontVariant: moneyFontVariant,
+  },
 });

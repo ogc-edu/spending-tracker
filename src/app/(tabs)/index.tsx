@@ -1,30 +1,33 @@
 /**
- * Dashboard tab (plan 010 / PRD DASH-1..5) — the product's heart: one
- * deterministic view of available money, spent, remaining budget, upcoming
- * commitments, safe-to-spend, daily allowance, the budget bar, and the
- * category summary (ARCH §8 pipeline).
+ * Dashboard tab (Plan 003 — Asymmetrical Bento Grid cash flow intelligence hub)
  *
- * Card order: what is COMMITTED or already spent comes first (hero → upcoming
- * → by category), then the derived guidance (safe-to-spend → its formula →
- * the budget bar).
+ * Structure:
+ * 1. Hero Bento Tile: Daily allowance A_daily with MoneyDisplay hero size,
+ *    total discretionary pool S_safe, status indicator (StatusPill),
+ *    and tri-column liquid/budget metrics.
+ * 2. Modular Split Row:
+ *    - Left: Cash Flow Equation (Liquid − Bills − Reserve = S_safe) with bottom sheet breakdown.
+ *    - Right: Upcoming Commitments countdown (next 2 maturing bills with countdown chips & quick-settle).
+ * 3. Monthly Budget Snapshot: spent vs target progress with BudgetMeter.tsx.
+ * 4. Contextual AI Daily Insight: on-device velocity analysis & free-form money inquiries.
+ * 5. Floating Action Dock: one-tap triggers for + Add Expense, Transfer, and Scan Receipt.
  *
- * Data flow: `CashFlowService.snapshot(now)` reads the same rows the other
- * tabs show and runs them through the pure engine — this screen contains NO
- * SQL and NO financial arithmetic (NFR-7). It re-reads on focus and supports
- * pull-to-refresh; `now` is derived at call time so the calendar rolls over
- * without restart (A4: no cache).
- *
- * First-class states (never crashes): no accounts → CTA to create one
- * (Settings/004); no overall budget → "—" + "Set a budget" prompt; deficit
- * (safe < 0) → the SafeToSpendCard's danger state + warning copy.
+ * Invariants:
+ * - Deterministic data flow: CashFlowService.snapshot(now) is the sole source of truth.
+ * - Zero arithmetic on screen.
+ * - Pure integer sen.
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -39,17 +42,15 @@ import type { AIResult, AskSnapshot } from '@/ai/types';
 import { formatDayLabel, nextMonthStartDate } from '@/utils/dates';
 import { colors, spacing } from '@/theme';
 import { EmptyState } from '@/components/EmptyState';
-import { Fab } from '@/components/ui/Fab';
 import { InlineError } from '@/components/ui/InlineError';
 import { SkeletonHome } from '@/components/ui/Skeleton';
 import { useUiStore } from '@/store/uiStore';
 import { HeroCard } from '@/components/dashboard/HeroCard';
-import { SafeToSpendCard } from '@/components/dashboard/SafeToSpendCard';
 import { FormulaCard } from '@/components/dashboard/FormulaCard';
-import { AskAiCard } from '@/components/dashboard/AskAiCard';
 import { UpcomingList } from '@/components/dashboard/UpcomingList';
-import { BudgetBar } from '@/components/dashboard/BudgetBar';
 import { CategorySummary } from '@/components/dashboard/CategorySummary';
+import { BudgetBar } from '@/components/dashboard/BudgetBar';
+import { AskAiCard } from '@/components/dashboard/AskAiCard';
 import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 
 function errMsg(error: unknown): string {
@@ -59,10 +60,20 @@ function errMsg(error: unknown): string {
 /** Retry is a no-op while there is nothing to retry (idle/pending/result). */
 const NOOP_RETRY = (): void => {};
 
+function useSafeInsets() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
+
 export default function DashboardScreen() {
   const { authService } = useAuth();
   const router = useRouter();
+  const insets = useSafeInsets();
   const setExpenseCategory = useUiStore((s) => s.setExpenseCategory);
+
   const services = useMemo(() => {
     const repos = repositories();
     return {
@@ -79,32 +90,23 @@ export default function DashboardScreen() {
     };
   }, [authService]);
 
-  // The ACTIVE provider (013): persisted choice + key + model via the config
-  // layer; with nothing configured, analyze() throws a typed error and the
-  // card shows "No AI provider configured" — the app works fully (DoD 16).
   const aiService = useMemo(
     () => createAIService('fake', {}, aiServiceOptions(services.aiConfig)),
     [services.aiConfig],
   );
 
   const [snapshot, setSnapshot] = useState<CashFlowSnapshot | null>(null);
-  // The reference date the current snapshot was built with — the AI payload's
-  // daysRemaining must agree with the snapshot's dailyAllowanceSen (015).
   const [snapshotAt, setSnapshotAt] = useState<Date | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // "Ask about your money" UI state (019) — pending / typed error / result,
-  // plus the exact question + payload captured at submit time for Retry.
   const [aiPending, setAiPending] = useState(false);
   const [aiError, setAiError] = useState<AIUnavailableError | null>(null);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [aiQuestion, setAiQuestion] = useState<string | null>(null);
   const [aiPayload, setAiPayload] = useState<AskSnapshot | null>(null);
-  // Pending guard for rapid submits: one request in flight per snapshot (013
-  // behaviour — a double-tap must never fire a second analyze).
   const aiBusyRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -125,7 +127,6 @@ export default function DashboardScreen() {
     }
   }, [services.cashflow, services.categories]);
 
-  // Re-read SQLite every time the tab gains focus (ARCH §5) — no cache (A4).
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -141,12 +142,6 @@ export default function DashboardScreen() {
     }
   }, [load]);
 
-  /**
-   * "Ask about your money" (019 / DASH-4): map the CURRENT snapshot (010) to
-   * the ask payload at submit time — no recomputation — and dispatch to the
-   * active provider via AIService (012/013) with the user's question. The
-   * pending guard drops rapid double-submits: only one request in flight.
-   */
   const runAsk = useCallback(
     async (question: string, payload: AskSnapshot) => {
       if (aiBusyRef.current) return;
@@ -160,8 +155,6 @@ export default function DashboardScreen() {
         const result = await aiService.analyze('ask', payload, { question });
         setAiResult(result);
       } catch (err: unknown) {
-        // analyze() already throws typed AIUnavailableError; toAIError keeps it
-        // typed if anything unexpected slips through (012 contract).
         setAiError(toAIError(err));
       } finally {
         aiBusyRef.current = false;
@@ -215,8 +208,6 @@ export default function DashboardScreen() {
 
   if (!snapshot) return null;
 
-  // No accounts: a first-class CTA, not a crash (plan §Edge cases) — the
-  // CTA links to Settings → Accounts (016: EmptyState with action links).
   if (snapshot.accountCount === 0) {
     return (
       <ScrollView className="flex-1 bg-background" contentContainerStyle={styles.emptyWrap} refreshControl={refreshControl} testID="dashboard-empty-accounts">
@@ -231,95 +222,146 @@ export default function DashboardScreen() {
     );
   }
 
-  // Accounts exist but nothing has happened yet (016 "no data"): a quiet
-  // prompt to record the first expense — the zeroed cards below still show
-  // the available balance, so this is guidance, not a replacement.
   const noData = snapshot.spentSen === 0 && snapshot.upcomingItems.length === 0 && !snapshot.hasBudget;
-
   const dueBeforeLabel = formatDayLabel(nextMonthStartDate(snapshot.month.year, snapshot.month.month));
   const topCategories = snapshot.categorySummary.slice(0, 5);
   const goToBudgets = () => router.navigate('/budgets' as never);
   const goToAnalytics = () => router.navigate('/analytics' as never);
 
   return (
-    <KeyboardAwareScrollView className="flex-1 bg-background" contentContainerStyle={styles.content} refreshControl={refreshControl} testID="dashboard-screen">
-      {error ? <InlineError message={error} testID="dashboard-error" /> : null}
+    <View className="flex-1 bg-background" testID="dashboard-screen">
+      <KeyboardAwareScrollView
+        className="flex-1 bg-background"
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: Math.max(insets.top, spacing.lg),
+            paddingBottom: Math.max(insets.bottom, 24) + 80,
+          },
+        ]}
+        refreshControl={refreshControl}
+      >
+        <View className="px-4">
+          {error ? <InlineError message={error} testID="dashboard-error" /> : null}
 
-      {noData ? (
-        <EmptyState
-          icon="receipt-outline"
-          title="No data yet"
-          body="Record an expense, set a budget, or add a commitment to bring your cash flow to life."
-          action={{ label: 'Record an expense', onPress: () => router.push('/expenses/new' as never) }}
-          testID="dashboard-empty-data"
-        />
-      ) : null}
+          {noData ? (
+            <EmptyState
+              icon="receipt-outline"
+              title="No data yet"
+              body="Record an expense, set a budget, or add a commitment to bring your cash flow to life."
+              action={{ label: 'Record an expense', onPress: () => router.push('/expenses/new' as never) }}
+              testID="dashboard-empty-data"
+            />
+          ) : null}
 
-      <HeroCard
-        availableSen={snapshot.availableSen}
-        spentSen={snapshot.spentSen}
-        remainingSen={snapshot.hasBudget ? snapshot.remainingSen : null}
-        onSetBudget={goToBudgets}
-      />
+          {/* 1. Hero Bento Tile: Daily allowance, safe-to-spend pool, and available/spent/remaining */}
+          <HeroCard
+            availableSen={snapshot.availableSen}
+            spentSen={snapshot.spentSen}
+            remainingSen={snapshot.hasBudget ? snapshot.remainingSen : null}
+            onSetBudget={goToBudgets}
+            safeSen={snapshot.safeSen}
+            dailyAllowanceSen={snapshot.dailyAllowanceSen}
+            deficit={snapshot.deficit}
+            bufferSen={snapshot.bufferSen}
+            pctUsed={snapshot.budgetMetrics.pctUsed}
+          />
 
-      <UpcomingList
-        items={snapshot.upcomingItems}
-        totalSen={snapshot.upcomingSen}
-        dueBeforeLabel={dueBeforeLabel}
-        onOpenCommitment={(commitmentId) => router.push(`/commitments/${commitmentId}` as never)}
-      />
+          {/* 2. Modular Bento Split Row: Cash Flow Equation (Left) & Upcoming Commitments (Right) */}
+          <View className="flex-row gap-3 mb-4">
+            <FormulaCard
+              breakdown={snapshot.breakdown}
+              safeSen={snapshot.safeSen}
+            />
+            <UpcomingList
+              items={snapshot.upcomingItems}
+              totalSen={snapshot.upcomingSen}
+              dueBeforeLabel={dueBeforeLabel}
+              onOpenCommitment={(commitmentId) => router.push(`/commitments/${commitmentId}` as never)}
+            />
+          </View>
 
-      {topCategories.length > 0 ? (
-        <CategorySummary
-          summary={topCategories}
-          categories={categories}
-          onShowAll={goToAnalytics}
-          onOpenCategory={(categoryId) => {
-            // Plan 018: a category row IS the filter — open Expenses on it.
-            setExpenseCategory(categoryId);
-            router.navigate('/expenses' as never);
-          }}
-        />
-      ) : null}
+          {/* Category Summary (if spending recorded in categories) */}
+          {topCategories.length > 0 ? (
+            <CategorySummary
+              summary={topCategories}
+              categories={categories}
+              onShowAll={goToAnalytics}
+              onOpenCategory={(categoryId) => {
+                setExpenseCategory(categoryId);
+                router.navigate('/expenses' as never);
+              }}
+            />
+          ) : null}
 
-      <SafeToSpendCard
-        safeSen={snapshot.safeSen}
-        deficit={snapshot.deficit}
-        dailyAllowanceSen={snapshot.dailyAllowanceSen}
-      />
+          {/* 3. Monthly Budget Snapshot */}
+          <BudgetBar
+            budget={snapshot.budget}
+            spentSen={snapshot.spentSen}
+            remainingSen={snapshot.remainingSen}
+            pctUsed={snapshot.budgetMetrics.pctUsed}
+            overBudget={snapshot.budgetMetrics.overBudget}
+            onSetBudget={goToBudgets}
+          />
 
-      <FormulaCard
-        breakdown={snapshot.breakdown}
-        safeSen={snapshot.safeSen}
-      />
+          {/* 4. Contextual AI Daily Insight */}
+          <AskAiCard
+            ai={aiState}
+            label={aiQuestion ? `You asked: ${aiQuestion}` : null}
+            onSubmit={onAsk}
+            disabled={snapshot === null}
+          />
 
-      <AskAiCard
-        ai={aiState}
-        label={aiQuestion ? `You asked: ${aiQuestion}` : null}
-        onSubmit={onAsk}
-        disabled={snapshot === null}
-      />
+          <View style={styles.spacer} />
+        </View>
+      </KeyboardAwareScrollView>
 
-      <BudgetBar
-        budget={snapshot.budget}
-        spentSen={snapshot.spentSen}
-        remainingSen={snapshot.remainingSen}
-        pctUsed={snapshot.budgetMetrics.pctUsed}
-        overBudget={snapshot.budgetMetrics.overBudget}
-        onSetBudget={goToBudgets}
-      />
+      {/* 5. Floating Action Dock */}
+      <View
+        className="absolute left-4 right-4 flex-row items-center justify-between bg-card/95 border border-border/80 rounded-2xl p-2 shadow-lg"
+        style={{ bottom: Math.max(insets.bottom, 16) }}
+        testID="dashboard-floating-dock"
+      >
+        <Pressable
+          onPress={() => router.push('/expenses/new' as never)}
+          className="flex-1 flex-row items-center justify-center bg-primary rounded-xl py-3 px-3 gap-1.5"
+          accessibilityRole="button"
+          accessibilityLabel="Add expense"
+          testID="dashboard-add-expense-fab"
+        >
+          <Ionicons name="add" size={20} color="#090B10" />
+          <Text className="text-sm font-bold text-primary-foreground">Add Expense</Text>
+        </Pressable>
 
-      <View style={styles.spacer} />
+        <Pressable
+          onPress={() => router.push('/expenses/new' as never)}
+          className="flex-row items-center justify-center py-3 px-3 ml-2 rounded-xl border border-border/60 bg-muted/30"
+          accessibilityRole="button"
+          accessibilityLabel="Transfer funds"
+          testID="dashboard-action-transfer"
+        >
+          <Ionicons name="swap-horizontal" size={18} color={colors.text} />
+          <Text className="text-xs font-semibold text-foreground ml-1.5">Transfer</Text>
+        </Pressable>
 
-      {/* Plan 018: the dashboard's most common write — record an expense. */}
-      <Fab onPress={() => router.push('/expenses/new' as never)} label="Add expense" testID="dashboard-add-expense-fab" />
-    </KeyboardAwareScrollView>
+        <Pressable
+          onPress={() => router.push('/expenses/new' as never)}
+          className="flex-row items-center justify-center py-3 px-3 ml-2 rounded-xl border border-border/60 bg-muted/30"
+          accessibilityRole="button"
+          accessibilityLabel="Scan receipt"
+          testID="dashboard-action-scan"
+        >
+          <Ionicons name="camera-outline" size={18} color={colors.text} />
+          <Text className="text-xs font-semibold text-foreground ml-1.5">Scan</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  content: { paddingTop: spacing.lg, paddingBottom: 96 },
+  content: { flexGrow: 1 },
   emptyWrap: {
     flexGrow: 1,
     alignItems: 'center',

@@ -475,11 +475,12 @@ describe('Dashboard — Ask about your money (plan 019)', () => {
 });
 
 /* ------------------------------------------------------------------ *
- * Card order — committed/spent money first, derived guidance after.
+ * Bento Grid order — Hero & safe-to-spend → split row (equation & bills)
+ * → category summary → budget snapshot → ask AI.
  * ------------------------------------------------------------------ */
 
-describe('Dashboard card order', () => {
-  it('renders hero → upcoming → by category → safe-to-spend → formula → ask → budget bar', async () => {
+describe('Dashboard Bento Grid layout order (Plan 003)', () => {
+  it('renders hero/safe-to-spend → formula & upcoming → category → budget bar → ask ai', async () => {
     const tree = await renderDashboard(
       buildFixture({
         categorySummary: [
@@ -491,12 +492,12 @@ describe('Dashboard card order', () => {
 
     const cardIds = [
       'hero-card',
-      'upcoming-card',
-      'category-summary',
       'safe-to-spend',
       'formula-card',
-      'ask-ai-card',
+      'upcoming-card',
+      'category-summary',
       'budget-bar',
+      'ask-ai-card',
     ];
     const rendered = tree.root
       .findAll((node) => typeof node.type === 'string' && cardIds.includes(node.props.testID))

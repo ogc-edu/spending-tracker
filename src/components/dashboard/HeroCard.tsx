@@ -1,93 +1,229 @@
 /**
- * HeroCard (plan 010 DASH-1, restyled by plan 017) — the top line of the
- * dashboard: available money (the headline, money font), spent this month,
+ * HeroCard (plan 010 DASH-1, redesigned Plan 003) — The Hero Bento Tile:
+ * Cash flow intelligence hub displaying daily discretionary allowance (A_daily),
+ * total discretionary pool (S_safe), status indicator (StatusPill),
+ * available liquid money with privacy mask toggle, spent this month,
  * and remaining monthly budget.
  *
- * Plan 017 design: the ONE hero surface on the screen — accent-filled card,
- * white text (white on `#15803D` is the theme's AA-asserted 5.0:1 pair) — so
- * the headline reads as the product's answer at a glance; every other card
- * stays white. Stat rows are separated by translucent hairlines instead of
- * filled panels (filled panels would drop white-text contrast below AA).
+ * Plan 003 design: Obsidian luxe surface with hairline borders:
+ * - Healthy Surplus: Electric Mint border (border-primary/40)
+ * - Constrained Margin: Warm Amber border (border-warning/40)
+ * - Deficit Warning: Vivid Rose border (border-destructive/40)
  *
- * The eye button beside the label hides the headline behind asterisks — for
- * checking the app in public. It is a local view preference: nothing is stored
- * and the other figures (spent, remaining) are untouched.
- *
- * `remainingSen === null` means NO overall budget is set → the row shows "—"
- * and a "Set a budget" link (PRD §8.4: budget term 0 in the math; the prompt
- * per PRD). Pure presentation — all numbers are already engine-computed by
- * CashFlowService, no arithmetic here.
+ * All financial values remain pure integer sen from CashFlowService.
  */
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { MIN_TOUCH_TARGET, colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { MIN_TOUCH_TARGET, colors, moneyFontVariant, spacing } from '@/theme';
+import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
+import { StatusPill, type StatusVariant } from '@/components/ui/StatusPill';
+import { cn } from '@/lib/utils';
 
-/** What the headline shows while hidden (never derived from the amount — its
- *  length would leak the magnitude). */
+/** What the headline shows while hidden (never derived from the amount). */
 const MASK = '********';
 
-export function HeroCard({
-  availableSen,
-  spentSen,
-  remainingSen,
-  onSetBudget,
-}: {
+export interface HeroCardProps {
   availableSen: number;
   spentSen: number;
   /** null = no overall budget (UI: "—" + prompt). */
   remainingSen: number | null;
   /** "Set a budget" → Budgets tab (only rendered when remainingSen is null). */
   onSetBudget(): void;
-}) {
+  /** Safe-to-spend discretionary pool (S_safe). */
+  safeSen?: number;
+  /** Daily discretionary allowance (A_daily). */
+  dailyAllowanceSen?: number;
+  /** Deficit flag (safeSen < 0). */
+  deficit?: boolean;
+  /** Formula safety buffer (bufferSen). */
+  bufferSen?: number;
+  /** Monthly budget utilization percentage (0..100+). */
+  pctUsed?: number | null;
+}
+
+export function HeroCard({
+  availableSen,
+  spentSen,
+  remainingSen,
+  onSetBudget,
+  safeSen,
+  dailyAllowanceSen,
+  deficit,
+  bufferSen,
+  pctUsed,
+}: HeroCardProps) {
   const [hidden, setHidden] = useState(false);
 
-  return (
-    <View style={styles.card} testID="hero-card">
-      <View style={styles.header}>
-        <View style={styles.labelBadge}>
-          <Text style={styles.label}>Available Balance</Text>
-        </View>
-        <Pressable
-          onPress={() => setHidden((current) => !current)}
-          hitSlop={8}
-          style={styles.eyeButton}
-          accessibilityRole="button"
-          accessibilityState={{ selected: hidden }}
-          accessibilityLabel={hidden ? 'Show available balance' : 'Hide available balance'}
-          testID="hero-available-toggle"
-        >
-          <Ionicons
-            name={hidden ? 'eye-off-outline' : 'eye-outline'}
-            size={20}
-            color={colors.surface}
-          />
-        </Pressable>
-      </View>
-      <Text
-        style={[styles.available, hidden && styles.availableHidden]}
-        numberOfLines={1}
-        accessibilityLabel={hidden ? 'Available balance hidden' : `Available, ${spokenMoneyLabel(availableSen)}`}
-        testID="hero-available"
-      >
-        {hidden ? MASK : formatSen(availableSen)}
-      </Text>
+  const effectiveSafeSen = safeSen ?? (availableSen - spentSen);
+  const effectiveDailySen = dailyAllowanceSen ?? 0;
+  const isDeficit = deficit ?? (effectiveSafeSen <= 0);
 
-      <View style={styles.row}>
-        <View style={[styles.statPanel, styles.statPanelStart]}>
-          <Text style={styles.rowLabel}>Spent this month</Text>
+  let statusVariant: StatusVariant = 'healthy';
+  let statusLabel = 'HEALTHY SURPLUS';
+
+  if (isDeficit || effectiveSafeSen <= 0) {
+    statusVariant = 'danger';
+    statusLabel = 'DEFICIT WARNING';
+  } else if (
+    effectiveDailySen < 2000 ||
+    (bufferSen !== undefined && effectiveSafeSen <= bufferSen) ||
+    (pctUsed !== null && pctUsed !== undefined && pctUsed >= 80)
+  ) {
+    statusVariant = 'warning';
+    statusLabel = 'TIGHT MARGIN';
+  }
+
+  const borderClass =
+    statusVariant === 'danger'
+      ? 'border-destructive/40'
+      : statusVariant === 'warning'
+      ? 'border-warning/40'
+      : 'border-primary/40';
+
+  const dailyText = isDeficit ? '—' : `${formatSen(effectiveDailySen)} / day`;
+
+  return (
+    <View
+      testID="hero-card"
+      className={cn(
+        'rounded-3xl border p-5 mb-4 bg-card overflow-hidden',
+        borderClass
+      )}
+      style={styles.card}
+    >
+      {/* Top Header / Status Row */}
+      <View className="flex-row items-center justify-between mb-3" style={styles.header}>
+        <View style={styles.labelBadge}>
+          <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground" style={styles.label}>
+            Daily Allowance
+          </Text>
+        </View>
+        <StatusPill
+          variant={statusVariant}
+          label={statusLabel}
+          dot
+          testID="hero-status-pill"
+        />
+      </View>
+
+      {/* Primary Hero Metric: Daily Discretionary Allowance (A_daily) */}
+      <View className="my-1">
+        {isDeficit ? (
           <Text
-            style={styles.rowValue}
+            testID="daily-allowance-value"
+            numberOfLines={1}
+            accessibilityLabel="Daily allowance, no safe to spend"
+            style={[{ fontVariant: moneyFontVariant }]}
+            className="text-4xl sm:text-5xl font-black font-mono text-destructive tracking-tighter"
+          >
+            —
+          </Text>
+        ) : (
+          <View className="flex-row items-baseline gap-2">
+            <MoneyDisplay
+              amountInSen={effectiveDailySen}
+              size="hero"
+              className="text-foreground tracking-tighter font-mono"
+            />
+            <Text
+              testID="daily-allowance-value"
+              numberOfLines={1}
+              accessibilityLabel={`Daily allowance, ${spokenMoneyLabel(effectiveDailySen)} per day`}
+              style={[{ fontVariant: moneyFontVariant }]}
+              className="text-sm font-bold text-muted-foreground font-mono"
+            >
+              {dailyText}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Total Discretionary Pool (S_safe) */}
+      <View testID="safe-to-spend" className="mt-2 mb-2">
+        <Text className="text-xs font-semibold text-muted-foreground">
+          {isDeficit ? 'Discretionary Shortfall' : 'Safe to Spend Pool'}
+        </Text>
+        <Text
+          testID="safe-headline"
+          numberOfLines={1}
+          accessibilityLabel={`${isDeficit ? 'No safe to spend' : 'Safe to spend'}, ${spokenMoneyLabel(effectiveSafeSen)}`}
+          style={[{ fontVariant: moneyFontVariant }, styles.safeHeadline, isDeficit && styles.headlineDeficit]}
+          className={cn(
+            'text-2xl font-black font-mono tracking-tight my-0.5',
+            isDeficit ? 'text-destructive' : 'text-foreground'
+          )}
+        >
+          {formatSen(effectiveSafeSen)}
+        </Text>
+        {isDeficit ? (
+          <Text
+            testID="deficit-copy"
+            className="text-xs text-destructive mt-1 font-medium leading-relaxed"
+            style={styles.warning}
+          >
+            Cover your commitments and safety buffer before discretionary spending
+          </Text>
+        ) : null}
+      </View>
+
+      {/* Tri-Column Liquid & Budget Stat Strip */}
+      <View className="flex-row items-center border-t border-border/40 pt-3 mt-2" style={styles.row}>
+        {/* Available Balance with Privacy Mask Toggle */}
+        <View className="flex-1 pr-2" style={[styles.statPanel, styles.statPanelStart]}>
+          <View className="flex-row items-center justify-between mb-1">
+            <Text className="text-xs font-semibold text-muted-foreground" style={styles.rowLabel}>
+              Available
+            </Text>
+            <Pressable
+              onPress={() => setHidden((current) => !current)}
+              hitSlop={8}
+              style={styles.eyeButton}
+              accessibilityRole="button"
+              accessibilityState={{ selected: hidden }}
+              accessibilityLabel={hidden ? 'Show available balance' : 'Hide available balance'}
+              testID="hero-available-toggle"
+            >
+              <Ionicons
+                name={hidden ? 'eye-off-outline' : 'eye-outline'}
+                size={18}
+                color={colors.muted}
+              />
+            </Pressable>
+          </View>
+          <Text
+            testID="hero-available"
+            numberOfLines={1}
+            accessibilityLabel={hidden ? 'Available balance hidden' : `Available, ${spokenMoneyLabel(availableSen)}`}
+            style={[{ fontVariant: moneyFontVariant }, styles.rowValue, hidden && styles.availableHidden]}
+            className="text-sm font-bold text-foreground font-mono"
+          >
+            {hidden ? MASK : formatSen(availableSen)}
+          </Text>
+        </View>
+
+        {/* Spent this month */}
+        <View className="flex-1 px-2 border-l border-border/40" style={styles.statPanel}>
+          <Text className="text-xs font-semibold text-muted-foreground mb-1" style={styles.rowLabel}>
+            Spent
+          </Text>
+          <Text
+            testID="hero-spent"
             numberOfLines={1}
             accessibilityLabel={`Spent this month, ${spokenMoneyLabel(spentSen)}`}
-            testID="hero-spent"
+            style={[{ fontVariant: moneyFontVariant }, styles.rowValue]}
+            className="text-sm font-bold text-foreground font-mono"
           >
             {formatSen(spentSen)}
           </Text>
         </View>
-        <View style={styles.statPanel}>
-          <Text style={styles.rowLabel}>Remaining budget</Text>
+
+        {/* Remaining budget */}
+        <View className="flex-1 pl-2 border-l border-border/40" style={styles.statPanel}>
+          <Text className="text-xs font-semibold text-muted-foreground mb-1" style={styles.rowLabel}>
+            Budget Left
+          </Text>
           {remainingSen === null ? (
             <Pressable
               onPress={onSetBudget}
@@ -96,15 +232,16 @@ export function HeroCard({
               accessibilityLabel="Set a monthly budget"
               testID="hero-set-budget"
             >
-              <Text style={styles.rowValue}>—</Text>
-              <Text style={styles.setBudgetLink}>Set a budget</Text>
+              <Text style={[{ fontVariant: moneyFontVariant }, styles.rowValue]} className="text-sm font-bold text-muted-foreground font-mono">—</Text>
+              <Text className="text-xs text-primary font-semibold underline" style={styles.setBudgetLink}>Set a budget</Text>
             </Pressable>
           ) : (
             <Text
-              style={styles.rowValue}
+              testID="hero-remaining"
               numberOfLines={1}
               accessibilityLabel={`Remaining budget, ${spokenMoneyLabel(remainingSen)}`}
-              testID="hero-remaining"
+              style={[{ fontVariant: moneyFontVariant }, styles.rowValue]}
+              className="text-sm font-bold text-foreground font-mono"
             >
               {formatSen(remainingSen)}
             </Text>
@@ -117,13 +254,9 @@ export function HeroCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.accent,
     borderRadius: 20,
     padding: spacing.xl,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    marginBottom: spacing.md,
   },
   header: {
     flexDirection: 'row',
@@ -131,49 +264,41 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
-  labelBadge: {
-    backgroundColor: 'rgba(15,23,42,0.14)', // dark-translucent: white text ≥ AA on the blend
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  label: { fontSize: typography.caption, fontWeight: '700', color: colors.surface, letterSpacing: 0.4 },
+  labelBadge: {},
+  label: {},
   eyeButton: {
     width: MIN_TOUCH_TARGET,
     height: MIN_TOUCH_TARGET,
     alignItems: 'flex-end',
     justifyContent: 'center',
     marginRight: -spacing.xs,
-    marginVertical: -spacing.sm, // keeps the header its original height
+    marginVertical: -spacing.sm,
   },
-  available: {
-    fontSize: typography.display,
-    fontWeight: '800',
-    color: colors.surface,
-    marginVertical: spacing.sm,
-    letterSpacing: -0.5,
+  safeHeadline: {
     fontVariant: moneyFontVariant,
   },
-  /** Masked: letter-spaced so the asterisks read as a deliberate cover. */
-  availableHidden: { letterSpacing: 2 },
+  headlineDeficit: {
+    color: colors.danger,
+  },
+  availableHidden: {
+    letterSpacing: 2,
+  },
   row: {
     flexDirection: 'row',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   statPanel: {
     flex: 1,
-    paddingLeft: spacing.lg,
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.28)',
   },
-  statPanelStart: { paddingLeft: 0, borderLeftWidth: 0, marginRight: spacing.lg },
-  rowLabel: { fontSize: typography.caption, color: colors.surface, marginBottom: spacing.xs, fontWeight: '600', opacity: 1 },
-  rowValue: { fontSize: typography.moneySmall, fontWeight: '800', color: colors.surface, fontVariant: moneyFontVariant, flexShrink: 1 },
+  statPanelStart: {},
+  rowLabel: {},
+  rowValue: {
+    fontVariant: moneyFontVariant,
+  },
   setBudgetLink: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.surface,
-    textDecorationLine: 'underline',
     marginTop: 2,
+  },
+  warning: {
+    color: colors.danger,
   },
 });

@@ -1,14 +1,11 @@
 /**
- * AskAiCard (plan 019) — the Dashboard's "Ask about your money" surface.
+ * AskAiCard (plan 019, redesigned Plan 003) — The Contextual AI Daily Insight card:
+ * The Dashboard's "Ask about your money" surface powered by on-device BYOK prompts
+ * and free-form money inquiries.
  *
- * Replaces the plan-015 fixed "Explain my allowance" button: the user can type
- * a free-form question about their current numbers, or tap one of the common
- * prompts to submit it in one tap. The shared `AIAnalysisCard` renders below
- * (pending / typed error + Retry / validated result) — this component only
- * owns the input text and presentational chrome.
- *
- * The question is capped at MAX_QUESTION_CHARS (the same cap the facade
- * enforces); the fixed system instruction is never built from it (plan 019).
+ * Plan 003 Bento redesign:
+ * - Retains testID="ai-daily-insight", ask-ai-card, ask-ai-input, ask-ai-send, ask-ai-suggestions.
+ * - BentoCard obsidian luxe container with cyber cyan / accent accents.
  */
 import { useState } from 'react';
 import {
@@ -24,10 +21,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MAX_QUESTION_CHARS } from '@/ai/types';
 import { AIAnalysisCard, type AIAnalysisState } from '@/components/AIAnalysisCard';
-import { Card } from '@/components/ui/Card';
+import { BentoCard } from '@/components/ui/BentoCard';
 import { Chip } from '@/components/ui/Chip';
 import { useKeyboardAwareFocus } from '@/components/KeyboardAwareScrollView';
 import { colors, radius, spacing, typography } from '@/theme';
+import { cn } from '@/lib/utils';
 
 /** The prebuilt prompts shown as one-tap chips. Order = usefulness order. */
 export const ASK_SUGGESTIONS = [
@@ -72,88 +70,104 @@ export function AskAiCard({ ai, label = null, onSubmit, disabled = false }: AskA
   };
 
   return (
-    <Card testID="ask-ai-card">
-      <View style={styles.header}>
-        <View style={styles.iconBadge}>
-          <Ionicons name="sparkles" size={17} color={colors.accent} />
+    <View testID="ai-daily-insight">
+      <BentoCard testID="ask-ai-card" className="p-5 border border-border/60 bg-card mb-4">
+        {/* Header */}
+        <View style={styles.header} className="flex-row items-center gap-2.5 mb-3">
+          <View
+            style={styles.iconBadge}
+            className="w-8 h-8 rounded-full bg-accent/15 items-center justify-center border border-accent/20"
+          >
+            <Ionicons name="sparkles" size={16} color={colors.accent} />
+          </View>
+          <View style={styles.headerText} className="flex-1">
+            <Text className="text-base font-bold text-foreground" style={styles.title}>
+              Ask about your money
+            </Text>
+            <Text className="text-xs text-muted-foreground mt-0.5" style={styles.subtitle}>
+              Answers use your current numbers only.
+            </Text>
+          </View>
         </View>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Ask about your money</Text>
-          <Text style={styles.subtitle}>Answers use your current numbers only.</Text>
-        </View>
-      </View>
 
-      {/* One-tap common prompts. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.chipRow}
-        testID="ask-ai-suggestions"
-      >
-        {ASK_SUGGESTIONS.map((suggestion, index) => (
-          <Chip
-            key={suggestion}
-            label={suggestion}
-            disabled={ai.pending || disabled}
-            onPress={() => submit(suggestion)}
-            testID={`ask-ai-suggestion-${index}`}
-          />
-        ))}
-      </ScrollView>
-
-      {/* The question input + send action. */}
-      <View className="flex-row items-center gap-2 mt-2 border border-border rounded-xl bg-background pl-3 pr-1 py-1 min-h-[48px]" style={styles.inputRow}>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          onFocus={revealInput}
-          onSubmitEditing={() => submit(text)}
-          placeholder="Ask a question about your money…"
-          placeholderTextColor={colors.muted}
-          className="flex-1 text-base text-foreground py-2 pr-1"
-          style={styles.input}
-          maxLength={MAX_QUESTION_CHARS}
-          returnKeyType="send"
-          editable={!disabled}
-          accessibilityLabel="Ask a question about your money"
-          testID="ask-ai-input"
-        />
-        <Pressable
-          onPress={() => submit(text)}
-          disabled={!canSend}
-          accessibilityRole="button"
-          accessibilityLabel="Send question"
-          accessibilityState={{ disabled: !canSend, busy: ai.pending }}
-          className={`w-11 h-11 rounded-full bg-accent items-center justify-center ${!canSend ? 'opacity-40' : ''}`}
-          style={({ pressed }) => [
-            styles.sendButton,
-            !canSend && styles.sendDisabled,
-            pressed && canSend && styles.pressed,
-          ]}
-          testID="ask-ai-send"
+        {/* One-tap prompt suggestion chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.chipRow}
+          testID="ask-ai-suggestions"
+          className="mb-1"
         >
-          {ai.pending ? (
-            <ActivityIndicator size="small" color={colors.onAccent} />
-          ) : (
-            <Ionicons name="arrow-up" size={20} color={colors.onAccent} />
-          )}
-        </Pressable>
-      </View>
+          {ASK_SUGGESTIONS.map((suggestion, index) => (
+            <Chip
+              key={suggestion}
+              label={suggestion}
+              disabled={ai.pending || disabled}
+              onPress={() => submit(suggestion)}
+              testID={`ask-ai-suggestion-${index}`}
+            />
+          ))}
+        </ScrollView>
 
-      {/* Shared result surface — renders nothing until a question is asked. */}
-      <AIAnalysisCard label={displayLabel(label)} {...ai} />
-    </Card>
+        {/* Question input + send action */}
+        <View
+          className="flex-row items-center gap-2 mt-2.5 border border-border/60 rounded-xl bg-muted/20 pl-3 pr-1 py-1 min-h-[48px]"
+          style={styles.inputRow}
+        >
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            onFocus={revealInput}
+            onSubmitEditing={() => submit(text)}
+            placeholder="Ask a question about your money…"
+            placeholderTextColor={colors.muted}
+            className="flex-1 text-sm text-foreground py-2 pr-1"
+            style={styles.input}
+            maxLength={MAX_QUESTION_CHARS}
+            returnKeyType="send"
+            editable={!disabled}
+            accessibilityLabel="Ask a question about your money"
+            testID="ask-ai-input"
+          />
+          <Pressable
+            onPress={() => submit(text)}
+            disabled={!canSend}
+            accessibilityRole="button"
+            accessibilityLabel="Send question"
+            accessibilityState={{ disabled: !canSend, busy: ai.pending }}
+            className={cn(
+              'w-10 h-10 rounded-full bg-primary items-center justify-center',
+              !canSend && 'opacity-40'
+            )}
+            style={({ pressed }) => [
+              styles.sendButton,
+              !canSend && styles.sendDisabled,
+              pressed && canSend && styles.pressed,
+            ]}
+            testID="ask-ai-send"
+          >
+            {ai.pending ? (
+              <ActivityIndicator size="small" color="#090B10" />
+            ) : (
+              <Ionicons name="arrow-up" size={18} color="#090B10" />
+            )}
+          </Pressable>
+        </View>
+
+        {/* Shared AI Analysis Result */}
+        <AIAnalysisCard label={displayLabel(label)} {...ai} />
+      </BentoCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   iconBadge: {
     width: 34,
     height: 34,
     borderRadius: radius.full,
-    backgroundColor: colors.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -164,12 +178,10 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
     marginTop: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
-    backgroundColor: colors.background,
     paddingLeft: spacing.md,
     paddingRight: spacing.xs,
     paddingVertical: spacing.xs,
@@ -186,7 +198,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.full,
-    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },

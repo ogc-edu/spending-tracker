@@ -14,7 +14,7 @@ import type { Category } from '@/db/schema';
 import type { CategorySummaryItem } from '@/services/CashFlowService';
 import { categoryColor } from '@/components/categoryMeta';
 import { ProgressBar } from '@/components/ProgressBar';
-import { Card } from '@/components/ui/Card';
+import { BentoCard } from '@/components/ui/BentoCard';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
@@ -38,8 +38,10 @@ export function CategorySummary({
   const shownTotal = summary.reduce((sum, item) => sum + item.totalSen, 0);
 
   return (
-    <Card testID="category-summary">
-      <Text className="text-base font-bold text-foreground mb-2" style={styles.title}>By category</Text>
+    <BentoCard testID="category-summary" className="p-5 border border-border/60 bg-card mb-4">
+      <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3" style={styles.title}>
+        By Category
+      </Text>
       {summary.map((item) => {
         const share = shownTotal === 0 ? 0 : Math.floor((item.totalSen * 1000) / shownTotal) / 10;
         const label = nameById.get(item.categoryId) ?? `Category ${item.categoryId}`;
@@ -86,7 +88,7 @@ export function CategorySummary({
       >
         <Text className="text-sm font-bold text-accent" style={styles.showAllLabel}>Show all</Text>
       </Pressable>
-    </Card>
+    </BentoCard>
   );
 }
 
