@@ -1,24 +1,24 @@
 /**
- * Budgets tab (plan 007 / BUD-1..4) — monthly overall + per-category budgets.
+ * Budgets tab (Plan 005 — 2-Column Allocations Grid & Budgets Manager)
  *
- * Data flow: the shared uiStore month selection (default = current calendar
- * month; Analytics will reuse the same object in 011) drives a load that
- * re-reads SQLite on focus AND on month change (A4: no cache). Spent comes
- * from the PLAN 005 engine — monthlyTotals / expenseTotalsByCategory over the
- * month's expense rows — and every budget's metrics come from the pure
- * engine's budgetMetrics; this screen contains no SQL and no money math
- * (ARCH §1, plan 007 §Constraints).
+ * Screen layout:
+ * - Dynamic safe area insets and px-4 horizontal gutter.
+ * - Month cycle stepper: < October 2026 > with tabular-nums typography.
+ * - Overall Monthly Budget Bento Card with dynamic multi-tier BudgetMeter,
+ *   remaining funds, and daily buffer calculation (S_safe / D_rem).
+ * - Two-Column Category Allocations Grid covering all system categories with
+ *   individual progress meters, 48px touch targets, and "Set limit" affordances.
+ * - Native gesture-driven Budget Limit Sheet with quick allocation presets (+10%, +25%, Reset).
  *
- * Interactions: tap the overall card / any category row to open the RHF + Zod
- * BudgetForm (sen via parseMoneyToSen); "Clear" removes a row. Editing and
- * clearing past months is allowed (no retroactive restrictions). Over-budget
- * is an in-app flag — danger color + label, no notifications anywhere. The
- * overall budget is the only one that will ever feed cash flow (PRD §8.4,
- * built by plan 009/010) — category budgets are informational rows (BUD-3).
+ * Invariants:
+ * - Pure integer sen.
+ * - Zero arithmetic on screen (engine totals and metrics).
+ * - Full test contract preservation across all testIDs.
  */
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -39,6 +39,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Sheet } from '@/components/ui/Sheet';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
+import { TouchTarget } from '@/components/ui/TouchTarget';
 import { SkeletonCard, SkeletonRow } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ToastProvider';
 import { categoryColor } from '@/components/categoryMeta';
@@ -57,6 +58,7 @@ function shiftMonth(selection: MonthSelection, delta: number): MonthSelection {
 type BudgetEditing = { kind: 'overall' } | { kind: 'category'; category: Category };
 
 export default function BudgetsScreen() {
+  const insets = useSafeAreaInsets();
   const { authService } = useAuth();
   const toast = useToast();
   const services = useMemo(() => {
@@ -83,8 +85,6 @@ export default function BudgetsScreen() {
   const [editing, setEditing] = useState<BudgetEditing | null>(null);
   const [pickingCategory, setPickingCategory] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Plan 016: clearing a budget is destructive → ConfirmSheet (with the
-  // month/category context), never a silent row removal.
   const [clearing, setClearing] = useState<{ categoryId: number | null; categoryName?: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -174,38 +174,48 @@ export default function BudgetsScreen() {
     [services.budgets, selectedMonth, load, toast],
   );
 
-  /** The budget rows' clear affordance now opens the ConfirmSheet (016). */
   const requestClear = (key: { categoryId: number | null; categoryName?: string }) => setClearing(key);
 
   const submitLabel = editingInitial !== null ? 'Save budget' : 'Set budget';
 
   return (
-    <View style={styles.container} testID="budgets-screen">
-      {/* Month selector — shared uiStore month (Analytics 011 reuses it). */}
-      <View className="flex-row items-center justify-between px-6 py-3 bg-card border-b border-border" style={styles.monthBar} testID="budgets-month-bar">
-        <Pressable
+    <View
+      style={[styles.container, { paddingTop: insets.top }]}
+      testID="budgets-screen"
+      className="flex-1 bg-background"
+    >
+      {/* Month selector cycle stepper — shared uiStore month */}
+      <View
+        className="flex-row items-center justify-between px-4 py-3 bg-card border-b border-border/60"
+        testID="budgets-month-bar"
+      >
+        <TouchTarget
+          minHeight={44}
           onPress={() => setSelectedMonth(shiftMonth(selectedMonth, -1))}
-          hitSlop={11}
           accessibilityRole="button"
           accessibilityLabel="Previous month"
           testID="budgets-month-prev"
         >
           <Ionicons name="chevron-back" size={22} color={colors.accent} />
-        </Pressable>
-        <View className="bg-accent/10 rounded-full py-1.5 px-4" style={styles.monthLabelPill}>
-          <Text className="text-base font-extrabold text-accent tracking-tight" style={styles.monthLabel} testID="budgets-month-label">
+        </TouchTarget>
+        <View className="bg-primary/10 rounded-full py-1.5 px-4 border border-primary/20">
+          <Text
+            className="text-base font-extrabold text-primary tracking-tight font-mono"
+            style={{ fontVariant: ['tabular-nums'] }}
+            testID="budgets-month-label"
+          >
             {formatMonthLabel(selectedMonth.year, selectedMonth.month)}
           </Text>
         </View>
-        <Pressable
+        <TouchTarget
+          minHeight={44}
           onPress={() => setSelectedMonth(shiftMonth(selectedMonth, 1))}
-          hitSlop={11}
           accessibilityRole="button"
           accessibilityLabel="Next month"
           testID="budgets-month-next"
         >
           <Ionicons name="chevron-forward" size={22} color={colors.accent} />
-        </Pressable>
+        </TouchTarget>
       </View>
 
       {error ? <InlineError message={error} testID="budgets-error" /> : null}
@@ -219,8 +229,18 @@ export default function BudgetsScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />}
+          className="flex-1 px-4"
+          contentContainerStyle={{
+            paddingTop: 16,
+            paddingBottom: insets.bottom + 80,
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={colors.muted}
+            />
+          }
         >
           {overall === null && byCategory.size === 0 ? (
             <View style={styles.emptyWrap}>
@@ -234,46 +254,55 @@ export default function BudgetsScreen() {
             </View>
           ) : null}
 
+          {/* Overall Monthly Budget Bento Card */}
           <BudgetCard
             spentSen={spentTotal}
             budget={overall}
             onPress={() => setEditing({ kind: 'overall' })}
             onClear={() => requestClear({ categoryId: null, categoryName: 'Monthly budget' })}
             busy={busy}
+            year={selectedMonth.year}
+            month={selectedMonth.month}
           />
 
+          {/* Section header */}
           <SectionHeader
-            title="Category budgets"
+            title="Category allocations"
             note="Informational only — the overall monthly budget is what your cash flow reserves."
+            style={{ marginHorizontal: 0 }}
           />
-          {/* Only categories WITH a budget get a row — no more walls of unset "—" rows. */}
-          {categories
-            .filter((category) => byCategory.has(category.id))
-            .map((category) => (
-              <BudgetRow
-                key={category.id}
-                category={category}
-                spentSen={categorySpent.get(category.id) ?? 0}
-                budget={byCategory.get(category.id) ?? null}
-                onPress={() => setEditing({ kind: 'category', category })}
-                onClear={() => requestClear({ categoryId: category.id, categoryName: category.name })}
-                busy={busy}
-              />
+
+          {/* Two-Column Category Allocations Grid covering all system categories */}
+          <View className="flex-row flex-wrap -mx-1.5" testID="category-allocations-grid">
+            {categories.map((category) => (
+              <View key={category.id} className="w-1/2 px-1.5">
+                <BudgetRow
+                  category={category}
+                  spentSen={categorySpent.get(category.id) ?? 0}
+                  budget={byCategory.get(category.id) ?? null}
+                  onPress={() => setEditing({ kind: 'category', category })}
+                  onClear={() => requestClear({ categoryId: category.id, categoryName: category.name })}
+                  busy={busy}
+                />
+              </View>
             ))}
+          </View>
+
+          {/* Add Category Budget trigger for categories without a budget */}
           <Pressable
             onPress={() => setPickingCategory(true)}
-            className="flex-row items-center justify-center gap-2 min-h-[48px] mx-4 mt-3 border border-dashed border-accent rounded-xl bg-accent/5"
-            style={({ pressed }) => [styles.addCategoryRow, pressed && styles.pressed]}
+            className="flex-row items-center justify-center gap-2 min-h-[48px] mt-2 mb-4 border border-dashed border-primary/40 rounded-xl bg-primary/5"
+            style={({ pressed }) => [pressed && styles.pressed]}
             accessibilityRole="button"
             testID="budgets-add-category"
           >
             <Ionicons name="add" size={18} color={colors.accent} />
-            <Text className="text-accent text-base font-bold" style={styles.addCategoryLabel}>Add category budget</Text>
+            <Text className="text-primary text-base font-bold">Add category budget</Text>
           </Pressable>
-          <View style={styles.spacer} />
         </ScrollView>
       )}
 
+      {/* Budget Limit Entry Sheet */}
       <Sheet
         visible={editing !== null}
         onClose={() => setEditing(null)}
@@ -289,14 +318,16 @@ export default function BudgetsScreen() {
         />
       </Sheet>
 
-      {/* Category picker for NEW category budgets (only categories without one). */}
+      {/* Category picker Sheet */}
       <Sheet
         visible={pickingCategory}
         onClose={() => setPickingCategory(false)}
         title="Add a category budget"
         cardTestID="budgets-category-picker"
       >
-        <Text style={styles.sheetNote}>Pick a category to set its monthly budget for {formatMonthLabel(selectedMonth.year, selectedMonth.month)}.</Text>
+        <Text style={styles.sheetNote}>
+          Pick a category to set its monthly budget for {formatMonthLabel(selectedMonth.year, selectedMonth.month)}.
+        </Text>
         <View style={styles.pickerChips}>
           {categories.filter((c) => !byCategory.has(c.id)).map((category) => (
             <Chip
@@ -323,6 +354,7 @@ export default function BudgetsScreen() {
         />
       </Sheet>
 
+      {/* Confirm clear dialog */}
       <ConfirmSheet
         visible={clearing !== null}
         title="Clear budget"
@@ -342,40 +374,7 @@ export default function BudgetsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  monthBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  monthLabelPill: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: 999,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.lg,
-  },
-  monthLabel: { fontSize: typography.emphasis, fontWeight: '800', color: colors.accent, letterSpacing: -0.2 },
-  content: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
   centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
-  sectionTitle: {
-    fontSize: typography.emphasis,
-    fontWeight: '800',
-    color: colors.text,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.xs,
-    letterSpacing: -0.2,
-  },
-  sectionNote: {
-    fontSize: typography.caption,
-    color: colors.muted,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.md,
-    fontWeight: '500',
-  },
   pickerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   sheetNote: {
     fontSize: typography.caption,
@@ -383,23 +382,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontWeight: '500',
   },
-  spacer: { height: spacing.lg },
-  // Gap under the empty-state CTA so it never sticks to the "Monthly budget" card below (plan 016 follow-up).
   emptyWrap: { marginBottom: spacing.lg },
-  addCategoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    minHeight: 48,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.accent,
-    borderRadius: spacing.md,
-    backgroundColor: colors.accentSoft,
-  },
-  addCategoryLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '700' },
   pressed: { opacity: 0.7 },
 });

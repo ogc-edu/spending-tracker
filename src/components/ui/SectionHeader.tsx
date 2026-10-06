@@ -4,20 +4,25 @@
  * optional trailing element (e.g. the categories Delete/Done actions).
  * Replaces the drift of ad-hoc sectionTitle/sectionNote style pairs.
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, spacing, typography } from '@/theme';
+import { cn } from '@/lib/utils';
 
 export function SectionHeader({
   title,
   note,
   trailing,
+  className,
+  style,
 }: {
   title: string;
   note?: string;
   trailing?: React.ReactNode;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, style]} className={cn(className)}>
       <View style={styles.titleRow}>
         <Text style={styles.title}>{title}</Text>
         {trailing ? <View style={styles.trailing}>{trailing}</View> : null}

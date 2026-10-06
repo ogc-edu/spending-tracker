@@ -1,49 +1,41 @@
 /**
- * BudgetCard (plan 007 UI) — the OVERALL monthly budget card: amount,
- * spent/remaining, percentage, progress bar, over-budget state in danger
- * color (BUD-2..4). Tapping the card opens the edit form (set or replace,
- * BUD-1); a "Clear" action removes the row (clearing is deletion — plan
- * §Decisions). With no overall budget the card shows the "set a budget"
- * prompt (plan §Requirements — PRD §8.4 treats a missing budget as term 0 in
- * cash flow, which is the dashboard's concern in 010, never rendered here).
+ * BudgetCard (Plan 005 — Overall Monthly Budget Bento Card)
  *
- * Metrics come ONLY from the pure engine (budgetMetrics) — no money math in
- * the UI. No notifications anywhere: over-budget is color + label.
+ * Visual allocation control hero card featuring:
+ * - BentoCard hairline framing and Obsidian/Porcelain theming.
+ * - Multi-tier BudgetMeter with dynamic threshold transitions:
+ *     <80%: Electric Mint
+ *     80-99%: Warning Amber
+ *     >=100%: Destructive Rose with excess badge
+ * - Tabular monospace numeric display for zero layout shift (tabular-nums).
+ * - Total spent vs budget target cap via MoneyDisplay.
+ * - Remaining funds pool and remaining daily buffer (S_safe / D_rem).
+ * - Preserved test contracts:
+ *     testID="budget-overall-card"
+ *     testID="budget-overall-over"
+ *     testID="budget-overall-progress"
+ *     testID="budget-overall-clear"
+ *     testID="budget-overall-empty"
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Budget } from '@/db/schema';
-import { budgetMetrics, type BudgetMetrics } from '@/engine/budgets';
+import { budgetMetrics } from '@/engine/budgets';
 import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
-import { ProgressBar } from './ProgressBar';
+import {
+  daysInMonth,
+  daysRemainingInMonthInclusive,
+  isSameLocalMonth,
+  monthEndDate,
+  todayLocal,
+} from '@/utils/dates';
+import { moneyFontVariant } from '@/theme';
 import { Badge } from '@/components/ui/Badge';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { BudgetMeter } from '@/components/ui/BudgetMeter';
+import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
+import { cn } from '@/lib/utils';
 
-function MetricsRow({ metrics }: { metrics: BudgetMetrics }) {
-  return (
-    <View className="flex-row items-center justify-between mb-2" style={styles.metricsRow}>
-      <Text className="text-sm text-muted-foreground font-medium" style={styles.metricText}>
-        Spent {formatSen(metrics.spent)}
-        {metrics.remaining !== null ? <> · Remaining {formatSen(metrics.remaining)}</> : null}
-      </Text>
-      {metrics.pctUsed !== null ? (
-        <Text
-          className={`text-sm font-extrabold ${metrics.overBudget ? 'text-destructive' : 'text-foreground'}`}
-          style={[styles.pctText, metrics.overBudget && styles.overText]}
-        >
-          {metrics.pctUsed.toFixed(1)}%
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-export function BudgetCard({
-  spentSen,
-  budget,
-  onPress,
-  onClear,
-  busy = false,
-}: {
+export interface BudgetCardProps {
   /** Month spend (sen) — engine monthlyTotals over the selected month. */
   spentSen: number;
   /** The month's overall budget row, or null when unset. */
@@ -54,85 +46,178 @@ export function BudgetCard({
   onClear(): void;
   /** True while an upsert/clear is in flight (disables taps). */
   busy?: boolean;
-}) {
+  /** Optional year context (defaults to current year). */
+  year?: number;
+  /** Optional month context (defaults to current month). */
+  month?: number;
+}
+
+export function BudgetCard({
+  spentSen,
+  budget,
+  onPress,
+  onClear,
+  busy = false,
+  year,
+  month,
+}: BudgetCardProps) {
   const metrics = budgetMetrics(budget?.amountSen ?? null, spentSen);
+
+  const now = new Date();
+  const targetYear = year ?? now.getFullYear();
+  const targetMonth = month ?? (now.getMonth() + 1);
+  const today = todayLocal();
+  const monthEnd = monthEndDate(targetYear, targetMonth);
+  const isCurrentMonth = isSameLocalMonth(today, targetMonth, targetYear);
+  const isFutureMonth = new Date(targetYear, targetMonth - 1, 1) > now;
+  const daysRem = isCurrentMonth
+    ? daysRemainingInMonthInclusive(today, monthEnd)
+    : isFutureMonth
+    ? daysInMonth(targetYear, targetMonth)
+    : 0;
+
+  const dailyBufferSen =
+    metrics.remaining !== null && daysRem > 0
+      ? Math.floor(metrics.remaining / daysRem)
+      : null;
+
+  const excessSen = budget ? Math.max(0, metrics.spent - budget.amountSen) : 0;
 
   return (
     <Pressable
       onPress={onPress}
       disabled={busy}
-      className="bg-card rounded-2xl border border-border p-5 mx-6 mb-4"
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       accessibilityRole="button"
       accessibilityLabel={budget ? 'Edit monthly budget' : 'Set monthly budget'}
       testID="budget-overall-card"
+      className="mb-4"
+      style={({ pressed }) => [pressed && styles.cardPressed]}
     >
-      <View className="flex-row items-center justify-between mb-1" style={styles.header}>
-        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wide" style={styles.title}>Monthly budget</Text>
-        {metrics.overBudget ? (
-          <Badge tone="danger" label="Over budget" testID="budget-overall-over" />
-        ) : null}
-      </View>
+      <BentoCard className="p-5 border-border/60 bg-card">
+        {/* Header row */}
+        <View className="flex-row items-center justify-between mb-2">
+          <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            Monthly Budget
+          </Text>
+          {metrics.overBudget ? (
+            <Badge
+              tone="danger"
+              label={excessSen > 0 ? `Over by ${formatSen(excessSen)}` : 'Over budget'}
+              testID="budget-overall-over"
+            />
+          ) : null}
+        </View>
 
-      {budget ? (
-        <>
-          <Text className="text-2xl font-extrabold text-foreground my-1" style={styles.amount}>{formatSen(budget.amountSen)}</Text>
-          <MetricsRow metrics={metrics} />
-          {metrics.pctUsed !== null ? (
-            <View className="mb-3" style={styles.progressWrap}>
-              <ProgressBar
-                pct={metrics.pctUsed}
-                color={colors.accent}
-                danger={metrics.overBudget}
+        {budget ? (
+          <>
+            {/* Spent vs Cap */}
+            <View className="flex-row items-baseline justify-between my-1">
+              <View>
+                <Text className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">
+                  Spent
+                </Text>
+                <MoneyDisplay
+                  amountInSen={metrics.spent}
+                  size="xl"
+                  className={metrics.overBudget ? 'text-destructive font-black' : 'text-foreground font-black'}
+                />
+              </View>
+              <View className="items-end">
+                <Text className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">
+                  Target Cap
+                </Text>
+                <MoneyDisplay
+                  amountInSen={budget.amountSen}
+                  size="lg"
+                  className="text-muted-foreground font-bold"
+                />
+              </View>
+            </View>
+
+            {/* Multi-tier BudgetMeter */}
+            <View className="my-3">
+              <BudgetMeter
+                spentSen={metrics.spent}
+                totalSen={budget.amountSen}
+                heightClass="h-2.5"
                 testID="budget-overall-progress"
               />
             </View>
-          ) : null}
-          <Pressable
-            onPress={onClear}
-            disabled={busy}
-            hitSlop={8}
-            className="self-start mt-1 min-h-[36px] justify-center"
-            style={({ pressed }) => [styles.clearButton, pressed && styles.pressed]}
-            accessibilityRole="button"
-            testID="budget-overall-clear"
-          >
-            <Text className="text-muted-foreground text-xs font-semibold underline" style={styles.clearLabel}>Clear budget</Text>
-          </Pressable>
-        </>
-      ) : (
-        <View className="py-2" style={styles.emptyBox} testID="budget-overall-empty">
-          <Text className="text-base font-bold text-foreground mb-1" style={styles.emptyTitle}>No monthly budget set</Text>
-          <Text className="text-sm text-muted-foreground leading-5" style={styles.emptyBody}>Tap to set a budget for this month and see your remaining funds.</Text>
-        </View>
-      )}
+
+            {/* Metrics Breakdown (Remaining Pool & Daily Buffer) */}
+            <View className="flex-row items-center justify-between pt-2 border-t border-border/40">
+              <View>
+                <Text className="text-xs text-muted-foreground font-medium">Remaining Pool</Text>
+                <MoneyDisplay
+                  amountInSen={metrics.remaining ?? 0}
+                  size="sm"
+                  className="font-bold text-foreground"
+                />
+              </View>
+
+              {dailyBufferSen !== null && dailyBufferSen > 0 ? (
+                <View className="items-center">
+                  <Text className="text-xs text-muted-foreground font-medium">Daily Buffer</Text>
+                  <View className="flex-row items-baseline">
+                    <MoneyDisplay
+                      amountInSen={dailyBufferSen}
+                      size="sm"
+                      className="font-bold text-primary"
+                    />
+                    <Text className="text-xs text-muted-foreground font-medium">/day</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {metrics.pctUsed !== null ? (
+                <View className="items-end">
+                  <Text className="text-xs text-muted-foreground font-medium">Utilization</Text>
+                  <Text
+                    className={cn(
+                      'text-sm font-extrabold',
+                      metrics.overBudget ? 'text-destructive' : 'text-foreground'
+                    )}
+                    style={{ fontVariant: moneyFontVariant }}
+                  >
+                    {metrics.pctUsed.toFixed(1)}%
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Clear budget action */}
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onClear();
+              }}
+              disabled={busy}
+              hitSlop={8}
+              className="self-start mt-3 min-h-[36px] justify-center"
+              accessibilityRole="button"
+              accessibilityLabel="Clear budget"
+              testID="budget-overall-clear"
+            >
+              <Text className="text-muted-foreground text-xs font-semibold underline">
+                Clear budget
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <View className="py-2" testID="budget-overall-empty">
+            <Text className="text-base font-bold text-foreground mb-1">
+              No monthly budget set
+            </Text>
+            <Text className="text-sm text-muted-foreground leading-5">
+              Tap to set a budget for this month and see your remaining funds.
+            </Text>
+          </View>
+        )}
+      </BentoCard>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-  },
   cardPressed: { opacity: 0.85 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
-  title: { fontSize: typography.caption, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  amount: { fontSize: typography.money, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.4 },
-  metricsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
-  metricText: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
-  pctText: { fontSize: typography.body, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant },
-  overText: { color: colors.danger },
-  progressWrap: { marginBottom: spacing.md },
-  clearButton: { alignSelf: 'flex-start', marginTop: spacing.xs },
-  clearLabel: { color: colors.muted, fontSize: typography.caption, fontWeight: '600', textDecorationLine: 'underline' },
-  pressed: { opacity: 0.6 },
-  emptyBox: { paddingVertical: spacing.sm },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
-  emptyBody: { fontSize: typography.body, color: colors.muted, lineHeight: 21 },
 });
