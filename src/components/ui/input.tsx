@@ -6,7 +6,7 @@ function Input({ className, style, ...props }: React.ComponentProps<typeof TextI
     <TextInput
       style={[{ minHeight: 48 }, style]}
       className={cn(
-        'border border-border bg-card text-foreground flex min-h-[48px] w-full min-w-0 flex-row items-center rounded-lg px-3.5 py-2 text-base leading-5',
+        'border border-border/60 bg-card text-foreground flex min-h-[48px] w-full min-w-0 flex-row items-center rounded-lg px-3.5 py-2 text-base leading-5',
         props.editable === false &&
         cn(
           'opacity-50',

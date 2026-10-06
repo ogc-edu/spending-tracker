@@ -21,7 +21,7 @@ function Card({
   ...props
 }: CardProps) {
   const toneClasses = {
-    plain: 'bg-card border-border',
+    plain: 'bg-card border-border/60',
     tint: 'bg-emerald-50/80 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40',
     danger: 'bg-rose-50/80 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40',
     accent: 'bg-primary border-primary',
@@ -34,7 +34,7 @@ function Card({
       <View
         testID={testID}
         className={cn(
-          'rounded-2xl border border-border bg-card p-5',
+          'rounded-2xl border border-border/60 bg-card p-5',
           toneClasses,
           className
         )}
