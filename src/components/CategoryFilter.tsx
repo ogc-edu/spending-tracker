@@ -6,8 +6,8 @@
  * future). Presentational — selection lives in uiStore via the screen's
  * callbacks. Chips are ≥44 pt touch targets via the shared Chip.
  */
-import { ScrollView, StyleSheet } from 'react-native';
-import type { Category } from '@/db/schema';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import type { Account, Category } from '@/db/schema';
 import { categoryColor } from '@/components/categoryMeta';
 import { Chip } from '@/components/ui/Chip';
 import { spacing } from '@/theme';
@@ -17,13 +17,25 @@ export interface CategoryFilterProps {
   /** null = All. */
   selectedId: number | null;
   onSelect(categoryId: number | null): void;
+  accounts?: Account[];
+  selectedAccountId?: number | null;
+  onOpenAccountSheet?(): void;
 }
 
-export function CategoryFilter({ categories, selectedId, onSelect }: CategoryFilterProps) {
+export function CategoryFilter({
+  categories,
+  selectedId,
+  onSelect,
+  accounts,
+  selectedAccountId,
+  onOpenAccountSheet,
+}: CategoryFilterProps) {
   const handlePress = (categoryId: number | null) => {
     // Tap active chip → clear to All; tap another → replace (single-select).
     onSelect(categoryId === selectedId ? null : categoryId);
   };
+
+  const selectedAccount = accounts?.find((a) => a.id === selectedAccountId);
 
   return (
     <ScrollView
@@ -49,6 +61,18 @@ export function CategoryFilter({ categories, selectedId, onSelect }: CategoryFil
           testID={`category-filter-${category.id}`}
         />
       ))}
+      {accounts && accounts.length > 0 && onOpenAccountSheet ? (
+        <>
+          <View className="w-px h-6 bg-border mx-1 self-center" />
+          <Chip
+            label={selectedAccount ? selectedAccount.name : 'Account'}
+            icon="wallet-outline"
+            selected={selectedAccountId != null}
+            onPress={onOpenAccountSheet}
+            testID="account-filter-chip"
+          />
+        </>
+      ) : null}
     </ScrollView>
   );
 }

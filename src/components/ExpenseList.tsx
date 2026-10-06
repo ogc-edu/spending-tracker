@@ -1,17 +1,15 @@
 /**
- * ExpenseList (plan 006; plan 018) — the expense history as a GROUPED list:
- * one shared surface (List) with hairline separators, rows grouped under
- * date section labels (Today / Yesterday / DD Mon) via SectionList. Grouping
- * is presentational over the already-fetched, date-desc page — a day that
- * spans a 50-row page boundary simply repeats its header on the next page
- * (named in plan 018 §7). Pagination ("load more" on onEndReached) and the
- * loading footer are unchanged; the pinned totals bar and empty states stay
- * OUTSIDE (the screen decides which empty case applies).
+ * ExpenseList (Plan 004 — Audit Ledger)
+ *
+ * Daily grouped modular BentoCard containers with date headers and daily totals via MoneyDisplay.
+ * List container tagged with testID="expenses-list" and testID="expense-list".
+ * Pagination and pull-to-refresh preserved.
  */
-import { ActivityIndicator, RefreshControl, SectionList, StyleSheet } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { Account, Category, Expense } from '@/db/schema';
 import { ExpenseRow } from '@/components/ExpenseRow';
-import { SectionLabel } from '@/components/ui/List';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
 import { formatDayLabel, todayLocal } from '@/utils/dates';
 import { colors, spacing } from '@/theme';
 
@@ -25,19 +23,21 @@ export interface ExpenseListProps {
   onRefresh?(): void;
   refreshing?: boolean;
   onPressRow(expense: Expense): void;
+  onEditRow?(expense: Expense): void;
+  onDeleteRow?(expense: Expense): void;
 }
 
 /** One dated section over the date-desc page (order preserved). */
-interface ExpenseSection {
+export interface ExpenseSection {
   title: string;
+  date: string;
+  totalSen: number;
   data: Expense[];
 }
 
 /** "Today" / "Yesterday" / "DD Mon" label for a `YYYY-MM-DD` date. */
 function dateGroupLabel(dateStr: string, today: string): string {
   if (dateStr === today) return 'Today';
-  // Yesterday: today − 1 day, local calendar (no Date objects cross the seam —
-  // build the label from the same string arithmetic the engine uses).
   const [y, m, d] = today.split('-').map(Number);
   const yesterday = new Date(y, m - 1, d - 1);
   const pad = (n: number): string => String(n).padStart(2, '0');
@@ -54,8 +54,14 @@ export function groupByDate(expenses: Expense[]): ExpenseSection[] {
     const last = sections[sections.length - 1];
     if (last && last.title === title) {
       last.data.push(expense);
+      last.totalSen += expense.amountSen;
     } else {
-      sections.push({ title, data: [expense] });
+      sections.push({
+        title,
+        date: expense.date,
+        totalSen: expense.amountSen,
+        data: [expense],
+      });
     }
   }
   return sections;
@@ -70,6 +76,8 @@ export function ExpenseList({
   onRefresh,
   refreshing = false,
   onPressRow,
+  onEditRow,
+  onDeleteRow,
 }: ExpenseListProps) {
   const accountName = (id: number | null): string | null =>
     id == null ? null : (accounts.find((a) => a.id === id)?.name ?? null);
@@ -77,33 +85,71 @@ export function ExpenseList({
   const sections = groupByDate(expenses);
 
   return (
-    <SectionList
-      sections={sections}
-      keyExtractor={(expense) => String(expense.id)}
-      renderSectionHeader={({ section }) => <SectionLabel>{section.title}</SectionLabel>}
-      renderItem={({ item }) => (
-        <ExpenseRow
-          expense={item}
-          category={categories.find((c) => c.id === item.categoryId)}
-          accountName={accountName(item.accountId)}
-          onPress={() => onPressRow(item)}
-        />
-      )}
-      onEndReached={onEndReached}
-      onEndReachedThreshold={0.4}
-      refreshControl={
-        onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} /> : undefined
-      }
-      ListFooterComponent={
-        hasMore ? <ActivityIndicator style={styles.footer} testID="expense-list-footer" /> : null
-      }
-      contentContainerStyle={styles.content}
-      testID="expense-list"
-    />
+    <View className="flex-1" testID="expenses-list">
+      <FlatList
+        data={sections}
+        keyExtractor={(section, index) => `${section.date}-${index}`}
+        renderItem={({ item: section }) => (
+          <BentoCard className="mx-4 mb-3.5 p-0 overflow-hidden border border-border/60 bg-card rounded-2xl shadow-sm">
+            {/* Date Header: Displays formatted date string on the left, daily total sum on the right */}
+            <View className="flex-row items-center justify-between px-4 py-2.5 bg-muted/20 border-b border-border/60">
+              <Text className="text-sm font-bold text-foreground tracking-tight">
+                {section.title}
+              </Text>
+              <MoneyDisplay
+                amountInSen={section.totalSen}
+                size="sm"
+                className="text-muted-foreground font-semibold"
+              />
+            </View>
+            {/* Transaction Rows */}
+            <View>
+              {section.data.map((expense, idx) => (
+                <View
+                  key={expense.id}
+                  className={idx > 0 ? 'border-t border-border/40' : ''}
+                >
+                  <ExpenseRow
+                    expense={expense}
+                    category={categories.find((c) => c.id === expense.categoryId)}
+                    accountName={accountName(expense.accountId)}
+                    onPress={() => onPressRow(expense)}
+                    onEdit={onEditRow ? () => onEditRow(expense) : undefined}
+                    onDelete={onDeleteRow ? () => onDeleteRow(expense) : undefined}
+                  />
+                </View>
+              ))}
+            </View>
+          </BentoCard>
+        )}
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.4}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.muted}
+            />
+          ) : undefined
+        }
+        ListFooterComponent={
+          hasMore ? (
+            <ActivityIndicator
+              style={styles.footer}
+              testID="expense-list-footer"
+            />
+          ) : null
+        }
+        contentContainerStyle={styles.content}
+        testID="expense-list"
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 120 },
+  content: { paddingBottom: 120, paddingTop: spacing.sm },
   footer: { marginVertical: spacing.lg },
 });
+
