@@ -36,10 +36,20 @@ export function MoMChip({
 
   return (
     <View
+      className={`self-start rounded-full px-3 py-1 border ${
+        up
+          ? 'bg-destructive/10 border-destructive/20'
+          : down
+            ? 'bg-accent/10 border-accent/20'
+            : 'bg-muted/30 border-border'
+      }`}
       style={[styles.chip, up ? styles.up : down ? styles.down : styles.flat]}
       testID="analytics-mom"
     >
       <Text
+        className={`text-xs font-bold ${
+          up ? 'text-destructive' : down ? 'text-accent' : 'text-muted-foreground'
+        }`}
         style={[styles.text, up ? styles.upText : down ? styles.downText : styles.neutralText]}
         testID="analytics-mom-label"
       >

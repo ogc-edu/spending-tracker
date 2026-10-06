@@ -182,7 +182,7 @@ export default function BudgetsScreen() {
   return (
     <View style={styles.container} testID="budgets-screen">
       {/* Month selector — shared uiStore month (Analytics 011 reuses it). */}
-      <View style={styles.monthBar} testID="budgets-month-bar">
+      <View className="flex-row items-center justify-between px-6 py-3 bg-card border-b border-border" style={styles.monthBar} testID="budgets-month-bar">
         <Pressable
           onPress={() => setSelectedMonth(shiftMonth(selectedMonth, -1))}
           hitSlop={11}
@@ -192,8 +192,8 @@ export default function BudgetsScreen() {
         >
           <Ionicons name="chevron-back" size={22} color={colors.accent} />
         </Pressable>
-        <View style={styles.monthLabelPill}>
-          <Text style={styles.monthLabel} testID="budgets-month-label">
+        <View className="bg-accent/10 rounded-full py-1.5 px-4" style={styles.monthLabelPill}>
+          <Text className="text-base font-extrabold text-accent tracking-tight" style={styles.monthLabel} testID="budgets-month-label">
             {formatMonthLabel(selectedMonth.year, selectedMonth.month)}
           </Text>
         </View>
@@ -262,12 +262,13 @@ export default function BudgetsScreen() {
             ))}
           <Pressable
             onPress={() => setPickingCategory(true)}
+            className="flex-row items-center justify-center gap-2 min-h-[48px] mx-4 mt-3 border border-dashed border-accent rounded-xl bg-accent/5"
             style={({ pressed }) => [styles.addCategoryRow, pressed && styles.pressed]}
             accessibilityRole="button"
             testID="budgets-add-category"
           >
             <Ionicons name="add" size={18} color={colors.accent} />
-            <Text style={styles.addCategoryLabel}>Add category budget</Text>
+            <Text className="text-accent text-base font-bold" style={styles.addCategoryLabel}>Add category budget</Text>
           </Pressable>
           <View style={styles.spacer} />
         </ScrollView>

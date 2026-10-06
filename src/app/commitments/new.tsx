@@ -48,6 +48,7 @@ export default function NewCommitmentScreen() {
   return (
     <KeyboardScreen>
       <ScrollView
+        className="flex-1 bg-background"
         style={styles.container}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -61,10 +62,11 @@ export default function NewCommitmentScreen() {
         />
         <Pressable
           onPress={() => router.back()}
+          className="items-center py-4 min-h-[44px] justify-center active:opacity-60"
           style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
           accessibilityRole="button"
         >
-          <Text style={styles.cancelLinkLabel}>Cancel</Text>
+          <Text className="text-muted-foreground text-base font-semibold" style={styles.cancelLinkLabel}>Cancel</Text>
         </Pressable>
       </ScrollView>
     </KeyboardScreen>

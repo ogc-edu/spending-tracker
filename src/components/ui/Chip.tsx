@@ -1,16 +1,11 @@
 /**
- * Chip (plan 017) — the ONE filter chip every picker row composes from
- * (category filters, period presets, budget picker, settings categories).
- *
- * Fixes the plan-017 audit finding that the old chips were ~26 px tall —
- * under the project's own 44-pt touch-target rule — by enforcing
- * `minHeight: MIN_TOUCH_TARGET` and a pill shape. Selected state is the
- * accent fill (white label, AA-asserted pair); idle state is a bordered
- * surface with tone-colored optional icon.
+ * Chip — filter chip with RNR aesthetic and NativeWind support.
+ * Enforces minimum 44px touch target (MIN_TOUCH_TARGET) and subtle hairline borders.
  */
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MIN_TOUCH_TARGET, colors, spacing, typography } from '@/theme';
+import { MIN_TOUCH_TARGET, colors, typography } from '@/theme';
+import { cn } from '@/lib/utils';
 
 export interface ChipProps {
   label: string;
@@ -24,6 +19,8 @@ export interface ChipProps {
   onLongPress?(): void;
   delayLongPress?: number;
   disabled?: boolean;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
@@ -36,6 +33,8 @@ export function Chip({
   onLongPress,
   delayLongPress,
   disabled = false,
+  className,
+  style,
   testID,
 }: ChipProps) {
   return (
@@ -44,7 +43,19 @@ export function Chip({
       onLongPress={onLongPress}
       delayLongPress={delayLongPress}
       disabled={disabled}
-      style={({ pressed }) => [styles.chip, selected && styles.selected, pressed && styles.pressed]}
+      className={cn(
+        'min-h-[44px] flex-row items-center justify-center gap-1.5 rounded-full border px-4 py-1.5',
+        selected
+          ? 'border-primary bg-primary'
+          : 'border-border bg-card active:bg-muted/40',
+        className
+      )}
+      style={({ pressed }) => [
+        styles.chip,
+        selected && styles.selected,
+        pressed && styles.pressed,
+        style,
+      ]}
       android_ripple={{ color: selected ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)', borderless: false }}
       accessibilityRole="button"
       accessibilityState={{ selected }}
@@ -53,24 +64,22 @@ export function Chip({
       {icon ? (
         <Ionicons name={icon} size={14} color={selected ? colors.surface : iconColor ?? colors.muted} />
       ) : null}
-      <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
+      <Text
+        className={cn(
+          'text-xs font-semibold',
+          selected ? 'text-primary-foreground font-bold' : 'text-foreground'
+        )}
+        style={[styles.label, selected && styles.labelSelected]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
     minHeight: MIN_TOUCH_TARGET,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
   },
   selected: { backgroundColor: colors.accent, borderColor: colors.accent },
   pressed: { opacity: 0.8 },

@@ -8,7 +8,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { SpendingSnapshot } from '@/services/AnalyticsService';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 function StatCell({
   label,
@@ -24,11 +24,11 @@ function StatCell({
   testID?: string;
 }) {
   return (
-    <View style={styles.cell} testID={testID}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{value}</Text>
+    <View className="w-[48%] bg-card rounded-2xl border border-border p-4 mb-3" style={styles.cell} testID={testID}>
+      <Text className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider" style={styles.label}>{label}</Text>
+      <Text className="text-base font-extrabold text-foreground tracking-tight" style={styles.value}>{value}</Text>
       {sub ? (
-        <Text style={[styles.sub, subTone ? { color: subTone } : null]}>{sub}</Text>
+        <Text className="text-xs text-muted-foreground mt-1 font-medium" style={[styles.sub, subTone ? { color: subTone } : null]}>{sub}</Text>
       ) : null}
     </View>
   );
@@ -92,7 +92,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    ...shadows.card,
   },
   label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
   value: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, letterSpacing: -0.3 },

@@ -9,12 +9,13 @@
  * source of truth — errors bubble to `error`).
  */
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/theme';
 import { CATEGORY_ICON_CHOICES } from './categoryMeta';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
 
 export interface CategoryAddSheetProps {
   visible: boolean;
@@ -70,15 +71,15 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
       cardTestID="category-add-sheet"
     >
 
-          <Text style={styles.label} nativeID="category-add-label-name">
+          <Text className="text-sm font-semibold text-foreground mb-1.5 mt-3" style={styles.label} nativeID="category-add-label-name">
             Name
           </Text>
-          <TextInput
+          <Input
+            className={error ? 'border-destructive' : undefined}
             style={[styles.input, error && styles.inputError]}
             value={name}
             onChangeText={setName}
             placeholder="e.g. Pets"
-            placeholderTextColor={colors.muted}
             maxLength={24}
             autoFocus
             editable={!saving}
@@ -87,12 +88,12 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
             testID="category-add-name"
           />
           {error ? (
-            <Text style={styles.fieldError} testID="category-add-error">
+            <Text className="mt-1 text-xs text-destructive" style={styles.fieldError} testID="category-add-error">
               {error}
             </Text>
           ) : null}
 
-          <Text style={styles.label}>Icon</Text>
+          <Text className="text-sm font-semibold text-foreground mb-2 mt-3" style={styles.label}>Icon</Text>
           <View style={styles.iconGrid}>
             {CATEGORY_ICON_CHOICES.map((choice) => {
               const selected = icon === choice;

@@ -25,7 +25,7 @@ export function MonthSelector({
   };
 
   return (
-    <View style={styles.bar} testID="analytics-month-bar">
+    <View className="flex-row items-center justify-between px-6 py-3 bg-card border-b border-border" style={styles.bar} testID="analytics-month-bar">
       <Pressable
         onPress={() => shift(-1)}
         hitSlop={8}
@@ -35,8 +35,8 @@ export function MonthSelector({
       >
         <Ionicons name="chevron-back" size={22} color={colors.accent} />
       </Pressable>
-      <View style={styles.labelPill}>
-        <Text style={styles.label} testID="analytics-month-label">
+      <View className="bg-accent/10 rounded-full py-1.5 px-4" style={styles.labelPill}>
+        <Text className="text-base font-extrabold text-accent tracking-tight" style={styles.label} testID="analytics-month-label">
           {formatMonthLabel(month.year, month.month)}
         </Text>
       </View>

@@ -40,16 +40,16 @@ export function ScheduleRow({
 }: ScheduleRowProps) {
   if (payment) {
     return (
-      <View style={[styles.row, styles.paidRow]} testID="schedule-row-paid">
+      <View className="flex-row items-center gap-2 bg-card border border-border rounded-xl p-3.5 mb-2 min-h-[52px]" style={[styles.row, styles.paidRow]} testID="schedule-row-paid">
         <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
-        <View style={styles.body}>
-          <View style={styles.line}>
-            <Text style={styles.amount} numberOfLines={1} accessibilityLabel={`Payment, ${spokenMoneyLabel(payment.amountSen)}`}>
+        <View className="flex-1" style={styles.body}>
+          <View className="flex-row items-center gap-2" style={styles.line}>
+            <Text className="text-base font-bold text-foreground" style={styles.amount} numberOfLines={1} accessibilityLabel={`Payment, ${spokenMoneyLabel(payment.amountSen)}`}>
               {formatSen(payment.amountSen)}
             </Text>
-            <Text style={styles.paidLabel}>Paid</Text>
+            <Text className="text-xs text-accent font-bold" style={styles.paidLabel}>Paid</Text>
           </View>
-          <Text style={styles.meta}>
+          <Text className="text-xs text-muted-foreground mt-0.5" style={styles.meta}>
             {formatDayLabel(payment.dueDate)} · paid {formatDayLabel(payment.paidDate ?? payment.dueDate)}
             {accountName ? ` · ${accountName}` : ''}
           </Text>
@@ -57,31 +57,32 @@ export function ScheduleRow({
         <Pressable
           onPress={() => onUnPay(payment)}
           disabled={busy}
+          className="flex-row items-center gap-1 border border-destructive/30 rounded-lg py-2 px-3 bg-destructive/10 min-h-[44px]"
           style={({ pressed }) => [styles.unpay, pressed && styles.pressed]}
           accessibilityRole="button"
           testID="schedule-row-unpay"
         >
           <Ionicons name="arrow-undo-outline" size={14} color={colors.danger} />
-          <Text style={styles.unpayLabel}>Un-pay</Text>
+          <Text className="text-destructive text-xs font-bold" style={styles.unpayLabel}>Un-pay</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <View style={styles.row} testID="schedule-row-upcoming">
+    <View className="flex-row items-center gap-2 bg-card border border-border rounded-xl p-3.5 mb-2 min-h-[52px]" style={styles.row} testID="schedule-row-upcoming">
       <Ionicons name="calendar-outline" size={18} color={overdue ? colors.danger : colors.muted} />
-      <View style={styles.body}>
-        <View style={styles.line}>
-          <Text style={styles.amount} numberOfLines={1} accessibilityLabel={`Payment, ${spokenMoneyLabel(slot.amountSen)}`}>
+      <View className="flex-1" style={styles.body}>
+        <View className="flex-row items-center gap-2" style={styles.line}>
+          <Text className="text-base font-bold text-foreground" style={styles.amount} numberOfLines={1} accessibilityLabel={`Payment, ${spokenMoneyLabel(slot.amountSen)}`}>
             {formatSen(slot.amountSen)}
           </Text>
-          <Text style={[styles.dueLabel, overdue && styles.overdueLabel]}>
+          <Text className={`text-xs ${overdue ? 'text-destructive font-bold' : 'text-muted-foreground font-semibold'}`} style={[styles.dueLabel, overdue && styles.overdueLabel]}>
             {formatDayLabel(slot.dueDate)}
           </Text>
         </View>
         {overdue ? (
-          <Text style={styles.overdueBadge} testID="schedule-row-overdue">
+          <Text className="self-start mt-1 bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded" style={styles.overdueBadge} testID="schedule-row-overdue">
             Overdue
           </Text>
         ) : null}
@@ -89,6 +90,7 @@ export function ScheduleRow({
       <Pressable
         onPress={() => onMarkPaid(slot)}
         disabled={busy || !canMarkPaid}
+        className={`flex-row items-center gap-1 bg-accent rounded-lg py-2 px-3 min-h-[44px] ${(!canMarkPaid || busy) ? 'opacity-40' : ''}`}
         style={({ pressed }) => [
           styles.markPaid,
           (!canMarkPaid || busy) && styles.buttonDisabled,
@@ -98,7 +100,7 @@ export function ScheduleRow({
         testID="schedule-row-mark-paid"
       >
         <Ionicons name="checkmark" size={14} color="#fff" />
-        <Text style={styles.markPaidLabel}>Mark paid</Text>
+        <Text className="text-white text-xs font-bold" style={styles.markPaidLabel}>Mark paid</Text>
       </Pressable>
     </View>
   );

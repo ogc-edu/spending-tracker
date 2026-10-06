@@ -47,10 +47,10 @@ export function UpcomingList({
   const today = todayLocal();
   return (
     <Card testID="upcoming-card">
-      <Text style={styles.title}>Upcoming</Text>
+      <Text className="text-base font-bold text-foreground mb-2" style={styles.title}>Upcoming</Text>
 
       {items.length === 0 ? (
-        <Text style={styles.empty} testID="upcoming-empty">
+        <Text className="text-sm text-muted-foreground font-medium" style={styles.empty} testID="upcoming-empty">
           Nothing due before next month
         </Text>
       ) : (
@@ -61,31 +61,33 @@ export function UpcomingList({
               <Pressable
                 key={`${item.commitmentId}:${item.dueDate}`}
                 onPress={() => onOpenCommitment(item.commitmentId)}
+                className="flex-row items-center gap-3 py-3 border-t border-border min-h-[48px]"
                 style={({ pressed }) => [styles.row, pressed && styles.pressed]}
                 android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
                 accessibilityRole="button"
                 accessibilityLabel={`${item.name}, due ${formatDayLabel(item.dueDate)}, ${spokenMoneyLabel(item.amountSen)}`}
                 testID={`upcoming-row-${item.commitmentId}`}
               >
-                <View style={[styles.iconWrap, overdue && styles.iconWrapOverdue]}>
+                <View className={`w-9 h-9 rounded-full items-center justify-center ${overdue ? 'bg-destructive/10' : 'bg-accent/10'}`} style={[styles.iconWrap, overdue && styles.iconWrapOverdue]}>
                   <Ionicons
                     name={(KIND_ICONS[item.frequency] ?? DEFAULT_KIND_ICON) as never}
                     size={18}
                     color={overdue ? colors.danger : colors.accent}
                   />
                 </View>
-                <View style={styles.rowMain}>
-                  <Text style={styles.name} numberOfLines={1}>
+                <View className="flex-1 mr-1" style={styles.rowMain}>
+                  <Text className="text-sm font-semibold text-foreground" style={styles.name} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <View style={styles.dateRow}>
+                  <View className="flex-row items-center gap-2 mt-0.5" style={styles.dateRow}>
                     {overdue ? <Badge tone="danger" label="Overdue" /> : null}
-                    <Text style={[styles.date, overdue && styles.dateOverdue]}>
+                    <Text className={`text-xs ${overdue ? 'text-destructive font-semibold' : 'text-muted-foreground font-medium'}`} style={[styles.date, overdue && styles.dateOverdue]}>
                       {formatDayLabel(item.dueDate)}
                     </Text>
                   </View>
                 </View>
                 <Text
+                  className={`text-base font-bold flex-shrink ml-2 ${overdue ? 'text-destructive' : 'text-foreground'}`}
                   style={[styles.amount, overdue && styles.amountOverdue]}
                   numberOfLines={1}
                   accessibilityLabel={`${item.name}, ${spokenMoneyLabel(item.amountSen)}`}
@@ -95,9 +97,9 @@ export function UpcomingList({
               </Pressable>
             );
           })}
-          <View style={styles.footer} testID="upcoming-total">
-            <Text style={styles.footerLabel}>Due before {dueBeforeLabel}</Text>
-            <Text style={styles.footerAmount} numberOfLines={1} accessibilityLabel={`Due before ${dueBeforeLabel}, ${spokenMoneyLabel(totalSen)}`}>
+          <View className="flex-row justify-between items-center border-t border-border mt-1 pt-3" style={styles.footer} testID="upcoming-total">
+            <Text className="text-xs text-muted-foreground font-medium" style={styles.footerLabel}>Due before {dueBeforeLabel}</Text>
+            <Text className="text-base font-extrabold text-foreground flex-shrink ml-3" style={styles.footerAmount} numberOfLines={1} accessibilityLabel={`Due before ${dueBeforeLabel}, ${spokenMoneyLabel(totalSen)}`}>
               {formatSen(totalSen)}
             </Text>
           </View>

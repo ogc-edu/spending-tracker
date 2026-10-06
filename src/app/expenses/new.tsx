@@ -92,9 +92,9 @@ export default function NewExpenseScreen() {
 
   if (accounts.length === 0) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>No accounts yet</Text>
-        <Text style={styles.emptyBody}>
+      <View className="flex-1 bg-background items-center justify-center p-6" style={styles.center}>
+        <Text className="text-lg font-bold text-foreground mb-2" style={styles.emptyTitle}>No accounts yet</Text>
+        <Text className="text-sm text-muted-foreground text-center leading-6" style={styles.emptyBody}>
           Add an account in Settings → Accounts before recording expenses — every expense adjusts its account balance.
         </Text>
       </View>
@@ -109,6 +109,7 @@ export default function NewExpenseScreen() {
 
   return (
     <KeyboardAwareScrollView
+      className="flex-1 bg-background"
       style={styles.container}
       contentContainerStyle={styles.content}
       testID="new-expense-screen"
@@ -133,10 +134,11 @@ export default function NewExpenseScreen() {
       />
       <Pressable
         onPress={() => router.back()}
+        className="items-center py-4 min-h-[44px] justify-center active:opacity-60"
         style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
         accessibilityRole="button"
       >
-        <Text style={styles.cancelLinkLabel}>Cancel</Text>
+        <Text className="text-muted-foreground text-base font-semibold" style={styles.cancelLinkLabel}>Cancel</Text>
       </Pressable>
     </KeyboardAwareScrollView>
   );

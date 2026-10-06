@@ -41,19 +41,20 @@ export function BudgetBar({
   if (!budget) {
     return (
       <Card testID="budget-bar-empty">
-        <Text style={styles.title}>Monthly budget</Text>
-        <Text style={styles.emptyBody}>
+        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider" style={styles.title}>Monthly budget</Text>
+        <Text className="text-sm text-muted-foreground mt-1 leading-relaxed" style={styles.emptyBody}>
           No monthly budget set — cash flow treats it as RM0 reserved.
         </Text>
         <Pressable
           onPress={onSetBudget}
+          className="self-start mt-3 bg-accent/10 rounded-full min-h-[44px] justify-center py-2 px-4 border border-accent/20"
           style={({ pressed }) => [styles.setButton, pressed && styles.pressed]}
           android_ripple={{ color: 'rgba(0,0,0,0.06)', borderless: false }}
           accessibilityRole="button"
           accessibilityLabel="Set a monthly budget"
           testID="budget-bar-set"
         >
-          <Text style={styles.setLabel}>Set a budget</Text>
+          <Text className="text-accent text-sm font-bold" style={styles.setLabel}>Set a budget</Text>
         </Pressable>
       </Card>
     );
@@ -61,14 +62,14 @@ export function BudgetBar({
 
   return (
     <Card testID="budget-bar">
-      <View style={styles.header}>
-        <Text style={styles.title}>Monthly budget</Text>
+      <View className="flex-row items-center justify-between mb-1" style={styles.header}>
+        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wider" style={styles.title}>Monthly budget</Text>
         {overBudget ? <Badge tone="danger" label="Over budget" testID="budget-bar-over" /> : null}
       </View>
-      <Text style={styles.amount} numberOfLines={1} accessibilityLabel={`Monthly budget, ${spokenMoneyLabel(budget.amountSen)}`}>
+      <Text className="text-2xl font-extrabold text-foreground mb-2" style={styles.amount} numberOfLines={1} accessibilityLabel={`Monthly budget, ${spokenMoneyLabel(budget.amountSen)}`}>
         {formatSen(budget.amountSen)}
       </Text>
-      <View style={styles.progressWrap}>
+      <View className="mb-2" style={styles.progressWrap}>
         <ProgressBar
           pct={pctUsed ?? 0}
           color={colors.accent}
@@ -77,12 +78,13 @@ export function BudgetBar({
         />
       </View>
       <Text
+        className="text-sm text-muted-foreground font-medium"
         style={styles.metrics}
         accessibilityLabel={`Spent ${spokenMoneyLabel(spentSen)}, remaining ${spokenMoneyLabel(remainingSen)}`}
       >
         Spent {formatSen(spentSen)}
         {' · '}Remaining {formatSen(remainingSen)}
-        {pctUsed !== null ? <Text style={styles.pct}> · {pctUsed.toFixed(1)}%</Text> : null}
+        {pctUsed !== null ? <Text className="font-bold text-foreground" style={styles.pct}> · {pctUsed.toFixed(1)}%</Text> : null}
       </Text>
     </Card>
   );

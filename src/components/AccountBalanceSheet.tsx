@@ -78,35 +78,35 @@ export function AccountBalanceSheet({ account, onSave, onCancel }: AccountBalanc
     >
       {/* Remounted per account by the owner's `key`, so the prefill re-reads. */}
       <View>
-        <Text style={styles.subtitle} testID="account-balance-subtitle">
+        <Text className="text-xs text-muted-foreground mt-0.5" style={styles.subtitle} testID="account-balance-subtitle">
           {account.name} · now {formatSen(account.balanceSen)}
         </Text>
 
-          <Text style={styles.label} nativeID="account-balance-label">
-            {owed ? 'New amount owed' : 'New balance'}
+        <Text className="text-sm font-semibold text-foreground mb-1.5 mt-4" style={styles.label} nativeID="account-balance-label">
+          {owed ? 'New amount owed' : 'New balance'}
+        </Text>
+        <MoneyInput
+          value={amount}
+          onChangeValue={(next) => {
+            setAmount(next);
+            setError(null);
+          }}
+          hasError={error !== null}
+          editable={!saving}
+          autoFocus
+          accessibilityLabel={owed ? 'New amount owed in ringgit' : 'New balance in ringgit'}
+          accessibilityLabelledBy="account-balance-label"
+          testID="account-balance-input"
+        />
+        {error ? (
+          <Text className="mt-1 text-xs text-destructive" style={styles.fieldError} testID="account-balance-error">
+            {error}
           </Text>
-          <MoneyInput
-            value={amount}
-            onChangeValue={(next) => {
-              setAmount(next);
-              setError(null);
-            }}
-            hasError={error !== null}
-            editable={!saving}
-            autoFocus
-            accessibilityLabel={owed ? 'New amount owed in ringgit' : 'New balance in ringgit'}
-            accessibilityLabelledBy="account-balance-label"
-            testID="account-balance-input"
-          />
-          {error ? (
-            <Text style={styles.fieldError} testID="account-balance-error">
-              {error}
-            </Text>
-          ) : null}
+        ) : null}
 
-          <Text style={styles.note}>
-            This corrects the recorded figure only — your expenses and their history stay as they are.
-          </Text>
+        <Text className="text-xs text-muted-foreground mt-3 mb-4 leading-relaxed" style={styles.note}>
+          This corrects the recorded figure only — your expenses and their history stay as they are.
+        </Text>
 
         <Button
           label="Save"

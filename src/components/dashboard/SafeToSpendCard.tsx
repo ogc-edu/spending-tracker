@@ -33,7 +33,7 @@ export function SafeToSpendCard({
 
   return (
     <Card tone={deficit ? 'danger' : 'tint'} testID={deficit ? 'safe-to-spend-deficit' : 'safe-to-spend'}>
-      <View style={styles.header}>
+      <View className="flex-row items-center mb-1" style={styles.header}>
         <Badge
           tone={deficit ? 'danger' : 'accent'}
           label={deficit ? 'No safe-to-spend' : 'Safe to spend'}
@@ -41,6 +41,7 @@ export function SafeToSpendCard({
         />
       </View>
       <Text
+        className={`text-3xl font-extrabold my-2 tracking-tight ${deficit ? 'text-destructive' : 'text-foreground'}`}
         style={[styles.headline, deficit && styles.headlineDeficit]}
         numberOfLines={1}
         accessibilityLabel={`${deficit ? 'No safe to spend' : 'Safe to spend'}, ${spokenMoneyLabel(safeSen)}`}
@@ -49,11 +50,13 @@ export function SafeToSpendCard({
         {formatSen(safeSen)}
       </Text>
       <View
+        className="flex-row items-center justify-between bg-card rounded-xl py-3 px-3.5 border border-border/50"
         style={[styles.chip, deficit && styles.chipDeficit]}
         testID="daily-allowance-chip"
       >
-        <Text style={[styles.chipLabel, deficit && styles.deficitText]}>Daily allowance</Text>
+        <Text className={`text-xs font-semibold ${deficit ? 'text-destructive' : 'text-muted-foreground'}`} style={[styles.chipLabel, deficit && styles.deficitText]}>Daily allowance</Text>
         <Text
+          className={`text-sm font-bold ${deficit ? 'text-destructive' : 'text-foreground'}`}
           style={[styles.chipValue, deficit && styles.deficitText]}
           numberOfLines={1}
           accessibilityLabel={
@@ -65,7 +68,7 @@ export function SafeToSpendCard({
         </Text>
       </View>
       {deficit ? (
-        <Text style={styles.warning} testID="deficit-copy">
+        <Text className="text-xs text-destructive mt-2 leading-relaxed" style={styles.warning} testID="deficit-copy">
           Cover your commitments and safety buffer before discretionary spending
         </Text>
       ) : null}

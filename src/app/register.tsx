@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, Redirect } from 'expo-router';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { z } from 'zod';
 import { useAuth } from '@/auth/AuthProvider';
-import { colors, spacing, typography } from '@/theme';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/input';
+import { Text } from '@/components/ui/text';
 
 const schema = z
   .object({
@@ -42,8 +45,8 @@ export default function RegisterScreen() {
 
   if (status === 'loading') {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
+      <View className="flex-1 bg-background justify-center items-center">
+        <ActivityIndicator color="#15803D" />
       </View>
     );
   }
@@ -59,41 +62,44 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
       <KeyboardAvoidingView
-        style={styles.container}
+        className="flex-1 px-6 justify-center"
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.brandHeader}>
-          <View style={styles.brandIconWrap}>
-            <Ionicons name="wallet" size={32} color={colors.accent} />
+        <View className="items-center mb-8">
+          <View className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/40 items-center justify-center mb-3 border border-emerald-200 dark:border-emerald-800/30">
+            <Ionicons name="wallet" size={32} color="#15803D" />
           </View>
-          <Text style={styles.title}>Create account</Text>
-          <Text style={styles.subtitle}>Register to start tracking your finances</Text>
+          <Text className="text-2xl font-extrabold text-foreground tracking-tight">Create account</Text>
+          <Text className="text-sm font-medium text-muted-foreground mt-1">Register to start tracking your finances</Text>
         </View>
 
-        <View style={styles.card}>
+        <Card className="p-6 border border-border shadow-none">
           <Controller
             control={control}
             name="email"
             render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-              <View style={styles.field}>
-                <Text style={styles.label}>Email</Text>
-                <TextInput
-                  style={[styles.input, error && styles.inputError]}
+              <View className="mb-4">
+                <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5" nativeID="register-label-email">
+                  Email
+                </Text>
+                <Input
+                  className="min-h-[48px] h-12 rounded-xl bg-background border border-border px-4 text-base text-foreground"
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
                   placeholder="you@example.com"
-                  placeholderTextColor={colors.muted}
+                  placeholderTextColor="#6B7280"
                   accessibilityLabel="Email address"
+                  accessibilityLabelledBy="register-label-email"
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
                   editable={!isSubmitting}
                   testID="register-email"
                 />
-                {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+                {error ? <Text className="text-destructive text-xs font-semibold mt-1.5">{error.message}</Text> : null}
               </View>
             )}
           />
@@ -102,15 +108,18 @@ export default function RegisterScreen() {
             control={control}
             name="password"
             render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-              <View style={styles.field}>
-                <Text style={styles.label}>Password</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={[styles.input, styles.passwordInput, error && styles.inputError]}
+              <View className="mb-4">
+                <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5" nativeID="register-label-password">
+                  Password
+                </Text>
+                <View className="relative justify-center">
+                  <Input
+                    className="min-h-[48px] h-12 rounded-xl bg-background border border-border pl-4 pr-12 text-base text-foreground"
                     secureTextEntry={!showPassword}
                     placeholder="••••••••"
-                    placeholderTextColor={colors.muted}
+                    placeholderTextColor="#6B7280"
                     accessibilityLabel="Password"
+                    accessibilityLabelledBy="register-label-password"
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -119,7 +128,7 @@ export default function RegisterScreen() {
                   />
                   <Pressable
                     onPress={() => setShowPassword((v) => !v)}
-                    style={styles.eyeButton}
+                    className="absolute right-0 top-0 bottom-0 w-12 min-h-[44px] items-center justify-center"
                     hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
@@ -127,11 +136,11 @@ export default function RegisterScreen() {
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                       size={20}
-                      color={colors.muted}
+                      color="#6B7280"
                     />
                   </Pressable>
                 </View>
-                {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+                {error ? <Text className="text-destructive text-xs font-semibold mt-1.5">{error.message}</Text> : null}
               </View>
             )}
           />
@@ -140,49 +149,49 @@ export default function RegisterScreen() {
             control={control}
             name="confirm"
             render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-              <View style={styles.field}>
-                <Text style={styles.label}>Confirm password</Text>
-                <TextInput
-                  style={[styles.input, error && styles.inputError]}
+              <View className="mb-4">
+                <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5" nativeID="register-label-confirm">
+                  Confirm Password
+                </Text>
+                <Input
+                  className="min-h-[48px] h-12 rounded-xl bg-background border border-border px-4 text-base text-foreground"
                   secureTextEntry={!showPassword}
                   placeholder="••••••••"
-                  placeholderTextColor={colors.muted}
+                  placeholderTextColor="#6B7280"
                   accessibilityLabel="Confirm password"
+                  accessibilityLabelledBy="register-label-confirm"
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
                   editable={!isSubmitting}
                   testID="register-confirm"
                 />
-                {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+                {error ? <Text className="text-destructive text-xs font-semibold mt-1.5">{error.message}</Text> : null}
               </View>
             )}
           />
 
           {formError ? (
-            <View style={styles.errorBox} testID="register-error">
-              <Text style={styles.errorText}>{formError}</Text>
+            <View className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 mb-4" testID="register-error">
+              <Text className="text-destructive text-sm font-medium">{formError}</Text>
             </View>
           ) : null}
 
-          <Pressable
-            style={[styles.button, isSubmitting && styles.buttonDisabled]}
-            onPress={handleSubmit(onSubmit)}
+          <Button
+            label="Create account"
+            variant="default"
+            size="default"
+            busy={isSubmitting}
             disabled={isSubmitting}
-            accessibilityRole="button"
+            onPress={handleSubmit(onSubmit)}
             testID="register-submit"
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonLabel}>Create account</Text>
-            )}
-          </Pressable>
-        </View>
+            className="mt-2"
+          />
+        </Card>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <Link href={"/login" as never} style={styles.link} testID="register-login-link">
+        <View className="flex-row justify-center mt-6 items-center">
+          <Text className="text-muted-foreground text-sm font-medium">Already have an account? </Text>
+          <Link href={"/login" as never} className="text-primary text-sm font-bold min-h-[44px] justify-center items-center py-2" testID="register-login-link">
             Log in
           </Link>
         </View>
@@ -190,78 +199,3 @@ export default function RegisterScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
-  container: { flex: 1, backgroundColor: colors.background, padding: spacing.xl, justifyContent: 'center' },
-  brandHeader: { alignItems: 'center', marginBottom: spacing.xl },
-  brandIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  title: { fontSize: 26, fontWeight: '800', color: colors.text, marginBottom: spacing.xs, letterSpacing: -0.4 },
-  subtitle: { fontSize: typography.body, color: colors.muted, fontWeight: '500' },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.xl,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  field: { marginBottom: spacing.md },
-  label: { fontSize: typography.caption, fontWeight: '700', color: colors.text, marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.4 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    minHeight: 48,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    fontSize: typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-  },
-  passwordContainer: { position: 'relative' },
-  passwordInput: { paddingRight: 48 },
-  eyeButton: {
-    position: 'absolute',
-    right: spacing.md,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 36,
-  },
-  inputError: { borderColor: colors.danger },
-  fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption, fontWeight: '500' },
-  errorBox: { backgroundColor: colors.dangerSoft, borderRadius: 10, padding: spacing.md, marginBottom: spacing.md },
-  errorText: { color: colors.danger, fontSize: typography.body, fontWeight: '500' },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  buttonDisabled: { opacity: 0.7 },
-  buttonLabel: { color: colors.onAccent, fontSize: typography.emphasis, fontWeight: '700' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl },
-  footerText: { color: colors.muted, fontSize: typography.body, fontWeight: '500' },
-  link: { color: colors.accent, fontSize: typography.body, fontWeight: '700' },
-});

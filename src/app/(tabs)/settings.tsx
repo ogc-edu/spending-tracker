@@ -34,6 +34,8 @@ import { CategoryAddSheet } from '@/components/CategoryAddSheet';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { List } from '@/components/ui/List';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Card } from '@/components/ui/Card';
 import { ProviderRow, maskKeySuffix } from '@/components/ai/ProviderRow';
 import { ActiveProviderSelector } from '@/components/ai/ActiveProviderSelector';
 import { aiStatusLabel } from '@/components/ai/providerMeta';
@@ -41,7 +43,7 @@ import { KeyboardAwareScrollView, useKeyboardAwareFocus } from '@/components/Key
 import { useToast } from '@/components/ToastProvider';
 import { formatDDMMYYYY, toLocalDateString } from '@/utils/dates';
 import { formatSen, parseMoneyToSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -359,12 +361,21 @@ export default function SettingsScreen() {
 
       {/* Account 003: signed-in user + logout. */}
       {user ? (
-        <View style={styles.card}>
-          <Text style={styles.label}>Signed in as</Text>
-          <Text style={styles.email} testID="settings-email">
-            {user.email}
-          </Text>
-        </View>
+        <Card className="flex-row items-center gap-3.5 mx-6 mb-6 p-4 border border-border shadow-none">
+          <Avatar alt="User profile" className="size-11 bg-primary/10 border border-primary/20 items-center justify-center">
+            <AvatarFallback className="bg-primary/10">
+              <Text className="text-primary font-bold text-base">
+                {user.email.slice(0, 1).toUpperCase()}
+              </Text>
+            </AvatarFallback>
+          </Avatar>
+          <View className="flex-1">
+            <Text style={styles.label}>Signed in as</Text>
+            <Text style={styles.email} testID="settings-email">
+              {user.email}
+            </Text>
+          </View>
+        </Card>
       ) : null}
 
       {/* Plan 004: Accounts section. */}
@@ -762,7 +773,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.xl,
-    ...shadows.card,
   },
   label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600' },
   email: { fontSize: typography.body, fontWeight: '700', color: colors.text },

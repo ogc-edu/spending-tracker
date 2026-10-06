@@ -164,12 +164,12 @@ export default function ExpensesScreen() {
         onApplyCustom={setExpenseCustomRange}
       />
 
-      <View style={styles.totalsBar} testID="expenses-totals-bar">
-        <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue} testID="expenses-total" accessibilityLabel={`Total, ${spokenMoneyLabel(totals.totalSen)}`}>
+      <View className="flex-row items-center justify-between mx-4 px-4 py-3 mb-3 bg-card rounded-2xl border border-border" style={styles.totalsBar} testID="expenses-totals-bar">
+        <Text className="text-xs text-muted-foreground font-bold uppercase tracking-wider" style={styles.totalLabel}>Total</Text>
+        <Text className="text-xl font-extrabold text-foreground tracking-tight" style={styles.totalValue} testID="expenses-total" accessibilityLabel={`Total, ${spokenMoneyLabel(totals.totalSen)}`}>
           {formatSen(totals.totalSen)}
         </Text>
-        <Text style={styles.totalCount} testID="expenses-total-count">
+        <Text className="text-xs text-accent font-bold bg-accent/10 px-2.5 py-1 rounded-md" style={styles.totalCount} testID="expenses-total-count">
           {totals.count} {totals.count === 1 ? 'expense' : 'expenses'}
         </Text>
       </View>
@@ -245,11 +245,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
   },
   totalLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   totalValue: { fontSize: typography.title, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, letterSpacing: -0.4 },

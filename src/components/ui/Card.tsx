@@ -1,80 +1,135 @@
-/**
- * Card (plan 017) — the ONE surface card every screen composes from. This
- * replaces the card style block that was copy-pasted across ~15 components
- * (including literal `#0F172A` shadow hexes — the token rule requires theme
- * values, which `shadows.card` now provides).
- *
- * Tones:
- *  - 'plain'   white surface (default) — neutral information
- *  - 'tint'    accentSoft — semantic "healthy/good" state (SafeToSpend)
- *  - 'danger'  dangerSoft — semantic "deficit/bad" state (SafeToSpend deficit)
- *  - 'accent'  filled accent — the single hero surface (dashboard headline)
- *
- * Layout: full-width inside the screen's horizontal padding via the shared
- * `spacing.xl` inset, `spacing.lg` below the previous card (both overridable
- * through `style`). Pressable cards keep their own Pressable wrappers — this
- * is a plain View; callers that need taps add android_ripple themselves.
- */
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, shadows, spacing, typography } from '@/theme';
+import * as React from 'react';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { Text, TextClassContext } from '@/components/ui/text';
+import { cn } from '@/lib/utils';
 
 export type CardTone = 'plain' | 'tint' | 'danger' | 'accent';
 
-export function Card({
-  tone = 'plain',
-  style,
-  children,
-  testID,
-}: {
+export interface CardProps extends React.ComponentProps<typeof View> {
   tone?: CardTone;
   style?: StyleProp<ViewStyle>;
-  children?: React.ReactNode;
   testID?: string;
-}) {
+  className?: string;
+}
+
+function Card({
+  className,
+  tone = 'plain',
+  style,
+  testID,
+  children,
+  ...props
+}: CardProps) {
+  const toneClasses = {
+    plain: 'bg-card border-border',
+    tint: 'bg-emerald-50/80 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40',
+    danger: 'bg-rose-50/80 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40',
+    accent: 'bg-primary border-primary',
+  }[tone];
+
+  const textContext = tone === 'accent' ? 'text-primary-foreground' : 'text-card-foreground';
+
+  return (
+    <TextClassContext.Provider value={textContext}>
+      <View
+        testID={testID}
+        className={cn(
+          'rounded-2xl border border-border bg-card p-5',
+          toneClasses,
+          className
+        )}
+        style={style}
+        {...props}
+      >
+        {children}
+      </View>
+    </TextClassContext.Provider>
+  );
+}
+
+function CardHeader({
+  className,
+  ...props
+}: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
+  return <View className={cn('flex flex-col gap-1.5 pb-3', className)} {...props} />;
+}
+
+function CardTitle({
+  className,
+  ref,
+  ...props
+}: React.ComponentProps<typeof Text> & React.RefAttributes<typeof Text>) {
+  return (
+    <Text
+      ref={ref}
+      role="heading"
+      aria-level={3}
+      className={cn('text-lg font-bold tracking-tight text-foreground leading-snug', className)}
+      {...props}
+    />
+  );
+}
+
+function CardDescription({
+  className,
+  ...props
+}: React.ComponentProps<typeof Text> & React.RefAttributes<typeof Text>) {
+  return (
+    <Text
+      className={cn('text-muted-foreground text-sm font-medium leading-relaxed', className)}
+      {...props}
+    />
+  );
+}
+
+function CardContent({
+  className,
+  ...props
+}: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
+  return <View className={cn('pt-1', className)} {...props} />;
+}
+
+function CardFooter({
+  className,
+  ...props
+}: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
   return (
     <View
-      style={[
-        styles.card,
-        tone === 'tint' && styles.tint,
-        tone === 'danger' && styles.danger,
-        tone === 'accent' && styles.accent,
-        style,
-      ]}
-      testID={testID}
-    >
-      {children}
-    </View>
+      className={cn('flex flex-row items-center justify-between pt-4', className)}
+      {...props}
+    />
   );
 }
 
 /** Small uppercase micro-label used at the top of cards ("Available Balance"). */
-export function CardLabel({ children, onAccent = false }: { children: React.ReactNode; onAccent?: boolean }) {
-  return <Text style={[styles.cardLabel, onAccent && styles.cardLabelOnAccent]}>{children}</Text>;
+function CardLabel({
+  children,
+  onAccent = false,
+  className,
+}: {
+  children: React.ReactNode;
+  onAccent?: boolean;
+  className?: string;
+}) {
+  return (
+    <Text
+      className={cn(
+        'text-xs font-bold uppercase tracking-wider text-muted-foreground',
+        onAccent && 'text-primary-foreground/80',
+        className
+      )}
+    >
+      {children}
+    </Text>
+  );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-    ...shadows.card,
-  },
-  tint: { backgroundColor: colors.accentSoft, borderColor: colors.accentSoft },
-  danger: { backgroundColor: colors.dangerSoft, borderColor: colors.danger },
-  accent: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  cardLabel: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cardLabelOnAccent: { color: colors.surface },
-});
+export {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  CardLabel,
+};

@@ -39,7 +39,7 @@ export function CategorySummary({
 
   return (
     <Card testID="category-summary">
-      <Text style={styles.title}>By category</Text>
+      <Text className="text-base font-bold text-foreground mb-2" style={styles.title}>By category</Text>
       {summary.map((item) => {
         const share = shownTotal === 0 ? 0 : Math.floor((item.totalSen * 1000) / shownTotal) / 10;
         const label = nameById.get(item.categoryId) ?? `Category ${item.categoryId}`;
@@ -47,26 +47,28 @@ export function CategorySummary({
           <Pressable
             key={item.categoryId}
             onPress={() => onOpenCategory(item.categoryId)}
+            className="py-2.5 min-h-[44px] justify-center"
             style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
             accessibilityRole="button"
             accessibilityLabel={`${label}, ${spokenMoneyLabel(item.totalSen)} this month`}
             testID={`category-row-${item.categoryId}`}
           >
-            <View style={styles.rowTop}>
-              <View style={styles.rowMain}>
-                <View style={[styles.dot, { backgroundColor: categoryColor(item.categoryId) }]} />
-                <Text style={styles.name} numberOfLines={1}>
+            <View className="flex-row items-center justify-between mb-1.5" style={styles.rowTop}>
+              <View className="flex-1 flex-row items-center mr-3" style={styles.rowMain}>
+                <View className="w-2.5 h-2.5 rounded-full mr-3" style={[styles.dot, { backgroundColor: categoryColor(item.categoryId) }]} />
+                <Text className="text-sm text-foreground font-medium flex-shrink" style={styles.name} numberOfLines={1}>
                   {label}
                 </Text>
               </View>
               <Text
+                className="text-sm font-bold text-foreground flex-shrink ml-3"
                 style={styles.amount}
                 numberOfLines={1}
                 accessibilityLabel={`${label}, ${spokenMoneyLabel(item.totalSen)}`}
               >
                 {formatSen(item.totalSen)}
-                {share > 0 ? <Text style={styles.share}>  ·  {share.toFixed(0)}%</Text> : null}
+                {share > 0 ? <Text className="text-xs text-muted-foreground font-semibold" style={styles.share}>  ·  {share.toFixed(0)}%</Text> : null}
               </Text>
             </View>
             <ProgressBar pct={share} color={categoryColor(item.categoryId)} />
@@ -75,13 +77,14 @@ export function CategorySummary({
       })}
       <Pressable
         onPress={onShowAll}
+        className="border-t border-border mt-1 pt-3 pb-1 items-center justify-center min-h-[44px]"
         style={({ pressed }) => [styles.showAll, pressed && styles.pressed]}
         android_ripple={{ color: 'rgba(0,0,0,0.06)', borderless: false }}
         accessibilityRole="button"
         accessibilityLabel="Show all categories in Analytics"
         testID="category-show-all"
       >
-        <Text style={styles.showAllLabel}>Show all</Text>
+        <Text className="text-sm font-bold text-accent" style={styles.showAllLabel}>Show all</Text>
       </Pressable>
     </Card>
   );

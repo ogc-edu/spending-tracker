@@ -14,19 +14,24 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Budget } from '@/db/schema';
 import { budgetMetrics, type BudgetMetrics } from '@/engine/budgets';
 import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { ProgressBar } from './ProgressBar';
 import { Badge } from '@/components/ui/Badge';
 
 function MetricsRow({ metrics }: { metrics: BudgetMetrics }) {
   return (
-    <View style={styles.metricsRow}>
-      <Text style={styles.metricText}>
+    <View className="flex-row items-center justify-between mb-2" style={styles.metricsRow}>
+      <Text className="text-sm text-muted-foreground font-medium" style={styles.metricText}>
         Spent {formatSen(metrics.spent)}
         {metrics.remaining !== null ? <> · Remaining {formatSen(metrics.remaining)}</> : null}
       </Text>
       {metrics.pctUsed !== null ? (
-        <Text style={[styles.pctText, metrics.overBudget && styles.overText]}>{metrics.pctUsed.toFixed(1)}%</Text>
+        <Text
+          className={`text-sm font-extrabold ${metrics.overBudget ? 'text-destructive' : 'text-foreground'}`}
+          style={[styles.pctText, metrics.overBudget && styles.overText]}
+        >
+          {metrics.pctUsed.toFixed(1)}%
+        </Text>
       ) : null}
     </View>
   );
@@ -56,13 +61,14 @@ export function BudgetCard({
     <Pressable
       onPress={onPress}
       disabled={busy}
+      className="bg-card rounded-2xl border border-border p-5 mx-6 mb-4"
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       accessibilityRole="button"
       accessibilityLabel={budget ? 'Edit monthly budget' : 'Set monthly budget'}
       testID="budget-overall-card"
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Monthly budget</Text>
+      <View className="flex-row items-center justify-between mb-1" style={styles.header}>
+        <Text className="text-xs font-bold text-muted-foreground uppercase tracking-wide" style={styles.title}>Monthly budget</Text>
         {metrics.overBudget ? (
           <Badge tone="danger" label="Over budget" testID="budget-overall-over" />
         ) : null}
@@ -70,10 +76,10 @@ export function BudgetCard({
 
       {budget ? (
         <>
-          <Text style={styles.amount}>{formatSen(budget.amountSen)}</Text>
+          <Text className="text-2xl font-extrabold text-foreground my-1" style={styles.amount}>{formatSen(budget.amountSen)}</Text>
           <MetricsRow metrics={metrics} />
           {metrics.pctUsed !== null ? (
-            <View style={styles.progressWrap}>
+            <View className="mb-3" style={styles.progressWrap}>
               <ProgressBar
                 pct={metrics.pctUsed}
                 color={colors.accent}
@@ -86,17 +92,18 @@ export function BudgetCard({
             onPress={onClear}
             disabled={busy}
             hitSlop={8}
+            className="self-start mt-1 min-h-[36px] justify-center"
             style={({ pressed }) => [styles.clearButton, pressed && styles.pressed]}
             accessibilityRole="button"
             testID="budget-overall-clear"
           >
-            <Text style={styles.clearLabel}>Clear budget</Text>
+            <Text className="text-muted-foreground text-xs font-semibold underline" style={styles.clearLabel}>Clear budget</Text>
           </Pressable>
         </>
       ) : (
-        <View style={styles.emptyBox} testID="budget-overall-empty">
-          <Text style={styles.emptyTitle}>No monthly budget set</Text>
-          <Text style={styles.emptyBody}>Tap to set a budget for this month and see your remaining funds.</Text>
+        <View className="py-2" style={styles.emptyBox} testID="budget-overall-empty">
+          <Text className="text-base font-bold text-foreground mb-1" style={styles.emptyTitle}>No monthly budget set</Text>
+          <Text className="text-sm text-muted-foreground leading-5" style={styles.emptyBody}>Tap to set a budget for this month and see your remaining funds.</Text>
         </View>
       )}
     </Pressable>
@@ -112,7 +119,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginHorizontal: spacing.xl,
     marginBottom: spacing.lg,
-    ...shadows.card,
   },
   cardPressed: { opacity: 0.85 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },

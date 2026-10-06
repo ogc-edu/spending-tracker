@@ -95,6 +95,7 @@ export function useKeyboardAwareFocus(): () => void {
 
 export interface KeyboardAwareScrollViewProps {
   children: React.ReactNode;
+  className?: string;
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
   /** Passed straight to the inner ScrollView (dashboard pull-to-refresh). */
@@ -104,6 +105,7 @@ export interface KeyboardAwareScrollViewProps {
 
 export function KeyboardAwareScrollView({
   children,
+  className,
   style,
   contentContainerStyle,
   refreshControl,
@@ -151,7 +153,7 @@ export function KeyboardAwareScrollView({
 
   return (
     <FocusContext.Provider value={revealFocusedInput}>
-      <View ref={containerRef} style={[styles.container, style]} collapsable={false}>
+      <View ref={containerRef} className={className} style={[styles.container, style]} collapsable={false}>
         <ScrollView
           ref={scrollRef}
           style={styles.container}

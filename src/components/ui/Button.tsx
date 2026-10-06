@@ -1,107 +1,156 @@
-/**
- * Button (plan 018) — the ONE button every screen and sheet composes from.
- * Replaces the filled/outline/danger Pressable blocks that each rolled their
- * own radius, `#fff` labels and pressed states (forms, sheets, settings).
- *
- * Variants (all ≥48 pt tall):
- *  - primary    accent fill, white label — the main action of a surface
- *  - secondary  bordered surface — cancel / alternative actions
- *  - danger     danger fill, white label — destructive confirms, log out
- *  - ghost      no fill, accent text — low-emphasis actions ("Add category budget")
- *
- * White-on-accent and white-on-danger are the tokens test's AA pairs, now
- * referenced as colors.onAccent. `busy` swaps the label for a spinner and
- * disables the press (callers keep their own double-tap guards).
- */
-import { Pressable, StyleSheet, Text, ActivityIndicator, type StyleProp, type ViewStyle } from 'react-native';
+import * as React from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography } from '@/theme';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Text, TextClassContext } from '@/components/ui/text';
+import { cn } from '@/lib/utils';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+const buttonVariants = cva(
+  cn(
+    'group shrink-0 flex-row items-center justify-center gap-2 rounded-xl border border-transparent shadow-none',
+    Platform.select({
+      web: "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive whitespace-nowrap outline-none transition-all focus-visible:ring-[3px] disabled:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+    })
+  ),
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary active:opacity-90',
+        primary: 'bg-primary active:opacity-90',
+        destructive: 'bg-destructive active:opacity-90',
+        danger: 'bg-destructive active:opacity-90',
+        outline: 'border-border bg-background active:bg-accent',
+        secondary: 'border-border bg-secondary active:opacity-80 border',
+        ghost: 'bg-transparent active:bg-accent',
+        link: 'bg-transparent',
+      },
+      size: {
+        default: 'min-h-[48px] px-5 py-3',
+        sm: 'min-h-[44px] px-3.5 py-2 rounded-lg',
+        lg: 'min-h-[52px] px-7 py-3.5 rounded-xl',
+        icon: 'min-h-[44px] min-w-[44px] p-2 rounded-lg',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+);
 
-export interface ButtonProps {
-  label: string;
-  onPress(): void;
-  variant?: ButtonVariant;
-  /** Optional leading Ionicon glyph. */
+const buttonTextVariants = cva(
+  cn(
+    'text-sm font-semibold',
+    Platform.select({ web: 'pointer-events-none transition-colors' })
+  ),
+  {
+    variants: {
+      variant: {
+        default: 'text-primary-foreground',
+        primary: 'text-primary-foreground',
+        destructive: 'text-destructive-foreground',
+        danger: 'text-destructive-foreground',
+        outline: 'text-foreground',
+        secondary: 'text-secondary-foreground',
+        ghost: 'text-foreground',
+        link: 'text-primary underline',
+      },
+      size: {
+        default: 'text-base font-semibold',
+        sm: 'text-sm font-medium',
+        lg: 'text-lg font-bold',
+        icon: '',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  }
+);
+
+export type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
+export type ButtonSize = VariantProps<typeof buttonVariants>['size'];
+
+export interface ButtonProps
+  extends Omit<React.ComponentProps<typeof Pressable>, 'style'>,
+    VariantProps<typeof buttonVariants> {
+  label?: string;
   icon?: keyof typeof Ionicons.glyphMap;
-  /** While true: spinner instead of the label, press disabled. */
   busy?: boolean;
-  disabled?: boolean;
-  /** Stretch to the row (form action rows use flex: 1 pairs). */
   flex?: boolean;
-  style?: StyleProp<ViewStyle>;
-  testID?: string;
+  style?: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>);
 }
 
-const VARIANT_STYLES = StyleSheet.create({
-  primary: { backgroundColor: colors.accent },
-  secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  danger: { backgroundColor: colors.danger },
-  ghost: { backgroundColor: 'transparent' },
-});
-
-const VARIANT_LABELS = {
-  primary: colors.onAccent,
-  secondary: colors.muted,
-  danger: colors.onAccent,
-  ghost: colors.accent,
-} as const;
-
-export function Button({
+function Button({
+  className,
+  variant = 'default',
+  size = 'default',
   label,
-  onPress,
-  variant = 'primary',
   icon,
   busy = false,
   disabled = false,
   flex = false,
+  children,
   style,
   testID,
+  ...props
 }: ButtonProps) {
   const inactive = disabled || busy;
+
+  const textColorClass = buttonTextVariants({ variant, size });
+  const isDarkBg = variant === 'default' || variant === 'primary' || variant === 'destructive' || variant === 'danger';
+  const spinnerColor = isDarkBg ? '#ffffff' : '#0f172a';
+
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={inactive}
-      style={({ pressed }) => [
-        styles.button,
-        VARIANT_STYLES[variant],
-        inactive && styles.disabled,
-        pressed && styles.pressed,
-        flex && styles.flex,
-        style,
-      ]}
-      android_ripple={{ color: variant === 'primary' || variant === 'danger' ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)', borderless: false }}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: inactive, busy }}
-      testID={testID}
-    >
-      {busy ? (
-        <ActivityIndicator size="small" color={VARIANT_LABELS[variant]} />
-      ) : (
-        <>
-          {icon ? <Ionicons name={icon} size={17} color={VARIANT_LABELS[variant]} /> : null}
-          <Text style={[styles.label, { color: VARIANT_LABELS[variant] }]}>{label}</Text>
-        </>
-      )}
-    </Pressable>
+    <TextClassContext.Provider value={textColorClass}>
+      <Pressable
+        testID={testID}
+        disabled={inactive}
+        className={cn(
+          buttonVariants({ variant, size }),
+          flex && 'flex-1',
+          inactive && 'opacity-50',
+          className
+        )}
+        style={({ pressed }) => [
+          { minHeight: 48 },
+          flex ? { flex: 1 } : undefined,
+          inactive ? { opacity: 0.55 } : undefined,
+          pressed ? { opacity: 0.85 } : undefined,
+          typeof style === 'function' ? style({ pressed }) : style,
+        ]}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: inactive, busy }}
+        {...props}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={spinnerColor} />
+        ) : label !== undefined ? (
+          <>
+            {icon ? (
+              <Ionicons
+                name={icon}
+                size={18}
+                color={isDarkBg ? '#ffffff' : '#0f172a'}
+              />
+            ) : null}
+            <Text className={cn(textColorClass, 'text-center')}>
+              {label}
+            </Text>
+          </>
+        ) : (
+          children
+        )}
+      </Pressable>
+    </TextClassContext.Provider>
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    minHeight: 48,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 12,
-  },
-  flex: { flex: 1 },
-  label: { fontSize: typography.emphasis, fontWeight: '700' },
-  disabled: { opacity: 0.55 },
-  pressed: { opacity: 0.85 },
-});
+export { Button, buttonTextVariants, buttonVariants };

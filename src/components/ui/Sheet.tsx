@@ -91,6 +91,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xxl,
     borderTopRightRadius: radius.xxl,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     padding: spacing.xl,
     paddingBottom: spacing.xxl,
   },

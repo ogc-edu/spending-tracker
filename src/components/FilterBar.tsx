@@ -73,10 +73,11 @@ export function FilterBar({
   );
 
   return (
-    <View style={styles.bar} testID="expense-filter-bar">
-      <View style={styles.searchBox}>
+    <View className="pt-3" style={styles.bar} testID="expense-filter-bar">
+      <View className="flex-row items-center gap-2 border border-border rounded-xl bg-card min-h-[44px] py-1 px-3 mx-4 mb-3" style={styles.searchBox}>
         <Ionicons name="search-outline" size={16} color={colors.muted} />
         <TextInput
+          className="flex-1 text-base text-foreground p-0 min-h-[40px]"
           style={styles.searchInput}
           value={searchInput}
           onChangeText={handleSearchChange}

@@ -108,10 +108,15 @@ export default function EditCommitmentScreen() {
 
   if (loadError || !commitment) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>{loadError ?? 'Commitment not found'}</Text>
-        <Pressable onPress={() => router.back()} style={styles.backLink} accessibilityRole="button">
-          <Text style={styles.backLinkLabel}>Back</Text>
+      <View className="flex-1 bg-background items-center justify-center p-6" style={styles.center}>
+        <Text className="text-lg font-bold text-foreground mb-4" style={styles.emptyTitle}>{loadError ?? 'Commitment not found'}</Text>
+        <Pressable
+          onPress={() => router.back()}
+          className="min-h-[44px] justify-center px-4"
+          style={styles.backLink}
+          accessibilityRole="button"
+        >
+          <Text className="text-primary text-base font-semibold" style={styles.backLinkLabel}>Back</Text>
         </Pressable>
       </View>
     );
@@ -120,6 +125,7 @@ export default function EditCommitmentScreen() {
   return (
     <KeyboardScreen>
       <ScrollView
+        className="flex-1 bg-background"
         style={styles.container}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"

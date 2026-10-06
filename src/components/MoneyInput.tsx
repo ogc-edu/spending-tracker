@@ -42,6 +42,8 @@ import {
 } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
 
+import { cn } from '@/lib/utils';
+
 export interface MoneyInputProps {
   /** Canonical money string, e.g. "" or "2.00". */
   value: string;
@@ -55,6 +57,7 @@ export interface MoneyInputProps {
   accessibilityLabelledBy?: string;
   testID?: string;
   style?: StyleProp<ViewStyle>;
+  className?: string;
 }
 
 export function MoneyInput({
@@ -69,6 +72,7 @@ export function MoneyInput({
   accessibilityLabelledBy,
   testID,
   style,
+  className,
 }: MoneyInputProps) {
   const inputRef = useRef<TextInput>(null);
   const sen = senFromMoneyString(value);
@@ -99,6 +103,12 @@ export function MoneyInput({
       onPress={() => inputRef.current?.focus()}
       disabled={!editable}
       accessible={false}
+      className={cn(
+        'justify-center border border-border rounded-lg bg-card px-4 py-3 min-h-[56px]',
+        hasError && 'border-destructive',
+        !editable && 'bg-muted/50',
+        className
+      )}
       style={[styles.wrap, hasError && styles.wrapError, !editable && styles.wrapDisabled, style]}
     >
       <View style={styles.displayRow}>

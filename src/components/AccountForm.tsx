@@ -9,7 +9,7 @@
  */
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 import { ACCOUNT_TYPES, type AccountInput } from '@/repositories/types';
 import { parseMoneyToSen } from '@/utils/money';
@@ -17,6 +17,7 @@ import { colors, spacing, typography } from '@/theme';
 import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS } from './accountMeta';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.\d{1,2})?$/;
@@ -62,8 +63,8 @@ export function AccountForm({
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
           <View style={styles.field}>
             <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={[styles.input, error && styles.inputError]}
+            <Input
+              className="min-h-[44px] h-11 rounded-xl bg-background border border-border px-3.5 text-base"
               placeholder="e.g. Maybank, Wallet"
               placeholderTextColor={colors.muted}
               value={value}
@@ -109,8 +110,8 @@ export function AccountForm({
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
           <View style={styles.field}>
             <Text style={styles.label}>Initial balance (RM)</Text>
-            <TextInput
-              style={[styles.input, error && styles.inputError]}
+            <Input
+              className="min-h-[44px] h-11 rounded-xl bg-background border border-border px-3.5 text-base"
               keyboardType="decimal-pad"
               placeholder="0.00"
               placeholderTextColor={colors.muted}

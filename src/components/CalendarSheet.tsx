@@ -84,51 +84,54 @@ export function CalendarSheet({
       closeButtonTestID="calendar-sheet-close"
       cardTestID="calendar-sheet"
     >
+      {/* Month + year navigator */}
+      <View className="flex-row items-center justify-between bg-muted/30 rounded-xl px-1 mb-4" style={styles.monthBar}>
+        <Pressable
+          onPress={() => shiftYear(-1)}
+          className="w-11 h-11 items-center justify-center"
+          style={styles.monthArrow}
+          accessibilityRole="button"
+          accessibilityLabel="Previous year"
+          testID="calendar-prev-year"
+        >
+          <Ionicons name="play-skip-back" size={16} color={colors.muted} />
+        </Pressable>
+        <Pressable
+          onPress={() => shiftMonth(-1)}
+          className="w-11 h-11 items-center justify-center"
+          style={styles.monthArrow}
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+          testID="calendar-prev-month"
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
+        </Pressable>
+        <Text className="text-base font-bold text-foreground" style={styles.monthLabel} testID="calendar-month-label">
+          {formatMonthLabel(view.year, view.month)}
+        </Text>
+        <Pressable
+          onPress={() => shiftMonth(1)}
+          className="w-11 h-11 items-center justify-center"
+          style={styles.monthArrow}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          testID="calendar-next-month"
+        >
+          <Ionicons name="chevron-forward" size={22} color={colors.text} />
+        </Pressable>
+        <Pressable
+          onPress={() => shiftYear(1)}
+          className="w-11 h-11 items-center justify-center"
+          style={styles.monthArrow}
+          accessibilityRole="button"
+          accessibilityLabel="Next year"
+          testID="calendar-next-year"
+        >
+          <Ionicons name="play-skip-forward" size={16} color={colors.muted} />
+        </Pressable>
+      </View>
 
-          {/* Month + year navigator */}
-          <View style={styles.monthBar}>
-            <Pressable
-              onPress={() => shiftYear(-1)}
-              style={styles.monthArrow}
-              accessibilityRole="button"
-              accessibilityLabel="Previous year"
-              testID="calendar-prev-year"
-            >
-              <Ionicons name="play-skip-back" size={16} color={colors.muted} />
-            </Pressable>
-            <Pressable
-              onPress={() => shiftMonth(-1)}
-              style={styles.monthArrow}
-              accessibilityRole="button"
-              accessibilityLabel="Previous month"
-              testID="calendar-prev-month"
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
-            </Pressable>
-            <Text style={styles.monthLabel} testID="calendar-month-label">
-              {formatMonthLabel(view.year, view.month)}
-            </Text>
-            <Pressable
-              onPress={() => shiftMonth(1)}
-              style={styles.monthArrow}
-              accessibilityRole="button"
-              accessibilityLabel="Next month"
-              testID="calendar-next-month"
-            >
-              <Ionicons name="chevron-forward" size={22} color={colors.text} />
-            </Pressable>
-            <Pressable
-              onPress={() => shiftYear(1)}
-              style={styles.monthArrow}
-              accessibilityRole="button"
-              accessibilityLabel="Next year"
-              testID="calendar-next-year"
-            >
-              <Ionicons name="play-skip-forward" size={16} color={colors.muted} />
-            </Pressable>
-          </View>
-
-          <CalendarGrid {...gridProps} />
+      <CalendarGrid {...gridProps} />
 
       <Button
         label="Cancel"

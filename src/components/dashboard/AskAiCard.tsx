@@ -103,7 +103,7 @@ export function AskAiCard({ ai, label = null, onSubmit, disabled = false }: AskA
       </ScrollView>
 
       {/* The question input + send action. */}
-      <View style={styles.inputRow}>
+      <View className="flex-row items-center gap-2 mt-2 border border-border rounded-xl bg-background pl-3 pr-1 py-1 min-h-[48px]" style={styles.inputRow}>
         <TextInput
           value={text}
           onChangeText={setText}
@@ -111,6 +111,7 @@ export function AskAiCard({ ai, label = null, onSubmit, disabled = false }: AskA
           onSubmitEditing={() => submit(text)}
           placeholder="Ask a question about your money…"
           placeholderTextColor={colors.muted}
+          className="flex-1 text-base text-foreground py-2 pr-1"
           style={styles.input}
           maxLength={MAX_QUESTION_CHARS}
           returnKeyType="send"
@@ -124,6 +125,7 @@ export function AskAiCard({ ai, label = null, onSubmit, disabled = false }: AskA
           accessibilityRole="button"
           accessibilityLabel="Send question"
           accessibilityState={{ disabled: !canSend, busy: ai.pending }}
+          className={`w-11 h-11 rounded-full bg-accent items-center justify-center ${!canSend ? 'opacity-40' : ''}`}
           style={({ pressed }) => [
             styles.sendButton,
             !canSend && styles.sendDisabled,
@@ -181,8 +183,8 @@ const styles = StyleSheet.create({
     paddingRight: spacing.xs,
   },
   sendButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
     backgroundColor: colors.accent,
     alignItems: 'center',

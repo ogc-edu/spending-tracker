@@ -302,23 +302,23 @@ export default function CommitmentDetailScreen() {
       ) : (
         <>
           {/* Compact payment-plan summary — one row replaces the wall of slots. */}
-          <View style={styles.planCard} testID="commitment-plan-summary">
-            <View style={styles.planLine}>
+          <View className="flex-col bg-accent/10 border border-border/60 rounded-xl p-4 mb-3" style={styles.planCard} testID="commitment-plan-summary">
+            <View className="flex-row items-center gap-2" style={styles.planLine}>
               <Ionicons
                 name={commitment.frequency === 'one_time' ? 'calendar-outline' : 'repeat-outline'}
                 size={16}
                 color={colors.accent}
               />
-              <Text style={styles.planCadence}>
+              <Text className="flex-1 text-base font-bold text-foreground" style={styles.planCadence}>
                 {commitment.frequency === 'one_time'
                   ? 'One-time payment'
                   : commitment.totalSen !== null
                     ? 'Monthly payment'
                     : 'Recurring monthly'}
               </Text>
-              <Text style={styles.planAmount}>{formatSen(commitment.paymentSen)}</Text>
+              <Text className="text-base font-extrabold text-foreground" style={styles.planAmount}>{formatSen(commitment.paymentSen)}</Text>
             </View>
-            <Text style={styles.planNote}>
+            <Text className="mt-1 text-xs text-muted-foreground font-medium" style={styles.planNote}>
               {nextDue !== null
                 ? `Next payment ${formatDayLabel(nextDue)} · ${unpaid.length} payment${unpaid.length === 1 ? '' : 's'} left`
                 : 'All payments paid'}

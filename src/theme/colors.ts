@@ -1,32 +1,97 @@
 /**
- * Design tokens — single light theme (dark mode is future).
- * Palette: clean finance look, money-green accent, red for over-budget/deficit.
+ * Design tokens for Obsidian Luxe (dark) & Swiss Porcelain (light).
  *
- * Contrast (plan 016 a11y pass — every text pair meets WCAG AA ≥ 4.5:1,
- * asserted in src/theme/__tests__/tokens.test.ts):
- *   text      #1A1D21 on background/surface  ~16:1
- *   muted     #6B7280 on background/surface  ~4.6:1
- *   accent    #15803D on white / accentSoft  ~5.0:1 (white on accent ~5.0:1)
- *   danger    #B91C1C on white / dangerSoft  ~5.3:1+
- *   warning   #B45309 on white / warningSoft ≥4.5:1
+ * Obsidian Palette (Dark / OLED-optimized):
+ *   background: #090B10 — Canvas foundation establishing maximum OLED contrast
+ *   card:       #121620 — Primary Bento Grid tile surface
+ *   cardForeground: #F8FAFC — High-contrast text and numerical values
+ *   border:     #21293A — Structural hairline framing (0.5 pt equivalent)
+ *   borderSubtle: #18202F — Internal dividers between related metrics
+ *   input:      #1D2433 — Background surface for text entry and keypad targets
+ *   primary:    #10B981 — Electric Mint; indicates healthy cash flow and positive balances
+ *   primaryForeground: #022C22 — Contrast text for primary buttons and chips
+ *   destructive: #F43F5E — Vivid Rose; highlights deficits and budget overruns
+ *   warning:    #F59E0B — Warm Amber; denotes approaching bills and budget limits
+ *   muted:      #1A2130 — Recessed backgrounds for chips and meter tracks
+ *   mutedForeground: #7C8BA1 — Secondary labels and timestamp indicators
+ *   accent:     #06B6D4 — Cyber Cyan; marks linked commitments and AI evaluations
+ *
+ * Porcelain Palette (Light):
+ *   background: #F8FAFC — Canvas foundation establishing crisp contrast
+ *   card:       #FFFFFF — Primary Bento Grid tile surface
+ *   cardForeground: #0F172A — High-contrast text and numerical values
+ *   border:     #E2E8F0 — Structural hairline framing (0.5 pt equivalent)
+ *   borderSubtle: #F1F5F9 — Internal dividers between related metrics
+ *   input:      #F1F5F9 — Background surface for text entry and keypad targets
+ *   primary:    #059669 — Electric Mint; healthy cash flow
+ *   primaryForeground: #FFFFFF — Contrast text
+ *   destructive: #E11D48 — Vivid Rose; deficits and overruns
+ *   warning:    #D97706 — Warm Amber; approaching bills
+ *   muted:      #F1F5F9 — Recessed backgrounds
+ *   mutedForeground: #64748B — Secondary labels and timestamp indicators
+ *   accent:     #0891B2 — Cyber Cyan; linked commitments and AI
  */
+
+export const obsidian = {
+  background: '#090B10',
+  card: '#121620',
+  cardForeground: '#F8FAFC',
+  border: '#21293A',
+  borderSubtle: '#18202F',
+  input: '#1D2433',
+  primary: '#10B981',
+  primaryForeground: '#022C22',
+  destructive: '#F43F5E',
+  warning: '#F59E0B',
+  muted: '#1A2130',
+  mutedForeground: '#7C8BA1',
+  accent: '#06B6D4',
+} as const;
+
+export const porcelain = {
+  background: '#F8FAFC',
+  card: '#FFFFFF',
+  cardForeground: '#0F172A',
+  border: '#E2E8F0',
+  borderSubtle: '#F1F5F9',
+  input: '#F1F5F9',
+  primary: '#059669',
+  primaryForeground: '#FFFFFF',
+  destructive: '#E11D48',
+  warning: '#D97706',
+  muted: '#F1F5F9',
+  mutedForeground: '#64748B',
+  accent: '#0891B2',
+} as const;
+
 export const colors = {
-  background: '#F7F8FA',
-  surface: '#FFFFFF',
-  text: '#1A1D21',
-  muted: '#6B7280',
-  border: '#E5E7EB',
-  accent: '#15803D', // money green (darkened from #16A34A for AA on white/soft)
+  // Theme palettes
+  obsidian,
+  porcelain,
+
+  // Default theme tokens (Porcelain / Light)
+  background: porcelain.background,
+  surface: porcelain.card,
+  text: porcelain.cardForeground,
+  muted: porcelain.mutedForeground,
+  border: porcelain.border,
+  borderSubtle: porcelain.borderSubtle,
+  input: porcelain.input,
+  primary: porcelain.primary,
+  primaryForeground: porcelain.primaryForeground,
+  destructive: porcelain.destructive,
+
+  // Backward compatibility aliases for existing components
+  accent: '#15803D', // money green (ensures AA ≥ 4.5:1 on white and backward compat)
   accentSoft: '#DCFCE7',
-  danger: '#B91C1C', // red-700 (darkened from #DC2626 for AA on dangerSoft)
+  danger: '#B91C1C', // red-700 (ensures AA ≥ 4.5:1 on dangerSoft)
   dangerSoft: '#FEE2E2',
-  warning: '#B45309', // amber-700 (darkened from #D97706 for AA)
+  warning: '#B45309', // amber-700 (ensures AA ≥ 4.5:1 on warningSoft)
   warningSoft: '#FEF3C7',
-  /** Plan 018: one scrim for every modal sheet (was rgba(0,0,0,.4/.45) literals). */
   scrim: 'rgba(15,23,42,0.45)',
-  /** Plan 018: text/icons on accent or danger fills (reads as surface today). */
   onAccent: '#FFFFFF',
-  /** 12 category colors, index-aligned with the default category seed order */
+
+  // Category palette (12 distinct categories)
   categoryPalette: [
     '#16A34A', '#0EA5E9', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899',
     '#64748B', '#10B981', '#F97316', '#3B82F6', '#A855F7', '#78716C',

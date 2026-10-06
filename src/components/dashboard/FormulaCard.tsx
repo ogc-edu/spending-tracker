@@ -36,26 +36,28 @@ export function FormulaCard({
         accessibilityRole="button"
         accessibilityLabel={expanded ? 'Collapse the formula' : 'Expand the formula'}
         accessibilityState={{ expanded }}
+        className="flex-row items-center justify-between py-1 min-h-[44px]"
         style={styles.header}
         testID="formula-toggle"
       >
-        <View style={styles.headerText}>
-          <Text style={styles.title}>The formula</Text>
-          <Text style={styles.headerHint}>{expanded ? 'Tap to collapse' : 'Tap to see why'}</Text>
+        <View className="flex-1" style={styles.headerText}>
+          <Text className="text-base font-bold text-foreground" style={styles.title}>The formula</Text>
+          <Text className="text-xs text-muted-foreground mt-0.5" style={styles.headerHint}>{expanded ? 'Tap to collapse' : 'Tap to see why'}</Text>
         </View>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={22}
+          size={20}
           color={colors.muted}
         />
       </Pressable>
 
       {expanded ? (
-        <View style={styles.body} testID="formula-breakdown">
+        <View className="border-t border-border pt-3 mt-2 mb-3" style={styles.body} testID="formula-breakdown">
           {breakdown.map((item) => (
-            <View key={item.label} style={styles.row} testID={`formula-row-${item.label}`}>
-              <Text style={styles.rowLabel}>{item.label}</Text>
+            <View key={item.label} className="flex-row justify-between items-center py-2" style={styles.row} testID={`formula-row-${item.label}`}>
+              <Text className="text-sm text-muted-foreground" style={styles.rowLabel}>{item.label}</Text>
               <Text
+                className={`text-sm font-semibold ${item.amountSen < 0 ? 'text-destructive' : 'text-foreground'}`}
                 style={[
                   styles.rowAmount,
                   item.amountSen < 0 ? styles.minus : styles.plus,
@@ -67,9 +69,9 @@ export function FormulaCard({
               </Text>
             </View>
           ))}
-          <View style={styles.equalsRow} testID="formula-equals">
-            <Text style={styles.equalsLabel}>Safe to spend</Text>
-            <Text style={styles.equalsAmount} numberOfLines={1} accessibilityLabel={`Safe to spend, ${spokenMoneyLabel(safeSen)}`}>
+          <View className="flex-row justify-between items-center border-t border-border pt-3 mt-2" style={styles.equalsRow} testID="formula-equals">
+            <Text className="text-base font-bold text-foreground" style={styles.equalsLabel}>Safe to spend</Text>
+            <Text className="text-base font-extrabold text-foreground" style={styles.equalsAmount} numberOfLines={1} accessibilityLabel={`Safe to spend, ${spokenMoneyLabel(safeSen)}`}>
               {formatSen(safeSen)}
             </Text>
           </View>

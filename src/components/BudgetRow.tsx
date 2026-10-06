@@ -46,35 +46,36 @@ export function BudgetRow({
     <Pressable
       onPress={onPress}
       disabled={busy}
+      className="bg-card rounded-2xl border border-border p-3.5 mx-4 mb-2.5"
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       accessibilityRole="button"
       accessibilityLabel={`${category.name} budget`}
       testID={`budget-row-${category.id}`}
     >
-      <View style={styles.leading}>
-        <View style={[styles.iconBox, { backgroundColor: `${color}1A` }]}>
+      <View className="flex-row items-center" style={styles.leading}>
+        <View className="w-9 h-9 rounded-full items-center justify-center mr-3" style={[styles.iconBox, { backgroundColor: `${color}1A` }]}>
           <Ionicons name={category.icon as never} size={16} color={color} />
         </View>
-        <View style={styles.info}>
-          <View style={styles.titleLine}>
-            <Text style={styles.name}>{category.name}</Text>
+        <View className="flex-1" style={styles.info}>
+          <View className="flex-row items-center gap-2" style={styles.titleLine}>
+            <Text className="text-base font-bold text-foreground" style={styles.name}>{category.name}</Text>
             {metrics.overBudget ? (
               <Badge tone="danger" label="Over" testID={`budget-row-${category.id}-over`} />
             ) : null}
           </View>
-          <Text style={styles.spent} testID={`budget-row-${category.id}-spent`}>
+          <Text className="text-xs text-muted-foreground mt-0.5 font-medium" style={styles.spent} testID={`budget-row-${category.id}-spent`}>
             Spent {formatSen(metrics.spent)}
           </Text>
         </View>
       </View>
 
-      <View style={styles.trailing}>
+      <View className="items-end gap-1 ml-2" style={styles.trailing}>
         {budget ? (
-          <Text style={styles.budgetAmount} testID={`budget-row-${category.id}-amount`}>
+          <Text className="text-base font-bold text-foreground" style={styles.budgetAmount} testID={`budget-row-${category.id}-amount`}>
             {formatSen(budget.amountSen)}
           </Text>
         ) : (
-          <Text style={styles.noBudget} testID={`budget-row-${category.id}-amount`}>
+          <Text className="text-base font-bold text-muted-foreground" style={styles.noBudget} testID={`budget-row-${category.id}-amount`}>
             —
           </Text>
         )}
@@ -83,19 +84,20 @@ export function BudgetRow({
             onPress={onClear}
             disabled={busy}
             hitSlop={10}
+            className="min-h-[30px] justify-center"
             style={({ pressed }) => (pressed ? styles.pressed : undefined)}
             accessibilityRole="button"
             accessibilityLabel={`Clear ${category.name} budget`}
             testID={`budget-row-${category.id}-clear`}
           >
-            <Text style={styles.clearLabel}>Clear</Text>
+            <Text className="text-muted-foreground text-xs font-semibold underline" style={styles.clearLabel}>Clear</Text>
           </Pressable>
         ) : null}
       </View>
 
-      <View style={styles.progressColumn}>
+      <View className="mt-2.5 gap-1" style={styles.progressColumn}>
         {metrics.pctUsed !== null ? (
-          <Text style={[styles.pct, metrics.overBudget && styles.overText]}>{metrics.pctUsed.toFixed(1)}%</Text>
+          <Text className={`text-xs font-bold ${metrics.overBudget ? 'text-destructive' : 'text-foreground'}`} style={[styles.pct, metrics.overBudget && styles.overText]}>{metrics.pctUsed.toFixed(1)}%</Text>
         ) : null}
         <ProgressBar
           pct={metrics.pctUsed ?? 0}

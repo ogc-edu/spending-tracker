@@ -50,13 +50,13 @@ export function ConfirmSheet({
       closeLabel="Close confirmation"
       cardTestID="confirm-sheet"
     >
-      <Text style={styles.title} testID="confirm-sheet-title">
+      <Text className="text-lg font-bold text-foreground mb-2" style={styles.title} testID="confirm-sheet-title">
         {title}
       </Text>
-      <Text style={styles.message} testID="confirm-sheet-message">
+      <Text className="text-base text-muted-foreground leading-snug mb-5" style={styles.message} testID="confirm-sheet-message">
         {message}
       </Text>
-      <View style={styles.actions}>
+      <View className="flex-row gap-3" style={styles.actions}>
         <Button
           label={cancelLabel}
           variant="secondary"

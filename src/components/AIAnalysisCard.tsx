@@ -63,46 +63,47 @@ export function AIAnalysisCard({
   if (!pending && !error && !result) return null;
 
   return (
-    <View style={styles.card} testID="ai-analysis-card">
+    <View className="border-t border-border mt-2 pt-4" style={styles.card} testID="ai-analysis-card">
       {label ? (
-        <Text style={styles.label} testID="ai-analysis-label">
+        <Text className="text-xs text-muted-foreground mb-2 font-medium" style={styles.label} testID="ai-analysis-label">
           {label}
         </Text>
       ) : null}
 
       {pending ? (
-        <View style={styles.pendingRow} testID="ai-analysis-pending">
+        <View className="flex-row items-center gap-2" style={styles.pendingRow} testID="ai-analysis-pending">
           <ActivityIndicator color={colors.muted} />
-          <Text style={styles.pendingText}>Analyzing…</Text>
+          <Text className="text-sm text-muted-foreground" style={styles.pendingText}>Analyzing…</Text>
         </View>
       ) : null}
 
       {error ? (
         <View testID="ai-analysis-error">
-          <Text style={styles.errorText} testID="ai-analysis-error-message">
+          <Text className="text-sm text-destructive leading-5" style={styles.errorText} testID="ai-analysis-error-message">
             {errorMessage(error)}
           </Text>
           <Pressable
             onPress={onRetry}
             accessibilityRole="button"
             accessibilityLabel="Retry the analysis"
+            className="self-start mt-2 border border-border rounded-xl py-2 px-4 min-h-[44px] justify-center items-center active:opacity-70"
             style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
             testID="ai-analysis-retry"
           >
-            <Text style={styles.retryLabel}>Retry</Text>
+            <Text className="text-sm font-semibold text-foreground" style={styles.retryLabel}>Retry</Text>
           </Pressable>
         </View>
       ) : null}
 
       {!pending && !error && result ? (
         <View testID="ai-analysis-result">
-          <Text style={styles.summary} testID="ai-analysis-summary">
+          <Text className="text-sm text-foreground font-semibold leading-5 mb-2" style={styles.summary} testID="ai-analysis-summary">
             {result.summary}
           </Text>
           {result.points.map((point, index) => (
-            <View key={index} style={styles.pointRow} testID={`ai-analysis-point-${index}`}>
-              <View style={styles.pointDot} />
-              <Text style={styles.pointText}>{point}</Text>
+            <View key={index} className="flex-row items-start gap-2 mt-2" style={styles.pointRow} testID={`ai-analysis-point-${index}`}>
+              <View className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" style={styles.pointDot} />
+              <Text className="flex-1 text-sm text-muted-foreground leading-5" style={styles.pointText}>{point}</Text>
             </View>
           ))}
         </View>

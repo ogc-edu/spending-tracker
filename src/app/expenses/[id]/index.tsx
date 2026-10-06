@@ -134,17 +134,18 @@ export default function ExpenseDetailScreen() {
   const linked = expense.commitmentPaymentId !== null;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="expense-detail-screen">
+    <ScrollView className="flex-1 bg-background" style={styles.container} contentContainerStyle={styles.content} testID="expense-detail-screen">
       {linked ? (
-        <View style={styles.linkedBadge}>
+        <View className="flex-row items-center justify-center gap-1.5 bg-warning/10 border border-warning/20 rounded-lg py-2.5 mb-4" style={styles.linkedBadge}>
           <Ionicons name="link-outline" size={16} color={colors.warning} />
-          <Text style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
+          <Text className="text-warning text-xs font-bold" style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
         </View>
       ) : null}
 
       <Card>
-        <View style={styles.amountRow}>
+        <View className="flex-row items-center gap-3 mb-3" style={styles.amountRow}>
           <Text
+            className="text-3xl font-extrabold text-foreground flex-1 tracking-tight"
             style={styles.amount}
             numberOfLines={1}
             accessibilityLabel={`Expense amount, ${spokenMoneyLabel(expense.amountSen)}`}
@@ -172,27 +173,27 @@ export default function ExpenseDetailScreen() {
             </>
           ) : null}
         </View>
-        <View style={styles.row}>
+        <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
           <Ionicons name={category?.icon as never} size={18} color={categoryColor(expense.categoryId)} />
-          <Text style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
+          <Text className="text-base text-foreground font-semibold flex-1" style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
         </View>
-        <View style={styles.row}>
+        <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
           <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-          <Text style={styles.rowValue}>
+          <Text className="text-base text-foreground flex-1" style={styles.rowValue}>
             {formatDayLabel(expense.date)} · {expense.date}
           </Text>
         </View>
         {account ? (
-          <View style={styles.row}>
+          <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
             <Ionicons name="wallet-outline" size={18} color={colors.muted} />
-            <Text style={styles.rowValue}>{account.name}</Text>
+            <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{account.name}</Text>
           </View>
         ) : null}
-        {expense.description ? <Text style={styles.description}>{expense.description}</Text> : null}
+        {expense.description ? <Text className="text-base text-muted-foreground mt-1 italic" style={styles.description}>{expense.description}</Text> : null}
       </Card>
 
       {linked ? (
-        <Text style={styles.linkedHint}>
+        <Text className="text-xs text-muted-foreground leading-relaxed mb-4 mt-3" style={styles.linkedHint}>
           This expense was created when you marked a commitment payment as paid. To change or remove it, un-pay the
           payment in Commitments.
         </Text>

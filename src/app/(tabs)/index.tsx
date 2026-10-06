@@ -199,7 +199,7 @@ export default function DashboardScreen() {
 
   if (loading && !snapshot) {
     return (
-      <View style={styles.centerBox} testID="dashboard-loading">
+      <View className="flex-1 items-center justify-center bg-background" style={styles.centerBox} testID="dashboard-loading">
         <SkeletonHome />
       </View>
     );
@@ -207,7 +207,7 @@ export default function DashboardScreen() {
 
   if (error && !snapshot) {
     return (
-      <View style={styles.centerBox}>
+      <View className="flex-1 items-center justify-center bg-background" style={styles.centerBox}>
         <InlineError message={error} testID="dashboard-error" />
       </View>
     );
@@ -219,7 +219,7 @@ export default function DashboardScreen() {
   // CTA links to Settings → Accounts (016: EmptyState with action links).
   if (snapshot.accountCount === 0) {
     return (
-      <ScrollView contentContainerStyle={styles.emptyWrap} refreshControl={refreshControl} testID="dashboard-empty-accounts">
+      <ScrollView className="flex-1 bg-background" contentContainerStyle={styles.emptyWrap} refreshControl={refreshControl} testID="dashboard-empty-accounts">
         <EmptyState
           icon="wallet-outline"
           title="No accounts yet"
@@ -242,7 +242,7 @@ export default function DashboardScreen() {
   const goToAnalytics = () => router.navigate('/analytics' as never);
 
   return (
-    <KeyboardAwareScrollView contentContainerStyle={styles.content} refreshControl={refreshControl} testID="dashboard-screen">
+    <KeyboardAwareScrollView className="flex-1 bg-background" contentContainerStyle={styles.content} refreshControl={refreshControl} testID="dashboard-screen">
       {error ? <InlineError message={error} testID="dashboard-error" /> : null}
 
       {noData ? (

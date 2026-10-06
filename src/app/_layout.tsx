@@ -1,3 +1,4 @@
+import '../../global.css';
 import { useCallback, useEffect, useState } from 'react';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
@@ -6,6 +7,7 @@ import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PortalHost } from '@rn-primitives/portal';
 import { initDb } from '@/db';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { DbErrorScreen } from '@/components/DbErrorScreen';
@@ -107,6 +109,7 @@ export default function RootLayout() {
           <RootStack />
         </ToastProvider>
       </AuthProvider>
+      <PortalHost />
     </SafeAreaProvider>
   );
 }

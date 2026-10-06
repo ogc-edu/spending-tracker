@@ -1,14 +1,11 @@
 /**
- * IconButton (plan 018) — a ≥44 pt square/circular pressable carrying one
- * icon. Replaces the ad-hoc 40×40 trash buttons, header gears and eye
- * toggles that each hand-roll their own hit area.
- *
- * `tone` picks the icon color; `filled` adds a soft circular background
- * (danger-soft trash buttons, etc.). Header gear uses transparent + muted.
+ * IconButton — a ≥44 pt square/circular pressable carrying one icon.
+ * Follows RNR aesthetic with NativeWind support and hairline borders.
  */
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MIN_TOUCH_TARGET, colors, spacing } from '@/theme';
+import { cn } from '@/lib/utils';
 
 export type IconButtonTone = 'muted' | 'accent' | 'danger';
 
@@ -22,6 +19,8 @@ export function IconButton({
   filled = false,
   disabled = false,
   size = 20,
+  className,
+  style,
   testID,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
@@ -33,17 +32,31 @@ export function IconButton({
   filled?: boolean;
   disabled?: boolean;
   size?: number;
+  className?: string;
+  style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
   const color = TONE_COLOR[tone];
   const bg =
     tone === 'danger' ? colors.dangerSoft : tone === 'accent' ? colors.accentSoft : colors.background;
+
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       hitSlop={spacing.xs}
-      style={({ pressed }) => [styles.button, filled && { backgroundColor: bg }, pressed && styles.pressed]}
+      className={cn(
+        'w-11 h-11 rounded-full items-center justify-center min-h-[44px] min-w-[44px]',
+        filled && 'border border-border/40',
+        disabled && 'opacity-50',
+        className
+      )}
+      style={({ pressed }) => [
+        styles.button,
+        filled && { backgroundColor: bg },
+        pressed && styles.pressed,
+        style,
+      ]}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}

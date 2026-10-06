@@ -137,6 +137,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
+    minHeight: 44,
   },
   chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '700' },

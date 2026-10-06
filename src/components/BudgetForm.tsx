@@ -10,11 +10,12 @@
  */
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 import { parseMoneyToSen, formatSenInput } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.\d{1,2})?$/;
@@ -77,8 +78,8 @@ export function BudgetForm({
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
           <View style={styles.field}>
             <Text style={styles.label}>Amount (RM)</Text>
-            <TextInput
-              style={[styles.input, error && styles.inputError]}
+            <Input
+              className="min-h-[48px] h-12 rounded-xl bg-background border border-border px-4 text-base font-semibold"
               keyboardType="decimal-pad"
               placeholder="0.00"
               placeholderTextColor={colors.muted}

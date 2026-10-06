@@ -44,7 +44,7 @@ import { List, ListRow } from '@/components/ui/List';
 import { SkeletonGrid, SkeletonHome } from '@/components/ui/Skeleton';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography, shadows } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -182,9 +182,10 @@ export default function AnalyticsScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />}
         >
           {/* Header card: month total + MoM change + the 014 action. */}
-          <View style={styles.totalCard} testID="analytics-total-card">
-            <Text style={styles.totalLabel}>Total spent</Text>
+          <View className="bg-card mx-4 mt-4 rounded-2xl border border-border p-4" style={styles.totalCard} testID="analytics-total-card">
+            <Text className="text-xs text-muted-foreground font-bold uppercase tracking-wider" style={styles.totalLabel}>Total spent</Text>
             <Text
+              className="text-3xl font-extrabold text-foreground my-1 tracking-tight"
               style={styles.totalAmount}
               numberOfLines={1}
               accessibilityLabel={`Total spent, ${spokenMoneyLabel(snapshot.totalSen)}`}
@@ -192,7 +193,7 @@ export default function AnalyticsScreen() {
             >
               {formatSen(snapshot.totalSen)}
             </Text>
-            <View style={styles.momRow}>
+            <View className="flex-row items-center justify-between mt-2" style={styles.momRow}>
               <MoMChip changeSen={snapshot.changeSen} changePct={snapshot.changePct} />
               <Pressable
                 onPress={onAnalyzePress}
@@ -200,6 +201,9 @@ export default function AnalyticsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Analyze my spending"
                 testID="analytics-analyze-button"
+                className={`flex-row items-center gap-1.5 bg-accent/10 rounded-full min-h-[44px] px-3.5 ${
+                  aiPending ? 'opacity-50' : ''
+                }`}
                 style={({ pressed }) => [
                   styles.analyzeButton,
                   pressed && styles.analyzeButtonPressed,
@@ -211,7 +215,7 @@ export default function AnalyticsScreen() {
                 ) : (
                   <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
                 )}
-                <Text style={styles.analyzeLabel}>Analyze my spending</Text>
+                <Text className="text-xs font-bold text-accent" style={styles.analyzeLabel}>Analyze my spending</Text>
               </Pressable>
             </View>
 
@@ -224,8 +228,8 @@ export default function AnalyticsScreen() {
           <StatGrid snapshot={snapshot} />
 
           {/* Top 5 largest expenses (amounts/date/category — no descriptions, A6). */}
-          <View style={styles.section} testID="analytics-top-expenses">
-            <Text style={styles.sectionTitle}>Top expenses</Text>
+          <View className="bg-card mx-4 mt-4 rounded-2xl border border-border p-4" style={styles.section} testID="analytics-top-expenses">
+            <Text className="text-base font-bold text-foreground mb-3" style={styles.sectionTitle}>Top expenses</Text>
             <List style={styles.expenseList} testID="analytics-top-list">
               {snapshot.largest.map((row) => (
                 <ListRow
@@ -266,7 +270,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-    ...shadows.card,
   },
   totalLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   totalAmount: { fontSize: typography.display, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.5 },
@@ -296,7 +299,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-    ...shadows.card,
   },
   sectionTitle: {
     fontSize: typography.emphasis,

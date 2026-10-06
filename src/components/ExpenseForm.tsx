@@ -15,7 +15,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 import type { Account, Category, Expense } from '@/db/schema';
 import { DATE_RE, formatDDMMYYYY, isValidDateStr, todayLocal } from '@/utils/dates';
@@ -31,6 +31,7 @@ import { useKeyboardAwareFocus } from './KeyboardAwareScrollView';
 import { MoneyInput } from './MoneyInput';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.[0-9]{1,2})?$/;
@@ -261,11 +262,14 @@ export function ExpenseForm({
         control={control}
         name="date"
         render={({ field: { value }, fieldState: { error } }) => (
-          <View style={styles.field}>
-            <Text style={styles.label}>Date</Text>
+          <View className="mb-4" style={styles.field}>
+            <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>Date</Text>
             <Pressable
               onPress={() => setDateOpen(true)}
               disabled={submitting}
+              className={`flex-row items-center gap-2 border rounded-lg px-4 py-3 bg-card min-h-[48px] ${
+                error ? 'border-destructive' : 'border-border'
+              }`}
               style={({ pressed }) => [styles.dateField, error && styles.inputError, pressed && styles.pressed]}
               accessibilityRole="button"
               accessibilityLabel={`Date, ${value ? `${formatDDMMYYYY(value)}, picked` : 'not picked'}`}
@@ -273,12 +277,12 @@ export function ExpenseForm({
               testID="expense-form-date"
             >
               <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-              <Text style={[styles.dateValue, !value && styles.datePlaceholder]}>
+              <Text className={`flex-1 text-base font-semibold ${value ? 'text-foreground' : 'text-muted font-normal'}`} style={[styles.dateValue, !value && styles.datePlaceholder]}>
                 {value ? formatDDMMYYYY(value) : 'Select a date'}
               </Text>
               <Ionicons name="chevron-down" size={16} color={colors.muted} />
             </Pressable>
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
           </View>
         )}
       />
@@ -287,12 +291,12 @@ export function ExpenseForm({
         control={control}
         name="description"
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-          <View style={styles.field}>
-            <Text style={styles.label}>Description (optional)</Text>
-            <TextInput
+          <View className="mb-4" style={styles.field}>
+            <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>Description (optional)</Text>
+            <Input
+              className={`min-h-[64px] ${error ? 'border-destructive' : ''}`}
               style={[styles.input, styles.multiline, error && styles.inputError]}
               placeholder="e.g. lunch with team"
-              placeholderTextColor={colors.muted}
               accessibilityLabel="Description, optional"
               value={value}
               onChangeText={onChange}
@@ -303,7 +307,7 @@ export function ExpenseForm({
               editable={!submitting}
               testID="expense-form-description"
             />
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
           </View>
         )}
       />

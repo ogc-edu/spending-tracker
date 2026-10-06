@@ -134,14 +134,15 @@ export default function EditExpenseScreen() {
 
   if (loadError || !expense) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>{loadError ?? 'Expense not found'}</Text>
+      <View className="flex-1 bg-background items-center justify-center p-6" style={styles.center}>
+        <Text className="text-lg font-bold text-foreground mb-2" style={styles.emptyTitle}>{loadError ?? 'Expense not found'}</Text>
         <Pressable
           onPress={() => router.back()}
+          className="border border-border rounded-xl py-3 px-6 min-h-[44px] items-center justify-center bg-card active:opacity-70"
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
           accessibilityRole="button"
         >
-          <Text style={styles.backButtonLabel}>Back</Text>
+          <Text className="text-foreground text-base font-semibold" style={styles.backButtonLabel}>Back</Text>
         </Pressable>
       </View>
     );
@@ -155,47 +156,49 @@ export default function EditExpenseScreen() {
     const account = accounts.find((a) => a.id === expense.accountId);
     return (
       <KeyboardScreen>
-        <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="linked-expense-view">
-          <View style={styles.linkedBadge}>
+        <ScrollView className="flex-1 bg-background" style={styles.container} contentContainerStyle={styles.content} testID="linked-expense-view">
+          <View className="flex-row items-center justify-center gap-1.5 bg-amber-500/10 rounded-xl py-2 mb-4" style={styles.linkedBadge}>
             <Ionicons name="link-outline" size={16} color={colors.warning} />
-            <Text style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
+            <Text className="text-amber-500 text-xs font-bold" style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
           </View>
-          <View style={styles.card}>
+          <View className="bg-card rounded-2xl border border-border p-5 mb-4" style={styles.card}>
             <Text
+              className="text-2xl font-bold text-foreground mb-3"
               style={styles.amount}
               numberOfLines={1}
               accessibilityLabel={`Expense amount, ${spokenMoneyLabel(expense.amountSen)}`}
             >
               {formatSen(expense.amountSen)}
             </Text>
-          <View style={styles.row}>
-            <Ionicons name={category?.icon as never} size={18} color={categoryColor(expense.categoryId)} />
-            <Text style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
-          </View>
-          <View style={styles.row}>
-            <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-            <Text style={styles.rowValue}>{formatDayLabel(expense.date)} · {expense.date}</Text>
-          </View>
-          {account ? (
-            <View style={styles.row}>
-              <Ionicons name="wallet-outline" size={18} color={colors.muted} />
-              <Text style={styles.rowValue}>{account.name}</Text>
+            <View className="flex-row items-center gap-2 mb-2" style={styles.row}>
+              <Ionicons name={category?.icon as never} size={18} color={categoryColor(expense.categoryId)} />
+              <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
             </View>
-          ) : null}
-          {expense.description ? <Text style={styles.description}>{expense.description}</Text> : null}
-        </View>
-        <Text style={styles.linkedHint}>
-          This expense was created when you marked a commitment payment as paid. To change or remove it, un-pay the
-          payment in Commitments.
-        </Text>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-          testID="linked-expense-back"
-        >
-          <Text style={styles.backButtonLabel}>Back</Text>
-        </Pressable>
+            <View className="flex-row items-center gap-2 mb-2" style={styles.row}>
+              <Ionicons name="calendar-outline" size={18} color={colors.muted} />
+              <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{formatDayLabel(expense.date)} · {expense.date}</Text>
+            </View>
+            {account ? (
+              <View className="flex-row items-center gap-2 mb-2" style={styles.row}>
+                <Ionicons name="wallet-outline" size={18} color={colors.muted} />
+                <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{account.name}</Text>
+              </View>
+            ) : null}
+            {expense.description ? <Text className="text-base text-muted-foreground mt-1 italic" style={styles.description}>{expense.description}</Text> : null}
+          </View>
+          <Text className="text-xs text-muted-foreground leading-4 mb-4" style={styles.linkedHint}>
+            This expense was created when you marked a commitment payment as paid. To change or remove it, un-pay the
+            payment in Commitments.
+          </Text>
+          <Pressable
+            onPress={() => router.back()}
+            className="border border-border rounded-xl py-3 min-h-[44px] items-center justify-center bg-card active:opacity-70"
+            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            testID="linked-expense-back"
+          >
+            <Text className="text-foreground text-base font-semibold" style={styles.backButtonLabel}>Back</Text>
+          </Pressable>
         </ScrollView>
       </KeyboardScreen>
     );
@@ -203,6 +206,7 @@ export default function EditExpenseScreen() {
 
   return (
     <KeyboardAwareScrollView
+      className="flex-1 bg-background"
       style={styles.container}
       contentContainerStyle={styles.content}
       testID="edit-expense-screen"
@@ -227,13 +231,14 @@ export default function EditExpenseScreen() {
       />
       <Pressable
         onPress={confirmDelete}
+        className="flex-row items-center justify-center gap-1.5 border border-destructive/30 rounded-xl py-3.5 mt-4 min-h-[48px] bg-destructive/10 active:opacity-70"
         style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
         accessibilityRole="button"
         disabled={submitting}
         testID="expense-delete-button"
       >
         <Ionicons name="trash-outline" size={18} color={colors.danger} />
-        <Text style={styles.deleteLabel}>Delete expense</Text>
+        <Text className="text-destructive text-base font-bold" style={styles.deleteLabel}>Delete expense</Text>
       </Pressable>
 
       <ConfirmSheet

@@ -28,27 +28,28 @@ export function ExpenseRow({ expense, category, accountName, onPress }: ExpenseR
   return (
     <Pressable
       onPress={onPress}
+      className="flex-row items-center py-3 px-4 min-h-[52px]"
       style={({ pressed }) => (pressed ? [styles.row, styles.pressed] : styles.row)}
       android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
       accessibilityRole="button"
       testID={`expense-row-${expense.id}`}
     >
-      <View style={[styles.avatar, { backgroundColor: `${catColor}18` }]}>
+      <View className="w-10 h-10 rounded-full items-center justify-center mr-3" style={[styles.avatar, { backgroundColor: `${catColor}18` }]}>
         <Ionicons
           name={(category?.icon ?? 'receipt-outline') as never}
           size={18}
           color={catColor}
         />
       </View>
-      <View style={styles.rowInfo}>
-        <View style={styles.rowTop}>
-          <Text style={styles.rowTitle} numberOfLines={1}>
+      <View className="flex-1" style={styles.rowInfo}>
+        <View className="flex-row items-center justify-between" style={styles.rowTop}>
+          <Text className="text-base font-bold text-foreground flex-1 mr-2" style={styles.rowTitle} numberOfLines={1}>
             {expense.description ? expense.description : (category?.name ?? 'Category')}
           </Text>
-          <Text style={styles.rowAmount}>{formatSen(expense.amountSen)}</Text>
+          <Text className="text-base font-bold text-foreground" style={styles.rowAmount}>{formatSen(expense.amountSen)}</Text>
         </View>
-        <View style={styles.rowBottom}>
-          <Text style={styles.rowMeta} numberOfLines={1}>
+        <View className="flex-row items-center mt-0.5" style={styles.rowBottom}>
+          <Text className="text-xs text-muted-foreground font-medium flex-1" style={styles.rowMeta} numberOfLines={1}>
             {formatDayLabel(expense.date)}
             {expense.description ? ` · ${category?.name ?? 'Expense'}` : ''}
             {accountName ? ` · ${accountName}` : ''}
