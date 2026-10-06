@@ -17,6 +17,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -31,7 +32,10 @@ import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { BudgetMeter } from '@/components/ui/BudgetMeter';
+import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { COMMITMENT_TYPE_ICONS, COMMITMENT_TYPE_LABELS } from '@/components/commitmentMeta';
 import { ScheduleRow } from '@/components/ScheduleRow';
 import { PaymentFlowSheet } from '@/components/PaymentFlowSheet';
@@ -47,6 +51,7 @@ const UPCOMING_PREVIEW_COUNT = 3;
 
 export default function CommitmentDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authService } = useAuth();
   const toast = useToast();
@@ -231,15 +236,29 @@ export default function CommitmentDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="commitment-detail-screen">
-      {/* Header card (plan 018: tinted hero language — red when overdue, soft green otherwise) */}
-      <Card tone={overdueNext && commitment.status === 'active' ? 'danger' : 'tint'} testID="commitment-hero">
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}
+      testID="commitment-detail-screen"
+    >
+      {/* Header card / Digital Pass (hero) */}
+      <BentoCard
+        className={`border ${overdueNext && commitment.status === 'active' ? 'border-destructive/60 bg-destructive/5' : 'border-border/60 bg-card'} rounded-2xl p-5 mb-5`}
+        testID="commitment-hero"
+      >
         <View style={styles.titleRow}>
-          <Ionicons
-            name={(COMMITMENT_TYPE_ICONS[commitment.type as keyof typeof COMMITMENT_TYPE_ICONS] ?? 'calendar-outline') as never}
-            size={20}
-            color={colors.text}
-          />
+          <View
+            style={[
+              styles.iconWrap,
+              { backgroundColor: overdueNext && commitment.status === 'active' ? `${colors.danger}22` : `${colors.accent}22` },
+            ]}
+          >
+            <Ionicons
+              name={(COMMITMENT_TYPE_ICONS[commitment.type as keyof typeof COMMITMENT_TYPE_ICONS] ?? 'calendar-outline') as never}
+              size={20}
+              color={overdueNext && commitment.status === 'active' ? colors.danger : colors.accent}
+            />
+          </View>
           <Text style={styles.name}>{commitment.name}</Text>
           {commitment.status !== 'cancelled' && !archived ? (
             <Button
@@ -262,38 +281,68 @@ export default function CommitmentDetailScreen() {
             />
           ) : null}
         </View>
+
         <View style={styles.badgeRow}>
-          <Badge
-            tone={commitment.status === 'cancelled' ? 'danger' : commitment.status === 'completed' ? 'accent' : 'neutral'}
+          <StatusPill
+            variant={
+              commitment.status === 'completed'
+                ? 'healthy'
+                : commitment.status === 'cancelled'
+                  ? 'neutral'
+                  : overdueNext && commitment.status === 'active'
+                    ? 'danger'
+                    : 'accent'
+            }
             label={
               commitment.status === 'completed'
                 ? 'Completed'
                 : commitment.status === 'cancelled'
                   ? 'Cancelled'
-                  : 'Active'
+                  : overdueNext && commitment.status === 'active'
+                    ? 'Overdue'
+                    : 'Active'
             }
+            dot
           />
-          {archived ? <Badge tone="warning" label="Archived" /> : null}
+          {archived ? <StatusPill variant="warning" label="Archived" /> : null}
           <Text style={styles.typeLabel}>
             {COMMITMENT_TYPE_LABELS[commitment.type as keyof typeof COMMITMENT_TYPE_LABELS] ?? 'Other'}
             {commitment.frequency === 'one_time' ? ' · one-time' : ' · monthly'}
           </Text>
         </View>
-        <Text
-          style={styles.amount}
-          numberOfLines={1}
+
+        <View className="border-t border-border/40 my-3" />
+
+        <MoneyDisplay
+          amountInSen={commitment.paymentSen}
+          size="hero"
+          className="mb-1"
           accessibilityLabel={`Payment amount, ${spokenMoneyLabel(commitment.paymentSen)}`}
-        >
-          {formatSen(commitment.paymentSen)}
-        </Text>
+        />
+
         {commitment.totalSen !== null ? (
+          <>
+            <BudgetMeter
+              spentSen={Math.max(0, commitment.totalSen - commitment.remainingSen)}
+              totalSen={commitment.totalSen}
+              customColor="bg-emerald-500"
+              heightClass="h-2"
+              className="mt-2 mb-1.5"
+            />
+            <Text style={styles.remaining}>
+              {formatSen(commitment.remainingSen)} of {formatSen(commitment.totalSen)} remaining
+            </Text>
+          </>
+        ) : commitment.frequency === 'monthly' ? (
           <Text style={styles.remaining}>
-            {formatSen(commitment.remainingSen)} of {formatSen(commitment.totalSen)} remaining
+            Recurring monthly · {nextDue !== null ? `${overdueNext ? 'Overdue' : 'Next due'} ${formatDayLabel(nextDue)}` : 'All paid'}
           </Text>
         ) : (
-          <Text style={styles.remaining}>Recurring monthly</Text>
+          <Text style={styles.remaining}>
+            {nextDue !== null ? `${overdueNext ? 'Overdue' : 'Maturity date'} ${formatDayLabel(nextDue)}` : 'Settled'}
+          </Text>
         )}
-      </Card>
+      </BentoCard>
 
       {/* Schedule */}
       <Text style={styles.sectionTitle}>Schedule</Text>
@@ -454,6 +503,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   name: { fontSize: typography.title, fontWeight: '700', color: colors.text, flex: 1 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.md },
   typeLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '600', flexShrink: 1 },

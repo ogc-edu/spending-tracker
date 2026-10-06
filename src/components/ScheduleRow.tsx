@@ -90,17 +90,19 @@ export function ScheduleRow({
       <Pressable
         onPress={() => onMarkPaid(slot)}
         disabled={busy || !canMarkPaid}
-        className={`flex-row items-center gap-1 bg-accent rounded-lg py-2 px-3 min-h-[44px] ${(!canMarkPaid || busy) ? 'opacity-40' : ''}`}
+        className={`flex-row items-center gap-1.5 bg-emerald-600 dark:bg-emerald-500 rounded-lg py-2 px-3 min-h-[44px] ${(!canMarkPaid || busy) ? 'opacity-40' : ''}`}
         style={({ pressed }) => [
           styles.markPaid,
           (!canMarkPaid || busy) && styles.buttonDisabled,
           pressed && styles.pressed,
         ]}
         accessibilityRole="button"
-        testID="schedule-row-mark-paid"
+        testID="mark-paid-button"
       >
-        <Ionicons name="checkmark" size={14} color="#fff" />
-        <Text className="text-white text-xs font-bold" style={styles.markPaidLabel}>Mark paid</Text>
+        <View testID="schedule-row-mark-paid" className="flex-row items-center gap-1.5">
+          <Ionicons name="checkmark" size={14} color="#fff" />
+          <Text className="text-white text-xs font-bold" style={styles.markPaidLabel}>Mark paid</Text>
+        </View>
       </Pressable>
     </View>
   );

@@ -150,4 +150,72 @@ describe('Commitments tab — default order is next due date', () => {
 
     expect(renderedNames(await renderScreen())).toEqual(['Still owed', 'Settled']);
   });
+
+  it('renders Digital Passes for Fixed Loan, Recurring Subscription, and One-Off Obligation with preserved testIDs', async () => {
+    const today = todayLocal();
+    const repo = new DrizzleCommitmentRepository(db.db as unknown as never);
+
+    // 1. One-Off Obligation
+    await repo.create(1, {
+      name: 'Road Tax',
+      type: 'bill',
+      totalSen: null,
+      remainingSen: 0,
+      paymentSen: 82_000,
+      frequency: 'one_time',
+      startDate: today,
+      endDate: null,
+      dueDate: today,
+    });
+
+    // 2. Fixed Amortizing Loan
+    await repo.create(1, {
+      name: 'Car Loan',
+      type: 'installment',
+      totalSen: 45_000_00,
+      remainingSen: 31_200_00,
+      paymentSen: 65_000,
+      frequency: 'monthly',
+      startDate: today,
+      endDate: null,
+      dueDate: today,
+    });
+
+    // 3. Recurring Subscription
+    await repo.create(1, {
+      name: 'Netflix',
+      type: 'subscription',
+      totalSen: null,
+      remainingSen: 0,
+      paymentSen: 4_500,
+      frequency: 'monthly',
+      startDate: today,
+      endDate: null,
+      dueDate: today,
+    });
+
+    const items = await repo.list(1);
+    const roadTax = items.find((c) => c.name === 'Road Tax')!;
+    const carLoan = items.find((c) => c.name === 'Car Loan')!;
+    const netflix = items.find((c) => c.name === 'Netflix')!;
+
+    const tree = await renderScreen();
+
+    // Verify screen and list containers
+    expect(tree.root.findByProps({ testID: 'commitments-screen' })).toBeDefined();
+    expect(tree.root.findByProps({ testID: 'commitments-list' })).toBeDefined();
+    expect(tree.root.findByProps({ testID: 'add-commitment-fab' })).toBeDefined();
+
+    // Verify Digital Pass cards by type
+    expect(tree.root.findByProps({ testID: `obligation-card-${roadTax.id}` })).toBeDefined();
+    expect(tree.root.findByProps({ testID: `loan-card-${carLoan.id}` })).toBeDefined();
+    expect(tree.root.findByProps({ testID: `subscription-card-${netflix.id}` })).toBeDefined();
+
+    // Verify preserved contracts on each row
+    for (const item of [roadTax, carLoan, netflix]) {
+      expect(tree.root.findByProps({ testID: `commitment-row-${item.id}` })).toBeDefined();
+      expect(tree.root.findByProps({ testID: `commitment-name-${item.id}` })).toBeDefined();
+      expect(tree.root.findByProps({ testID: `commitment-next-due-${item.id}` })).toBeDefined();
+    }
+  });
 });
