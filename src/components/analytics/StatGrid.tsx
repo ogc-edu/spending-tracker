@@ -1,99 +1,160 @@
 /**
- * StatGrid (plan 011, AN-2/AN-3) — the 2×2 analytics stat cells: average
- * daily spend, largest expense (with its day + category), overall-budget
- * utilization ("No budget" when unset), and the end-of-month projection.
- * Pure presentation over the typed snapshot — every figure is the engine's.
+ * StatGrid (Plan 007 / AN-2/AN-3) — 2x2 Metrics Bento Matrix for Analytics.
+ * Renders four executive cash flow KPI tiles using BentoCard & MoneyDisplay:
+ *  - Cell 1: Total monthly spend + MoM percentage change chip (MoMChip)
+ *  - Cell 2: Daily average spend (spent / days elapsed)
+ *  - Cell 3: Peak spending day (highest spend day, primary driver, date)
+ *  - Cell 4: Top spending category (amount and percentage share)
+ *
+ * Preserved test contracts:
+ *  - testID="analytics-kpi-grid"
+ *  - testID="analytics-stats"
+ *  - testID="analytics-total-card"
+ *  - testID="analytics-total"
+ *  - testID="analytics-stat-avg"
+ *  - testID="analytics-stat-largest"
+ *  - testID="analytics-stat-utilization"
+ *  - testID="analytics-stat-projection"
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { SpendingSnapshot } from '@/services/AnalyticsService';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
+import { MoMChip } from '@/components/analytics/MoMChip';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
-
-function StatCell({
-  label,
-  value,
-  sub,
-  subTone,
-  testID,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  subTone?: string;
-  testID?: string;
-}) {
-  return (
-    <View className="w-[48%] bg-card rounded-2xl border border-border p-4 mb-3" style={styles.cell} testID={testID}>
-      <Text className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wider" style={styles.label}>{label}</Text>
-      <Text className="text-base font-extrabold text-foreground tracking-tight" style={styles.value}>{value}</Text>
-      {sub ? (
-        <Text className="text-xs text-muted-foreground mt-1 font-medium" style={[styles.sub, subTone ? { color: subTone } : null]}>{sub}</Text>
-      ) : null}
-    </View>
-  );
-}
 
 export function StatGrid({ snapshot }: { snapshot: SpendingSnapshot }) {
   const largest = snapshot.largest[0] ?? null;
+  const topCategory = snapshot.topCategories[0] ?? null;
   const utilization = snapshot.utilization;
-  const utilValue = utilization === null ? 'No budget' : utilization.pct !== null ? `${utilization.pct.toFixed(1)}%` : '—';
+
+  const topCategoryShare =
+    snapshot.totalSen > 0 && topCategory
+      ? Math.floor((topCategory.amountSen * 1000) / snapshot.totalSen) / 10
+      : 0;
 
   return (
-    <View style={styles.grid} testID="analytics-stats">
-      <StatCell
-        label="Average daily"
-        value={formatSen(snapshot.avgDailySen)}
-        sub="to date"
-        testID="analytics-stat-avg"
-      />
-      <StatCell
-        label="Largest expense"
-        value={largest ? formatSen(largest.amountSen) : '—'}
-        sub={largest ? `${formatDayLabel(largest.date)} · ${largest.categoryName}` : undefined}
-        testID="analytics-stat-largest"
-      />
-      <StatCell
-        label="Budget used"
-        value={utilValue}
-        sub={
-          utilization === null
-            ? undefined
-            : utilization.overBudget
-              ? 'Over budget'
-              : 'of monthly budget'
-        }
-        subTone={utilization?.overBudget ? colors.danger : undefined}
-        testID="analytics-stat-utilization"
-      />
-      <StatCell
-        label="Projected end-of-month"
-        value={formatSen(snapshot.projectionSen)}
-        sub="at current pace"
-        testID="analytics-stat-projection"
-      />
+    <View testID="analytics-kpi-grid" className="mb-4">
+      <View testID="analytics-stats" className="flex-row flex-wrap justify-between gap-3">
+        {/* Cell 1: Total Monthly Spend */}
+        <BentoCard
+          testID="analytics-total-card"
+          className="flex-1 min-w-[46%] p-3.5 bg-card border-border/80 justify-between"
+        >
+          <Text className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+            Total Spent
+          </Text>
+          <View className="my-1.5">
+            <MoneyDisplay
+              amountInSen={snapshot.totalSen}
+              size="lg"
+              testID="analytics-total"
+            />
+          </View>
+          <View className="mt-1">
+            <MoMChip changeSen={snapshot.changeSen} changePct={snapshot.changePct} />
+          </View>
+          <View testID="analytics-stat-projection" className="mt-2 pt-2 border-t border-border/40">
+            <Text className="text-[11px] text-muted-foreground font-medium" numberOfLines={1}>
+              Proj: {formatSen(snapshot.projectionSen)}
+            </Text>
+          </View>
+        </BentoCard>
+
+        {/* Cell 2: Daily Average Spend */}
+        <BentoCard
+          testID="analytics-stat-avg"
+          className="flex-1 min-w-[46%] p-3.5 bg-card border-border/80 justify-between"
+        >
+          <Text className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+            Daily Average
+          </Text>
+          <View className="my-1.5">
+            <MoneyDisplay
+              amountInSen={snapshot.avgDailySen}
+              size="lg"
+            />
+          </View>
+          <Text className="text-xs text-muted-foreground font-medium mt-1">
+            {snapshot.elapsedDays} {snapshot.elapsedDays === 1 ? 'day' : 'days'} elapsed
+          </Text>
+          <View className="mt-2 pt-2 border-t border-border/40">
+            <Text className="text-[11px] text-muted-foreground/80 font-mono" style={{ fontVariant: ['tabular-nums'] }}>
+              of {snapshot.daysInMonth} cycle days
+            </Text>
+          </View>
+        </BentoCard>
+
+        {/* Cell 3: Peak Spending Day */}
+        <BentoCard
+          testID="analytics-stat-largest"
+          className="flex-1 min-w-[46%] p-3.5 bg-card border-border/80 justify-between"
+        >
+          <Text className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+            Peak Expense
+          </Text>
+          <View className="my-1.5">
+            {largest ? (
+              <MoneyDisplay
+                amountInSen={largest.amountSen}
+                size="lg"
+              />
+            ) : (
+              <Text className="text-xl font-bold text-foreground tracking-tight">—</Text>
+            )}
+          </View>
+          <Text className="text-xs text-muted-foreground font-medium mt-1" numberOfLines={1}>
+            {largest ? `${formatDayLabel(largest.date)} · ${largest.categoryName}` : 'No expenses'}
+          </Text>
+          <View className="mt-2 pt-2 border-t border-border/40">
+            <Text className="text-[11px] text-muted-foreground/80 font-medium" numberOfLines={1}>
+              {largest ? 'Largest transaction' : 'Zero activity'}
+            </Text>
+          </View>
+        </BentoCard>
+
+        {/* Cell 4: Top Spending Category */}
+        <BentoCard
+          className="flex-1 min-w-[46%] p-3.5 bg-card border-border/80 justify-between"
+        >
+          <Text className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+            Top Category
+          </Text>
+          <View className="my-1.5">
+            <Text className="text-base font-bold text-foreground" numberOfLines={1}>
+              {topCategory ? topCategory.categoryName : '—'}
+            </Text>
+            {topCategory ? (
+              <View className="flex-row items-baseline gap-1 mt-0.5">
+                <MoneyDisplay
+                  amountInSen={topCategory.amountSen}
+                  size="sm"
+                />
+                <Text className="text-xs text-muted-foreground font-semibold">
+                  ({topCategoryShare.toFixed(1)}%)
+                </Text>
+              </View>
+            ) : (
+              <Text className="text-xs text-muted-foreground font-medium mt-0.5">—</Text>
+            )}
+          </View>
+          <View testID="analytics-stat-utilization" className="mt-2 pt-2 border-t border-border/40">
+            <Text
+              className={`text-[11px] font-medium ${
+                utilization?.overBudget ? 'text-destructive font-bold' : 'text-muted-foreground'
+              }`}
+              numberOfLines={1}
+            >
+              {utilization === null
+                ? 'No budget set'
+                : utilization.overBudget
+                  ? `Budget: ${utilization.pct?.toFixed(1)}% (Over)`
+                  : `Budget: ${utilization.pct?.toFixed(1)}% used`}
+            </Text>
+          </View>
+        </BentoCard>
+      </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-  },
-  cell: {
-    width: '48%',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
-  value: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant, letterSpacing: -0.3 },
-  sub: { fontSize: typography.caption, color: colors.muted, marginTop: spacing.xs, fontWeight: '500' },
-});

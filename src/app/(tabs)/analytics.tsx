@@ -1,24 +1,19 @@
 /**
- * Analytics tab (plan 011 / PRD §7.5 AN-1..4) — deterministic month analytics
- * from the typed SpendingSnapshot (the exact 014 AI payload). Every number
- * comes from AnalyticsService.analyzePeriod (engine 009 only — this screen
- * has no SQL and no money math, ARCH §1). The SHARED uiStore month selection
- * (007) drives a re-read on focus AND on month change (ARCH §5, A4 no cache).
- * Decision A3: category proportions are plain View bars (zero chart deps).
+ * Analytics tab (Plan 007 / PRD §7.5 AN-1..4) — Executive Cash Flow Analytics Dashboard.
+ * Pairs a Month-over-Month cycle stepper with a 2x2 Metrics Bento Matrix, ranked
+ * Category Breakdown Proportional Bars, and a Bring-Your-Own-Key (BYOK) AI Monthly Review Container.
  *
- * Plan 014 (AN-5) — "Analyze my spending": the action button sits next to the
- * MoM chip and sends the RENDERED month's snapshot (tap-time mapping, no
- * drift mid-flight) through AIService.analyze('spending', …) — no provider
- * logic here (BYOK/config lives in AiConfigService, 013). The shared
- * AIAnalysisCard renders under the chip: pending / typed error + Retry /
- * Zod-validated result, labelled with the analyzed month (a month change
- * mid-flight never re-labels a stale result). Previous-month-zero baseline →
- * changePct null → the prompt covers "no comparison available" (no invented
- * trends, AI-3). Empty month → button hidden, not an error.
+ * Invariants:
+ *  - Dynamic safe-area insets and px-4 horizontal gutter.
+ *  - Preserved screen root: testID="analytics-screen".
+ *  - Domain engine immutability (AnalyticsService only — no SQL or arithmetic on screen).
+ *  - Pure integer sen throughout.
+ *  - Monospace tabular numbers (tabular-nums).
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -29,25 +24,32 @@ import { createAIService } from '@/ai/AIService';
 import { toAIError } from '@/ai/errors';
 import type { AIUnavailableError } from '@/ai/errors';
 import type { AIResult, SpendingSnapshot as AISpendingSnapshot } from '@/ai/types';
-import {
-  AIAnalysisCard,
-  type AIAnalysisState,
-} from '@/components/AIAnalysisCard';
+import { AIAnalysisCard, type AIAnalysisState } from '@/components/AIAnalysisCard';
 import { useUiStore } from '@/store/uiStore';
 import { MonthSelector } from '@/components/analytics/MonthSelector';
-import { MoMChip } from '@/components/analytics/MoMChip';
 import { CategoryBreakdown } from '@/components/analytics/CategoryBreakdown';
 import { StatGrid } from '@/components/analytics/StatGrid';
 import { EmptyState } from '@/components/EmptyState';
+import { BentoCard } from '@/components/ui/BentoCard';
 import { InlineError } from '@/components/ui/InlineError';
 import { List, ListRow } from '@/components/ui/List';
+import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
 import { SkeletonGrid, SkeletonHome } from '@/components/ui/Skeleton';
+import { TouchTarget } from '@/components/ui/TouchTarget';
 import { formatDayLabel } from '@/utils/dates';
-import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { spokenMoneyLabel } from '@/utils/money';
+import { colors } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function useSafeInsets() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
 }
 
 /** A no-op retry while there is nothing to retry (idle/pending/result). */
@@ -55,6 +57,7 @@ const NOOP_RETRY = (): void => {};
 
 export default function AnalyticsScreen() {
   const router = useRouter();
+  const insets = useSafeInsets();
   const { authService } = useAuth();
 
   const { service, aiService } = useMemo(() => {
@@ -74,7 +77,7 @@ export default function AnalyticsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ---- Plan 014 — the AI analysis drive state (tap-time capture). ----
+  // ---- AI analysis drive state (tap-time capture) ----
   const [aiPending, setAiPending] = useState(false);
   const [aiError, setAiError] = useState<AIUnavailableError | null>(null);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
@@ -95,7 +98,7 @@ export default function AnalyticsScreen() {
     }
   }, [service, selectedMonth]);
 
-  // Re-read on focus AND on every month change (selectedMonth is a dep).
+  // Re-read on focus AND on every month change.
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -111,11 +114,7 @@ export default function AnalyticsScreen() {
     }
   }, [load]);
 
-  /**
-   * Run one analysis against the TAP-TIME payload. Both `label` and `payload`
-   * are captured by the caller (the state the screen renders at tap time), so
-   * a month change mid-flight only affects the next tap, never this request.
-   */
+  /** Run one analysis against the tap-time payload. */
   const runAnalysis = useCallback(
     async (label: string, payload: AISpendingSnapshot) => {
       setAiPending(true);
@@ -144,7 +143,6 @@ export default function AnalyticsScreen() {
     if (aiPayload && aiLabel) void runAnalysis(aiLabel, aiPayload);
   }, [aiPayload, aiLabel, runAnalysis]);
 
-  /** The card's state bundle — the shared contract (015 uses the same shape). */
   const aiState: AIAnalysisState = useMemo(
     () => ({
       pending: aiPending,
@@ -158,13 +156,17 @@ export default function AnalyticsScreen() {
   const isEmpty = snapshot !== null && snapshot.totalSen === 0;
 
   return (
-    <View style={styles.container} testID="analytics-screen">
+    <View
+      className="flex-1 bg-background"
+      style={{ paddingTop: insets.top }}
+      testID="analytics-screen"
+    >
       <MonthSelector month={selectedMonth} onChange={setSelectedMonth} />
 
       {error ? <InlineError message={error} testID="analytics-error" /> : null}
 
       {loading ? (
-        <View style={styles.centerBox} testID="analytics-loading">
+        <View className="items-center pt-16 px-4" testID="analytics-loading">
           <SkeletonHome />
           <SkeletonGrid />
         </View>
@@ -178,146 +180,99 @@ export default function AnalyticsScreen() {
         />
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />}
+          className="flex-1 px-4"
+          contentContainerStyle={{
+            paddingTop: 16,
+            paddingBottom: insets.bottom + 80,
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={colors.muted}
+            />
+          }
         >
-          {/* Header card: month total + MoM change + the 014 action. */}
-          <View className="bg-card mx-4 mt-4 rounded-2xl border border-border p-4" style={styles.totalCard} testID="analytics-total-card">
-            <Text className="text-xs text-muted-foreground font-bold uppercase tracking-wider" style={styles.totalLabel}>Total spent</Text>
-            <Text
-              className="text-3xl font-extrabold text-foreground my-1 tracking-tight"
-              style={styles.totalAmount}
-              numberOfLines={1}
-              accessibilityLabel={`Total spent, ${spokenMoneyLabel(snapshot.totalSen)}`}
-              testID="analytics-total"
-            >
-              {formatSen(snapshot.totalSen)}
-            </Text>
-            <View className="flex-row items-center justify-between mt-2" style={styles.momRow}>
-              <MoMChip changeSen={snapshot.changeSen} changePct={snapshot.changePct} />
-              <Pressable
+          {/* 1. 2x2 Metrics Bento Matrix */}
+          <StatGrid snapshot={snapshot} />
+
+          {/* 2. Ranked Category Breakdown Proportional Bars */}
+          <CategoryBreakdown breakdown={snapshot.breakdown} totalSen={snapshot.totalSen} />
+
+          {/* 3. AI Monthly Review Container */}
+          <BentoCard elevated className="border-cyan-500/40 bg-card p-4 mb-4" testID="ai-analysis-card">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2.5">
+                <View className="w-8 h-8 rounded-full bg-cyan-500/10 items-center justify-center border border-cyan-500/25">
+                  <Ionicons name="sparkles" size={15} color="#06b6d4" />
+                </View>
+                <View>
+                  <Text className="text-base font-bold text-foreground">AI Monthly Review</Text>
+                  <Text className="text-xs text-muted-foreground font-medium">
+                    Executive cash flow analysis
+                  </Text>
+                </View>
+              </View>
+
+              <TouchTarget
+                minHeight={44}
                 onPress={onAnalyzePress}
                 disabled={aiPending}
                 accessibilityRole="button"
                 accessibilityLabel="Analyze my spending"
                 testID="analytics-analyze-button"
-                className={`flex-row items-center gap-1.5 bg-accent/10 rounded-full min-h-[44px] px-3.5 ${
+                className={`flex-row items-center gap-1.5 bg-cyan-500/10 border border-cyan-500/30 rounded-full px-3.5 py-1.5 active:opacity-75 ${
                   aiPending ? 'opacity-50' : ''
                 }`}
-                style={({ pressed }) => [
-                  styles.analyzeButton,
-                  pressed && styles.analyzeButtonPressed,
-                  aiPending && styles.analyzeButtonDisabled,
-                ]}
               >
                 {aiPending ? (
-                  <ActivityIndicator size="small" color={colors.accent} />
+                  <ActivityIndicator size="small" color="#06b6d4" />
                 ) : (
-                  <Ionicons name="sparkles-outline" size={16} color={colors.accent} />
+                  <Ionicons name="sparkles-outline" size={14} color="#06b6d4" />
                 )}
-                <Text className="text-xs font-bold text-accent" style={styles.analyzeLabel}>Analyze my spending</Text>
-              </Pressable>
+                <Text className="text-xs font-bold text-cyan-600 dark:text-cyan-400">
+                  {aiResult ? 'Re-analyze' : 'Analyze Month'}
+                </Text>
+              </TouchTarget>
             </View>
 
-            {/* Shared AI card — renders nothing until an analysis starts. */}
+            {/* AI Result Card */}
             <AIAnalysisCard label={aiLabel ?? undefined} {...aiState} />
-          </View>
+          </BentoCard>
 
-          <CategoryBreakdown breakdown={snapshot.breakdown} totalSen={snapshot.totalSen} />
-
-          <StatGrid snapshot={snapshot} />
-
-          {/* Top 5 largest expenses (amounts/date/category — no descriptions, A6). */}
-          <View className="bg-card mx-4 mt-4 rounded-2xl border border-border p-4" style={styles.section} testID="analytics-top-expenses">
-            <Text className="text-base font-bold text-foreground mb-3" style={styles.sectionTitle}>Top expenses</Text>
-            <List style={styles.expenseList} testID="analytics-top-list">
+          {/* 4. Top 5 Largest Expenses */}
+          <BentoCard className="bg-card mb-6 p-4" testID="analytics-top-expenses">
+            <Text className="text-base font-bold text-foreground mb-3 tracking-tight">
+              Top Expenses
+            </Text>
+            <List testID="analytics-top-list" style={{ marginTop: 0, marginHorizontal: 0, borderWidth: 0, backgroundColor: 'transparent' }}>
               {snapshot.largest.map((row) => (
                 <ListRow
                   key={row.id}
                   onPress={() => router.push(`/expenses/${row.id}` as never)}
                   testID={`analytics-top-expense-${row.id}`}
                 >
-                  <View style={styles.rankDot}>
-                    <Text style={styles.rankText}>{row.categoryName.charAt(0)}</Text>
+                  <View className="w-7 h-7 rounded-full bg-muted/40 items-center justify-center mr-2 border border-border/40">
+                    <Text className="text-xs font-bold text-muted-foreground">
+                      {row.categoryName.charAt(0)}
+                    </Text>
                   </View>
-                  <Text style={styles.expenseMeta}>
+                  <Text className="text-xs text-muted-foreground font-medium flex-shrink">
                     {formatDayLabel(row.date)} · {row.categoryName}
                   </Text>
-                  <Text style={styles.expenseAmount} numberOfLines={1} accessibilityLabel={`${row.categoryName}, ${spokenMoneyLabel(row.amountSen)}`}>
-                    {formatSen(row.amountSen)}
-                  </Text>
+                  <View className="ml-auto flex-shrink">
+                    <MoneyDisplay
+                      amountInSen={row.amountSen}
+                      size="sm"
+                      accessibilityLabel={`${row.categoryName}, ${spokenMoneyLabel(row.amountSen)}`}
+                    />
+                  </View>
                 </ListRow>
               ))}
             </List>
-          </View>
-
-          <View style={styles.spacer} />
+          </BentoCard>
         </ScrollView>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
-  content: { paddingBottom: spacing.xxl },
-  totalCard: {
-    backgroundColor: colors.surface,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-  },
-  totalLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  totalAmount: { fontSize: typography.display, fontWeight: '800', color: colors.text, marginVertical: spacing.xs, fontVariant: moneyFontVariant, letterSpacing: -0.5 },
-  momRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-  },
-  analyzeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.accentSoft,
-    borderRadius: 999,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-  },
-  analyzeButtonPressed: { opacity: 0.75 },
-  analyzeButtonDisabled: { opacity: 0.5 },
-  analyzeLabel: { fontSize: typography.caption, fontWeight: '700', color: colors.accent },
-  section: {
-    backgroundColor: colors.surface,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: typography.emphasis,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: spacing.md,
-    letterSpacing: -0.2,
-  },
-  expenseList: { marginTop: 0, marginHorizontal: 0, borderWidth: 0, shadowOpacity: 0 },
-  rankDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankText: { fontSize: typography.caption, fontWeight: '800', color: colors.muted },
-  expenseAmount: { fontSize: typography.body, color: colors.text, fontWeight: '700', fontVariant: moneyFontVariant, marginLeft: 'auto', flexShrink: 1 },
-  expenseMeta: { fontSize: typography.caption, color: colors.muted, fontWeight: '500', flexShrink: 1 },
-  spacer: { height: spacing.lg },
-});

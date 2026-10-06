@@ -1,16 +1,16 @@
 /**
- * MoMChip (plan 011, AN-1; restyled by plan 017) — month-over-month change vs
- * the PREVIOUS calendar month (AN-4). ▼ green = spending FELL (good), ▲ red =
- * rose (bad, mirrors the app's danger tone for over-spending); a flat month
- * shows no arrow. Plan 017: the chip now uses the SOFT badge language every
- * other status pill uses (tinted background + tone text) instead of a solid
- * saturated fill. When changePct is null (previous month total 0) the change
- * is undefined and the chip renders "—" (AN-1). Pure presentation — the
- * numbers are the engine's.
+ * MoMChip (Plan 007 / AN-1) — Month-over-Month change indicator vs the
+ * previous calendar month (AN-4).
+ * ▼ emerald = spending fell (healthy surplus direction),
+ * ▲ rose = spending rose (tight/deficit direction),
+ * — = previous month was 0 (no baseline available).
+ * Soft badge styling with hairline borders and tabular numbers.
+ * Preserves test contracts:
+ *  - testID="analytics-mom"
+ *  - testID="analytics-mom-label"
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { formatSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
 
 export function MoMChip({
   changeSen,
@@ -21,8 +21,14 @@ export function MoMChip({
 }) {
   if (changePct === null) {
     return (
-      <View style={[styles.chip, styles.neutral]} testID="analytics-mom">
-        <Text style={styles.neutralText} testID="analytics-mom-label">
+      <View
+        className="self-start rounded-full px-2.5 py-0.5 border bg-muted/20 border-border/60"
+        testID="analytics-mom"
+      >
+        <Text
+          className="text-xs font-bold text-muted-foreground"
+          testID="analytics-mom-label"
+        >
           —
         </Text>
       </View>
@@ -36,21 +42,24 @@ export function MoMChip({
 
   return (
     <View
-      className={`self-start rounded-full px-3 py-1 border ${
+      className={`self-start rounded-full px-2.5 py-0.5 border ${
         up
-          ? 'bg-destructive/10 border-destructive/20'
+          ? 'bg-rose-500/10 border-rose-500/25'
           : down
-            ? 'bg-accent/10 border-accent/20'
-            : 'bg-muted/30 border-border'
+            ? 'bg-emerald-500/10 border-emerald-500/25'
+            : 'bg-muted/20 border-border/60'
       }`}
-      style={[styles.chip, up ? styles.up : down ? styles.down : styles.flat]}
       testID="analytics-mom"
     >
       <Text
         className={`text-xs font-bold ${
-          up ? 'text-destructive' : down ? 'text-accent' : 'text-muted-foreground'
+          up
+            ? 'text-rose-600 dark:text-rose-400'
+            : down
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-muted-foreground'
         }`}
-        style={[styles.text, up ? styles.upText : down ? styles.downText : styles.neutralText]}
+        style={{ fontVariant: ['tabular-nums'] }}
         testID="analytics-mom-label"
       >
         {arrow ? `${arrow} ` : ''}
@@ -60,21 +69,3 @@ export function MoMChip({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  chip: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderWidth: 1,
-  },
-  up: { backgroundColor: colors.dangerSoft, borderColor: colors.dangerSoft },
-  down: { backgroundColor: colors.accentSoft, borderColor: colors.accentSoft },
-  flat: { backgroundColor: colors.background, borderColor: colors.border },
-  upText: { color: colors.danger, fontSize: typography.caption, fontWeight: '700' },
-  downText: { color: colors.accent, fontSize: typography.caption, fontWeight: '700' },
-  text: { fontSize: typography.caption, fontWeight: '700' },
-  neutral: { backgroundColor: colors.muted },
-  neutralText: { color: colors.surface, fontSize: typography.caption, fontWeight: '700' },
-});

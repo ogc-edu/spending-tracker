@@ -1,24 +1,28 @@
 /**
- * AIAnalysisCard — the SHARED result surface for every contextual AI action
+ * AIAnalysisCard — SHARED result surface for every contextual AI action
  * (plans 013–015 / PRD AI-2, AI-4).
  *
  * Three states, all non-blocking:
  *  - pending: a request is in flight (ActivityIndicator + caption);
- *  - typed error: an `AIUnavailableError` rendered inline with a Retry action
- *    (reason → fixed user-facing label, never raw provider text — AI-6);
- *  - result: a Zod-validated `AIResult` (summary + ≤5 points).
+ *  - typed error: an AIUnavailableError rendered inline with a Retry action;
+ *  - result: a Zod-validated AIResult (summary + points).
  *
- * Renders nothing when idle (no pending/error/result) so callers can mount it
- * unconditionally. REPOSITORY OWNER: plan 014 (the Analytics screen wires it);
- * plan 015 imports the same contract. The props ARE the shared contract:
- * `AIAnalysisState` (pending/error/result/onRetry) + an optional `label`
- * (the caller's context header, e.g. the analyzed month — so a stale result
- * is never ambiguous).
+ * Renders nothing when idle so callers can mount it unconditionally.
+ * Preserves test contracts:
+ *  - testID="ai-analysis-card"
+ *  - testID="ai-analysis-label"
+ *  - testID="ai-analysis-pending"
+ *  - testID="ai-analysis-error"
+ *  - testID="ai-analysis-error-message"
+ *  - testID="ai-analysis-retry"
+ *  - testID="ai-analysis-result"
+ *  - testID="ai-analysis-summary"
+ *  - testID="ai-analysis-point-{index}"
  */
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import type { AIErrorReason, AIResult } from '@/ai/types';
 import { AIUnavailableError } from '@/ai/errors';
-import { colors, spacing, typography } from '@/theme';
+import { TouchTarget } from '@/components/ui/TouchTarget';
 
 /** Fixed user-facing message per typed failure reason — never raw provider text. */
 export const AI_ERROR_LABELS: Record<AIErrorReason, string> = {
@@ -31,7 +35,7 @@ export const AI_ERROR_LABELS: Record<AIErrorReason, string> = {
   unknown: 'Something went wrong — please retry.',
 };
 
-/** Label for a typed error: fixed per reason; `unknown` may carry context (e.g. "No AI provider configured"). */
+/** Label for a typed error: fixed per reason; `unknown` may carry context. */
 function errorMessage(error: AIUnavailableError): string {
   if (error.reason === 'unknown' && error.message) return error.message;
   return AI_ERROR_LABELS[error.reason];
@@ -50,8 +54,8 @@ export interface AIAnalysisState {
 }
 
 /**
- * Shared analysis card. Returns null when idle. `label` is an optional small
- * header (plan 014: the analyzed month, so a stale result is never ambiguous).
+ * Shared analysis card. Returns null when idle.
+ * `label` is an optional small header (e.g. the analyzed month).
  */
 export function AIAnalysisCard({
   pending,
@@ -63,47 +67,47 @@ export function AIAnalysisCard({
   if (!pending && !error && !result) return null;
 
   return (
-    <View className="border-t border-border mt-2 pt-4" style={styles.card} testID="ai-analysis-card">
+    <View className="mt-3 pt-3 border-t border-border/60" testID="ai-analysis-card">
       {label ? (
-        <Text className="text-xs text-muted-foreground mb-2 font-medium" style={styles.label} testID="ai-analysis-label">
+        <Text className="text-xs text-muted-foreground mb-2 font-medium" testID="ai-analysis-label">
           {label}
         </Text>
       ) : null}
 
       {pending ? (
-        <View className="flex-row items-center gap-2" style={styles.pendingRow} testID="ai-analysis-pending">
-          <ActivityIndicator color={colors.muted} />
-          <Text className="text-sm text-muted-foreground" style={styles.pendingText}>Analyzing…</Text>
+        <View className="flex-row items-center gap-2 py-1" testID="ai-analysis-pending">
+          <ActivityIndicator color="#06b6d4" />
+          <Text className="text-sm text-muted-foreground font-medium">Analyzing…</Text>
         </View>
       ) : null}
 
       {error ? (
         <View testID="ai-analysis-error">
-          <Text className="text-sm text-destructive leading-5" style={styles.errorText} testID="ai-analysis-error-message">
+          <Text className="text-sm text-destructive leading-5 font-medium" testID="ai-analysis-error-message">
             {errorMessage(error)}
           </Text>
-          <Pressable
+          <TouchTarget
+            minHeight={44}
             onPress={onRetry}
             accessibilityRole="button"
             accessibilityLabel="Retry the analysis"
-            className="self-start mt-2 border border-border rounded-xl py-2 px-4 min-h-[44px] justify-center items-center active:opacity-70"
-            style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+            className="self-start mt-2 border border-border/80 rounded-xl px-4 justify-center items-center active:opacity-70 bg-card"
             testID="ai-analysis-retry"
           >
-            <Text className="text-sm font-semibold text-foreground" style={styles.retryLabel}>Retry</Text>
-          </Pressable>
+            <Text className="text-sm font-semibold text-foreground">Retry</Text>
+          </TouchTarget>
         </View>
       ) : null}
 
       {!pending && !error && result ? (
         <View testID="ai-analysis-result">
-          <Text className="text-sm text-foreground font-semibold leading-5 mb-2" style={styles.summary} testID="ai-analysis-summary">
+          <Text className="text-sm text-foreground font-semibold leading-5 mb-2" testID="ai-analysis-summary">
             {result.summary}
           </Text>
           {result.points.map((point, index) => (
-            <View key={index} className="flex-row items-start gap-2 mt-2" style={styles.pointRow} testID={`ai-analysis-point-${index}`}>
-              <View className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" style={styles.pointDot} />
-              <Text className="flex-1 text-sm text-muted-foreground leading-5" style={styles.pointText}>{point}</Text>
+            <View key={index} className="flex-row items-start gap-2.5 mt-2" testID={`ai-analysis-point-${index}`}>
+              <View className="w-1.5 h-1.5 rounded-full bg-cyan-500 mt-2" />
+              <Text className="flex-1 text-sm text-muted-foreground leading-5">{point}</Text>
             </View>
           ))}
         </View>
@@ -111,37 +115,3 @@ export function AIAnalysisCard({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    marginTop: spacing.sm,
-    paddingTop: spacing.md,
-  },
-  label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.sm },
-  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  pendingText: { fontSize: typography.body, color: colors.muted },
-  errorText: { fontSize: typography.body, color: colors.danger, lineHeight: 21 },
-  retryButton: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.md,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-  },
-  pressed: { opacity: 0.7 },
-  retryLabel: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  summary: { fontSize: typography.body, color: colors.text, lineHeight: 21, fontWeight: '500' },
-  pointRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.sm },
-  pointDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.accent,
-    marginTop: 7,
-  },
-  pointText: { flex: 1, fontSize: typography.body, color: colors.muted, lineHeight: 21 },
-});

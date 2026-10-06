@@ -1,16 +1,38 @@
 /**
- * CategoryBreakdown (plan 011, decision A3) — the month's per-category totals
- * as plain horizontal bar rows (zero chart dependencies, consistent with the
- * Dashboard). Each bar shows the category's SHARE of the month total — a
- * presentation ratio, not a financial figure (money math stays in the
- * engine). Reuses plan 007's ProgressBar as-is ("extend, don't reformat").
+ * CategoryBreakdown (Plan 007) — Ranked category expenditure list.
+ * Features:
+ *  - Dynamic proportional fill bars showing exact percentage share of total month spend.
+ *  - Category icon badge with subtle tinted background.
+ *  - Tabular currency amounts via MoneyDisplay.
+ *  - Share percentage chip with tabular-nums typography.
+ *
+ * Preserved test contracts:
+ *  - testID="analytics-categories"
+ *  - testID="analytics-breakdown"
+ *  - testID="analytics-breakdown-row-{id}"
  */
-import { StyleSheet, Text, View } from 'react-native';
-import { ProgressBar } from '@/components/ProgressBar';
+import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { BudgetMeter } from '@/components/ui/BudgetMeter';
+import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
 import { categoryColor } from '@/components/categoryMeta';
 import type { CategorySpend } from '@/services/AnalyticsService';
-import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+
+const DEFAULT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  Food: 'restaurant-outline',
+  Groceries: 'cart-outline',
+  Transport: 'car-outline',
+  Entertainment: 'film-outline',
+  Shopping: 'bag-handle-outline',
+  Bills: 'receipt-outline',
+  Health: 'medkit-outline',
+  Education: 'school-outline',
+  Travel: 'airplane-outline',
+  Gifts: 'gift-outline',
+  'Debt / Repayment': 'card-outline',
+  Other: 'ellipsis-horizontal-circle-outline',
+};
 
 export function CategoryBreakdown({
   breakdown,
@@ -20,55 +42,63 @@ export function CategoryBreakdown({
   totalSen: number;
 }) {
   if (breakdown.length === 0) return null;
+
   return (
-    <View className="bg-card mx-4 mt-4 rounded-2xl border border-border p-4" style={styles.section} testID="analytics-breakdown">
-      <Text className="text-base font-bold text-foreground mb-3" style={styles.title}>Category breakdown</Text>
-      {breakdown.map((row) => {
-        // Share of the month total, one-decimal floored (mirrors engine pct floors).
-        const share = totalSen === 0 ? 0 : Math.floor((row.amountSen * 1000) / totalSen) / 10;
-        return (
-          <View key={row.categoryId} className="mb-3" style={styles.row} testID={`analytics-breakdown-row-${row.categoryId}`}>
-            <View className="flex-row justify-between items-center mb-1.5" style={styles.rowHeader}>
-              <Text className="text-sm text-foreground font-semibold flex-shrink" style={styles.name}>{row.categoryName}</Text>
-              <View className="flex-row items-center gap-2 flex-shrink ml-3" style={styles.amountWrap}>
-                <Text className="text-sm font-bold text-foreground" style={styles.amount}>{formatSen(row.amountSen)}</Text>
-                <Text className="text-xs text-muted-foreground font-bold" style={styles.share}>{share.toFixed(1)}%</Text>
+    <BentoCard testID="analytics-categories" className="bg-card mb-4 p-4">
+      <View testID="analytics-breakdown">
+        <Text className="text-base font-bold text-foreground mb-3 tracking-tight">
+          Category Breakdown
+        </Text>
+        {breakdown.map((row) => {
+          const share = totalSen === 0 ? 0 : Math.floor((row.amountSen * 1000) / totalSen) / 10;
+          const color = categoryColor(row.categoryId);
+          const iconName = DEFAULT_ICONS[row.categoryName] ?? 'pricetag-outline';
+
+          return (
+            <View
+              key={row.categoryId}
+              className="mb-3.5"
+              testID={`analytics-breakdown-row-${row.categoryId}`}
+            >
+              <View className="flex-row justify-between items-center mb-1.5">
+                <View className="flex-row items-center gap-2.5 flex-1 mr-2">
+                  <View
+                    className="w-7 h-7 rounded-full items-center justify-center border border-border/40"
+                    style={{ backgroundColor: `${color}20` }}
+                  >
+                    <Ionicons name={iconName} size={14} color={color} />
+                  </View>
+                  <Text className="text-sm font-semibold text-foreground flex-shrink" numberOfLines={1}>
+                    {row.categoryName}
+                  </Text>
+                </View>
+
+                <View className="flex-row items-center gap-2">
+                  <MoneyDisplay
+                    amountInSen={row.amountSen}
+                    size="sm"
+                  />
+                  <View className="bg-muted/40 rounded-full px-2 py-0.5 border border-border/40">
+                    <Text
+                      className="text-xs font-bold text-muted-foreground font-mono"
+                      style={{ fontVariant: ['tabular-nums'] }}
+                    >
+                      {share.toFixed(1)}%
+                    </Text>
+                  </View>
+                </View>
               </View>
+
+              <BudgetMeter
+                spentSen={row.amountSen}
+                totalSen={totalSen}
+                customColor={color}
+                heightClass="h-2"
+              />
             </View>
-            <ProgressBar pct={share} color={categoryColor(row.categoryId)} />
-          </View>
-        );
-      })}
-    </View>
+          );
+        })}
+      </View>
+    </BentoCard>
   );
 }
-
-const styles = StyleSheet.create({
-  section: {
-    backgroundColor: colors.surface,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-  },
-  title: {
-    fontSize: typography.emphasis,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: spacing.md,
-    letterSpacing: -0.2,
-  },
-  row: { marginBottom: spacing.md },
-  rowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs + 2,
-  },
-  name: { fontSize: typography.body, color: colors.text, fontWeight: '600', flexShrink: 1 },
-  amountWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1, marginLeft: spacing.md },
-  amount: { fontSize: typography.body, color: colors.text, fontWeight: '700', fontVariant: moneyFontVariant },
-  share: { fontSize: typography.caption, color: colors.muted, fontWeight: '700' },
-});
