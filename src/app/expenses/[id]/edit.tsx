@@ -157,9 +157,15 @@ export default function EditExpenseScreen() {
     return (
       <KeyboardScreen>
         <ScrollView className="flex-1 bg-background" style={styles.container} contentContainerStyle={styles.content} testID="linked-expense-view">
-          <View className="flex-row items-center justify-center gap-1.5 bg-amber-500/10 rounded-xl py-2 mb-4" style={styles.linkedBadge}>
-            <Ionicons name="link-outline" size={16} color={colors.warning} />
-            <Text className="text-amber-500 text-xs font-bold" style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
+          <View
+            className="flex-row items-center justify-center gap-1.5 bg-amber-500/10 rounded-xl py-2 px-3 mb-4"
+            style={styles.linkedBadge}
+            testID="linked-commitment-lock"
+          >
+            <Ionicons name="lock-closed-outline" size={16} color={colors.warning} />
+            <Text className="text-amber-500 text-xs font-bold text-center flex-1" style={styles.linkedBadgeLabel}>
+              This expense is linked to an active recurring commitment. Manage or reverse this transaction from the Commitments tab.
+            </Text>
           </View>
           <View className="bg-card rounded-2xl border border-border p-5 mb-4" style={styles.card}>
             <Text

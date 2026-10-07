@@ -18,7 +18,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 import type { Account, Category, Expense } from '@/db/schema';
-import { DATE_RE, formatDDMMYYYY, isValidDateStr, todayLocal } from '@/utils/dates';
+import { DATE_RE, formatDDMMYYYY, isValidDateStr, todayLocal, toLocalDateString } from '@/utils/dates';
 import { formatSen, formatSenInput, parseMoneyToSen } from '@/utils/money';
 import { balanceEffectFor } from '@/services/ExpenseService';
 import type { ExpenseInput } from '@/repositories/types';
@@ -32,6 +32,12 @@ import { MoneyInput } from './MoneyInput';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/input';
+
+function yesterdayLocal(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toLocalDateString(d);
+}
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.[0-9]{1,2})?$/;
@@ -158,6 +164,7 @@ export function ExpenseForm({
             {/* POS-style entry: digits fill in from the sen place (2,0,0 → RM2.00). */}
             <MoneyInput
               value={value}
+              variant="hero"
               onChangeValue={onChange}
               onBlur={onBlur}
               onFocus={onInputFocus}
@@ -167,6 +174,7 @@ export function ExpenseForm({
               accessibilityLabel="Amount in ringgit"
               accessibilityLabelledBy="expense-form-label-amount"
               testID="expense-form-amount"
+              containerTestID="money-input"
             />
             {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
           </View>
@@ -179,7 +187,7 @@ export function ExpenseForm({
         render={({ field: { value, onChange }, fieldState: { error } }) => (
           <View style={styles.field}>
             <Text style={styles.label}>Category</Text>
-            <View style={styles.chipWrap}>
+            <View style={styles.chipWrap} testID="category-matrix">
               {visibleCategories.map((category) => {
                 const selected = value === category.id;
                 const armed = armedDelete?.id === category.id;
@@ -239,13 +247,14 @@ export function ExpenseForm({
               {accounts.map((account) => {
                 const selected = value === account.id;
                 return (
-                  <Chip
-                    key={account.id}
-                    label={account.name}
-                    selected={selected}
-                    onPress={() => onChange(account.id)}
-                    testID={`expense-form-account-${account.id}`}
-                  />
+                  <View key={account.id} testID={`account-pill-${account.id}`}>
+                    <Chip
+                      label={account.name}
+                      selected={selected}
+                      onPress={() => onChange(account.id)}
+                      testID={`expense-form-account-${account.id}`}
+                    />
+                  </View>
                 );
               })}
             </View>
@@ -264,6 +273,20 @@ export function ExpenseForm({
         render={({ field: { value }, fieldState: { error } }) => (
           <View className="mb-4" style={styles.field}>
             <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>Date</Text>
+            <View className="flex-row items-center gap-2 mb-2">
+              <Chip
+                label="Today"
+                selected={value === todayLocal()}
+                onPress={() => setValue('date', todayLocal(), { shouldValidate: true })}
+                className="min-h-[36px] py-1"
+              />
+              <Chip
+                label="Yesterday"
+                selected={value === yesterdayLocal()}
+                onPress={() => setValue('date', yesterdayLocal(), { shouldValidate: true })}
+                className="min-h-[36px] py-1"
+              />
+            </View>
             <Pressable
               onPress={() => setDateOpen(true)}
               disabled={submitting}

@@ -7,6 +7,7 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -28,6 +29,7 @@ function errMsg(error: unknown): string {
 
 export default function NewExpenseScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { authService } = useAuth();
   const toast = useToast();
   const { lastUsedCategoryId, lastUsedAccountId } = useUiStore();
@@ -111,7 +113,10 @@ export default function NewExpenseScreen() {
     <KeyboardAwareScrollView
       className="flex-1 bg-background"
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[
+        styles.content,
+        { paddingBottom: Math.max(spacing.xxl, insets.bottom + spacing.xl) },
+      ]}
       testID="new-expense-screen"
     >
       <ExpenseForm

@@ -56,8 +56,10 @@ export interface MoneyInputProps {
   accessibilityLabel?: string;
   accessibilityLabelledBy?: string;
   testID?: string;
+  containerTestID?: string;
   style?: StyleProp<ViewStyle>;
   className?: string;
+  variant?: 'default' | 'hero';
 }
 
 export function MoneyInput({
@@ -71,8 +73,10 @@ export function MoneyInput({
   accessibilityLabel,
   accessibilityLabelledBy,
   testID,
+  containerTestID,
   style,
   className,
+  variant = 'default',
 }: MoneyInputProps) {
   const inputRef = useRef<TextInput>(null);
   const sen = senFromMoneyString(value);
@@ -98,29 +102,57 @@ export function MoneyInput({
     };
   }, [caretOpacity, focused]);
 
+  const isHero = variant === 'hero';
+
   return (
     <Pressable
+      testID={containerTestID}
       onPress={() => inputRef.current?.focus()}
       disabled={!editable}
       accessible={false}
       className={cn(
-        'justify-center border border-border rounded-lg bg-card px-4 py-3 min-h-[56px]',
+        isHero
+          ? 'justify-center items-center rounded-2xl bg-card border border-border px-4 py-6 min-h-[96px] w-full'
+          : 'justify-center border border-border rounded-lg bg-card px-4 py-3 min-h-[56px]',
         hasError && 'border-destructive',
         !editable && 'bg-muted/50',
         className
       )}
-      style={[styles.wrap, hasError && styles.wrapError, !editable && styles.wrapDisabled, style]}
+      style={[
+        isHero ? styles.heroWrap : styles.wrap,
+        hasError && styles.wrapError,
+        !editable && styles.wrapDisabled,
+        style,
+      ]}
+      {...({
+        onChangeText: (text: string) => {
+          onChangeValue(formatSenInput(senFromInputText(sen, text)));
+        },
+      } as object)}
     >
-      <View style={styles.displayRow}>
+      <View style={[styles.displayRow, isHero && styles.heroDisplayRow]}>
         <Text
-          style={[styles.display, empty && styles.displayEmpty]}
+          style={[
+            { fontVariant: ['tabular-nums'] },
+            isHero ? styles.heroDisplay : styles.display,
+            empty && styles.displayEmpty,
+          ]}
+          className={cn(
+            isHero
+              ? 'text-5xl font-black font-mono tracking-tighter text-foreground text-center'
+              : 'text-foreground font-semibold',
+            empty && 'text-muted-foreground opacity-50'
+          )}
           testID={testID ? `${testID}-display` : undefined}
         >
           {formatSen(sen)}
         </Text>
         {focused ? (
           <Animated.View
-            style={[styles.caret, { opacity: caretOpacity }]}
+            style={[
+              isHero ? styles.heroCaret : styles.caret,
+              { opacity: caretOpacity },
+            ]}
             accessibilityElementsHidden
             importantForAccessibility="no"
             testID={testID ? `${testID}-caret` : undefined}
@@ -173,13 +205,32 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     minHeight: 56, // the amount is the primary field — taller than the 44pt minimum
   },
+  heroWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+    minHeight: 96,
+  },
   wrapError: { borderColor: colors.danger },
   wrapDisabled: { backgroundColor: colors.background },
   displayRow: { flexDirection: 'row', alignItems: 'center' },
+  heroDisplayRow: { justifyContent: 'center' },
   display: {
     fontSize: typography.title,
     fontWeight: '700',
     color: colors.text,
+  },
+  heroDisplay: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: colors.text,
+    textAlign: 'center',
+    letterSpacing: -1,
   },
   /** No digits yet: the RM0.00 reads as a placeholder. */
   displayEmpty: { color: colors.muted, fontWeight: '600' },
@@ -189,6 +240,13 @@ const styles = StyleSheet.create({
     height: typography.title + 4,
     marginLeft: 2,
     borderRadius: 1,
+    backgroundColor: colors.accent,
+  },
+  heroCaret: {
+    width: 3,
+    height: 48,
+    marginLeft: 4,
+    borderRadius: 1.5,
     backgroundColor: colors.accent,
   },
   /** Covers the field so taps land on it, but paints nothing. */
