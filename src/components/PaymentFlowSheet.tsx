@@ -18,6 +18,7 @@ import { formatSen } from '@/utils/money';
 import { colors, moneyFontVariant, spacing, typography } from '@/theme';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
+import { haptics } from '@/utils/haptics';
 
 export interface PaymentFlowSheetProps {
   visible: boolean;
@@ -105,7 +106,10 @@ export function PaymentFlowSheet({
             icon="checkmark"
             flex
             disabled={busy}
-            onPress={() => onConfirm(selectedId)}
+            onPress={() => {
+              haptics.paymentSuccess();
+              onConfirm(selectedId);
+            }}
             testID="payment-flow-confirm"
           />
           <Button

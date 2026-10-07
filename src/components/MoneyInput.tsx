@@ -41,7 +41,7 @@ import {
   spokenMoneyLabel,
 } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
-
+import { haptics } from '@/utils/haptics';
 import { cn } from '@/lib/utils';
 
 export interface MoneyInputProps {
@@ -169,6 +169,7 @@ export function MoneyInput({
         caretHidden
         selection={{ start: digits.length, end: digits.length }}
         onChangeText={(text) => {
+          haptics.keypadPress();
           onChangeValue(formatSenInput(senFromInputText(sen, text)));
         }}
         onBlur={() => {

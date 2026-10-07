@@ -19,6 +19,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
+import { haptics } from '@/utils/haptics';
 
 export interface ConfirmSheetProps {
   visible: boolean;
@@ -73,6 +74,7 @@ export function ConfirmSheet({
           disabled={busy}
           onPress={() => {
             if (busy) return; // double-tap guard (belt + braces with disabled)
+            haptics.deleteConfirm();
             onConfirm();
           }}
           testID="confirm-sheet-confirm"

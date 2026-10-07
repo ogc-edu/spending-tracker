@@ -32,6 +32,7 @@ import { MoneyInput } from './MoneyInput';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/input';
+import { haptics } from '@/utils/haptics';
 
 function yesterdayLocal(): string {
   const d = new Date();
@@ -203,6 +204,7 @@ export function ExpenseForm({
                           setArmedDelete(null); // tap again = disarm, never select
                           return;
                         }
+                        haptics.categorySelect();
                         onChange(category.id);
                       }}
                       onLongPress={() => setArmedDelete(armed ? null : category)}
