@@ -1,15 +1,12 @@
 /**
- * Plan 016 — money figure accessibility + narrow-screen behavior:
- *  - spoken accessibilityLabels on the key figures ("Safe to spend, one
- *    thousand nine hundred ringgit" — the plan's fixture);
- *  - money Texts are single-line (truncate with ellipsis on narrow screens)
- *    and (under the ios jest preset) use tabular figures.
+ * Plan 016 — money figure accessibility: spoken accessibilityLabels on the key
+ * figures and (under the ios jest preset) tabular figures. Plan 020 replaced
+ * the safe-to-spend / hero figures with Home's month summary.
  */
 import { describe, expect, it } from '@jest/globals';
 import { StyleSheet } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { SafeToSpendCard } from '../dashboard/SafeToSpendCard';
-import { HeroCard } from '../dashboard/HeroCard';
+import { MonthSummaryCard } from '../dashboard/MonthSummaryCard';
 import { moneyFontVariant } from '@/theme';
 
 async function render(element: React.ReactElement): Promise<ReactTestRenderer> {
@@ -20,37 +17,21 @@ async function render(element: React.ReactElement): Promise<ReactTestRenderer> {
   return tree;
 }
 
-describe('plan 016 — money figures: spoken labels, wrapping, tabular figures', () => {
-  it('reads the safe-to-spend headline aloud ("one thousand nine hundred ringgit")', async () => {
+describe('plan 016 — money figures: spoken labels, tabular figures', () => {
+  it('reads the month summary figures aloud with tabular figures', async () => {
     const tree = await render(
-      <SafeToSpendCard safeSen={190000} deficit={false} dailyAllowanceSen={6333} />,
+      <MonthSummaryCard spentSen={116000} dueSen={190000} monthLabel="October 2026" />,
     );
-    const headline = tree.root.findByProps({ testID: 'safe-headline' });
-    expect(headline.props.accessibilityLabel).toBe('Safe to spend, one thousand nine hundred ringgit');
-    // Narrow-screen contract: single line, truncated with ellipsis.
-    expect(headline.props.numberOfLines).toBe(1);
-    const flattened = StyleSheet.flatten(headline.props.style as never) as { fontVariant?: unknown };
-    expect(flattened.fontVariant).toEqual(moneyFontVariant);
-  });
-
-  it('labels the deficit headline as "No safe to spend"', async () => {
-    const tree = await render(<SafeToSpendCard safeSen={-30000} deficit dailyAllowanceSen={0} />);
-    const headline = tree.root.findByProps({ testID: 'safe-headline' });
-    expect(headline.props.accessibilityLabel).toBe('No safe to spend, minus three hundred ringgit');
-  });
-
-  it('labels the HeroCard available/spent/remaining figures', async () => {
-    const tree = await render(
-      <HeroCard availableSen={300000} spentSen={116000} remainingSen={184000} onSetBudget={() => {}} />,
-    );
-    expect(tree.root.findByProps({ testID: 'hero-available' }).props.accessibilityLabel).toBe(
-      'Available, three thousand ringgit',
-    );
-    expect(tree.root.findByProps({ testID: 'hero-spent' }).props.accessibilityLabel).toBe(
-      'Spent this month, one thousand one hundred and sixty ringgit',
-    );
-    expect(tree.root.findByProps({ testID: 'hero-remaining' }).props.accessibilityLabel).toBe(
-      'Remaining budget, one thousand eight hundred and forty ringgit',
-    );
+    // The host Text (MoneyDisplay forwards testID and sets the spoken label there).
+    const host = (testID: string) =>
+      tree.root.find((node) => typeof node.type === 'string' && node.props.testID === testID);
+    const spent = host('summary-spent');
+    const due = host('summary-due');
+    expect(spent.props.accessibilityLabel).toBe('one thousand one hundred and sixty ringgit');
+    expect(due.props.accessibilityLabel).toBe('one thousand nine hundred ringgit');
+    for (const figure of [spent, due]) {
+      const flattened = StyleSheet.flatten(figure.props.style as never) as { fontVariant?: unknown };
+      expect(flattened.fontVariant).toEqual(moneyFontVariant);
+    }
   });
 });

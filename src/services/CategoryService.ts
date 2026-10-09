@@ -44,7 +44,7 @@ export class CategoryService {
 
   /**
    * Delete a category — LIST-ONLY by user rule: the row leaves every picker,
-   * but expenses and budgets that reference it are untouched (no cascade,
+   * but expenses that reference it are untouched (no cascade,
    * no reassignment; their rows keep the id and render a generic label).
    * 'Other' itself is protected (it is the seeded catch-all behind the
    * pickers' "+" chip).

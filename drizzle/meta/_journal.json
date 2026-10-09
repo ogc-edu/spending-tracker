@@ -15,6 +15,13 @@
       "when": 1789197123229,
       "tag": "0001_shocking_maximus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791561848255,
+      "tag": "0002_breezy_harpoon",
+      "breakpoints": true
     }
   ]
 }

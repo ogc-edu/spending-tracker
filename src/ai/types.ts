@@ -11,8 +11,11 @@
  * (fake / gemini / deepseek) can implement it without importing the facade.
  */
 
-/** Fixed set of contextual AI actions (PRD AI-2 / ARCH §9; 'ask' = plan 019). */
-export type AIContext = 'debt' | 'spending' | 'allowance' | 'ask';
+/**
+ * Fixed set of contextual AI actions (PRD AI-2 / ARCH §9; 'ask' = plan 019).
+ * Plan 020 removed 'allowance' along with the daily allowance itself.
+ */
+export type AIContext = 'debt' | 'spending' | 'ask';
 
 /** Providers behind the facade (AI-5). Only `fake` is real in plan 012. */
 export type AIProviderName = 'fake' | 'gemini' | 'deepseek';
@@ -89,31 +92,9 @@ export interface SpendingSnapshot {
   avgDailySen: number;
   /** End-of-month projection, floored sen (AN-3) — pace context (plan 014). */
   projectionSen: number;
-  /** Budget pressure: null = no OVERALL budget set for the month (plan 014). */
-  utilization: { pct: number | null; overBudget: boolean } | null;
   topCategories: TopCategory[];
   /** Category-level "largest" breakdown — NO free-text descriptions (A6). */
   largest?: TopCategory[];
-}
-
-/* ------------------------------------------------------------------ *
- * Allowance context — produced by CashFlowService (plan 010).
- * ------------------------------------------------------------------ */
-
-export interface AllowanceSnapshot {
-  availableSen: number;
-  upcomingSen: number;
-  remainingBudgetSen: number;
-  bufferSen: number;
-  safeSen: number;
-  dailyAllowanceSen: number;
-  daysRemaining: number;
-  /**
-   * Whether an overall budget is set (plan 015). `false` when the UI shows
-   * "—" for the remaining budget — the AI must never invent one. Present on
-   * every allowance payload, so a missing flag is a shape error, not a gap.
-   */
-  hasBudget: boolean;
 }
 
 /* ------------------------------------------------------------------ *
@@ -129,11 +110,11 @@ export interface AskCommitmentItem {
 }
 
 /**
- * Plan 019 — the dashboard "Ask about your money" payload. A superset of the
- * allowance aggregates PLUS the next calendar month's unpaid commitment slots
- * and category-name spend totals, so free-form questions ("what is my total
- * commitment next month?") are answerable. Aggregates + names only — never a
- * raw expense description (A6).
+ * Plan 019 — the dashboard "Ask about your money" payload: the month's
+ * spending and commitments due this month and next, plus category-name spend
+ * totals, so free-form questions ("what is my total commitment next month?")
+ * are answerable. Aggregates + names only — never a raw expense description
+ * (A6). Plan 020 dropped the budget / buffer / safe-to-spend / allowance terms.
  */
 export interface AskSnapshot {
   /** `YYYY-MM` of the current month. */
@@ -142,15 +123,6 @@ export interface AskSnapshot {
   monthLabel: string;
   availableSen: number;
   spentSen: number;
-  hasBudget: boolean;
-  /** The overall budget amount, or null when none is set. */
-  budgetSen: number | null;
-  remainingBudgetSen: number;
-  bufferSen: number;
-  safeSen: number;
-  dailyAllowanceSen: number;
-  daysRemaining: number;
-  deficit: boolean;
   /** Σ unpaid commitments due before next month (the dashboard's "upcoming"). */
   upcomingThisMonthSen: number;
   upcomingThisMonth: AskCommitmentItem[];
@@ -165,7 +137,6 @@ export interface AskSnapshot {
 export interface AIContextSnapshotMap {
   debt: DebtSnapshot;
   spending: SpendingSnapshot;
-  allowance: AllowanceSnapshot;
   ask: AskSnapshot;
 }
 

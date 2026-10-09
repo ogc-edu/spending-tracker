@@ -7,7 +7,6 @@
 
 import type {
   Account,
-  Budget,
   Category,
   Commitment,
   CommitmentPayment,
@@ -72,7 +71,7 @@ export interface AccountRepository {
  * CategoryRepository — categories are GLOBAL (no user_id, A10): read-only in
  * the MVP (plan 004); plan-016-follow-up adds create/delete (custom
  * categories, the pickers' "+" chip and the Settings multi-select manager).
- * Delete is LIST-ONLY by user rule: never a cascade — expenses and budgets
+ * Delete is LIST-ONLY by user rule: never a cascade — expenses
  * keep their category_id (dangling ids render with a generic label). SQLite
  * FK enforcement is suspended for the delete statement only.
  */
@@ -81,7 +80,7 @@ export interface CategoryRepository {
   byId(id: number): Promise<Category | null>;
   /** Insert a category (type defaults to 'expense' in the schema). Returns the created row. */
   create(input: { name: string; icon: string }): Promise<Category>;
-  /** Delete the row WITHOUT touching expenses/budgets that reference it (no cascade). */
+  /** Delete the row WITHOUT touching expenses that reference it (no cascade). */
   remove(id: number): Promise<void>;
 }
 
@@ -145,43 +144,6 @@ export interface ExpenseTx {
   adjustBalance(userId: number, accountId: number, deltaSen: number): void;
 }
 
-/**
- * Budget row identity (plan 007 / BUD-1): categoryId null = the OVERALL monthly
- * budget; set = one per-category budget. Month 1–12, year absolute (4-digit).
- */
-export interface BudgetKey {
-  /** NULL = overall budget; set = per-category budget. */
-  categoryId: number | null;
-  /** 1–12. */
-  month: number;
-  year: number;
-}
-
-/** Input accepted by BudgetService.upsert — sen already parsed by the form (BUD-1). */
-export interface BudgetInput extends BudgetKey {
-  amountSen: number;
-}
-
-/**
- * BudgetRepository (plan 007 / ARCHITECTURE §2, §4) — all methods user-scoped
- * (A10). Upsert semantics: editing a month's (category) budget REPLACES its
- * row — never duplicates. The committed unique index is
- * UNIQUE(user_id, category_id, month, year); because SQLite treats NULLs as
- * distinct in unique indexes, the OVERALL row (category_id NULL) can never
- * conflict with that index — the implementation enforces the
- * single-overall-row invariant itself (delete-then-insert in one transaction,
- * same sync-txn discipline as ExpenseRepository).
- */
-export interface BudgetRepository {
-  /** REPLACE the row for (categoryId, month, year) — inserts or updates in place. */
-  upsert(userId: number, input: BudgetInput): Promise<Budget>;
-  /** DELETE the row — clearing is removal, never a zero sentinel (plan §Decisions). */
-  clear(userId: number, key: BudgetKey): Promise<void>;
-  /** The month's overall budget row, or null when unset (cash-flow input, PRD §8.4). */
-  overallFor(userId: number, month: number, year: number): Promise<Budget | null>;
-  /** EVERY budget row for the month (overall + all categories); other months excluded. */
-  forMonth(userId: number, month: number, year: number): Promise<Budget[]>;
-}
 
 /**
  * Expense history filter (plan 006 / EXP-5). All predicates are OPTIONAL and
@@ -381,18 +343,6 @@ export interface CommitmentRepository {
 /* ── Plan 010: Settings ──────────────────────────────────────────────────── */
 
 /**
- * SettingsRepository (plan 010 / PRD SET-1) — user preferences, NEVER secrets
- * (AI keys live in SecureStore, plan 013; only provider/model selections and
- * the cash-flow buffer persist here). The `settings` table is single-row per
- * user (PK = user_id) and already exists in migration 0000 — this plan only
- * adds the repository + service on top of it.
- *
- * Missing-row semantics: the DEFAULT safety buffer (RM300 = 30000 sen, the
- * committed column default) applies until the user first writes a setting —
- * buffer() never returns null, so CashFlowService can feed it straight into
- * the engine.
- */
-/**
  * The payroll split (config) plus the deposit that applies it. Amounts are
  * integer sen and always > 0 — an account with no slice simply has no row.
  */
@@ -411,14 +361,13 @@ export interface PayrollRepository {
   lastRunAt(userId: number): Promise<number | null>;
 }
 
+/**
+ * SettingsRepository (plan 010) — user preferences, NEVER secrets (AI keys
+ * live in SecureStore, plan 013; only provider/model selections persist
+ * here). The `settings` table is single-row per user (PK = user_id).
+ * Plan 020 removed the safety buffer along with safe-to-spend.
+ */
 export interface SettingsRepository {
-  /**
-   * The user's safety-buffer sen value, or the 30000 default when no row
-   * exists yet (SET-1 / plan 010).
-   */
-  buffer(userId: number): Promise<number>;
-  /** Insert or REPLACE the user's settings row (PK = user_id). Returns the row. */
-  setBuffer(userId: number, safetyBufferSen: number): Promise<Settings>;
   /**
    * The user's AI prefs (plan 013 / AI-6, AI-9) — the active-provider choice
    * and each provider's selected model id. All-null defaults for a rowless

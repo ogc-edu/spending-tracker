@@ -1,16 +1,16 @@
 /**
- * Plan 016 — Settings screen: SET-1 safety-buffer editor + SET-2 AI status
- * line, against the real screen with the analytics-screen harness seams:
+ * Plan 016 — Settings screen: SET-2 AI status line, against the real screen
+ * with the analytics-screen harness seams:
  *  - @/db repositories() → real Drizzle repos over a better-sqlite3 test DB;
  *  - expo-router useFocusEffect → plain effect, useRouter → stubs;
  *  - @/auth/AuthProvider useAuth → fake signed-in user + CurrentUserSource;
  *  - @/services/AiConfigService → controllable key map, so "configured vs
  *    not configured" is deterministic.
  *
- * Covers (plan §Tests): buffer save/load round-trip incl. 0 allowed and
- * negative rejected; AI status reflects key presence. Plus the payroll-in
- * section: setting the split, the total, and the deposit that credits every
- * allocated account.
+ * Covers: AI status reflects key presence. Plan 020: the safety-buffer
+ * editor and the payroll section are gone (payroll is hidden, not deleted —
+ * PayrollService keeps its own tests), while accounts, categories, AI and
+ * logout still render.
  */
 import { describe, expect, it, beforeEach, jest } from '@jest/globals';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
@@ -22,8 +22,6 @@ import { DrizzleAccountRepository } from '@/repositories/drizzle/accountReposito
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
 import { DrizzleSettingsRepository } from '@/repositories/drizzle/settingsRepository';
 import { DrizzleExpenseRepository } from '@/repositories/drizzle/expenseRepository';
-import { DrizzlePayrollRepository } from '@/repositories/drizzle/payrollRepository';
-import { DrizzleBudgetRepository } from '@/repositories/drizzle/budgetRepository';
 import { DrizzleCommitmentRepository } from '@/repositories/drizzle/commitmentRepository';
 import type { CurrentUserSource } from '@/services/AccountService';
 import type { AIProviderName } from '@/ai/types';
@@ -36,9 +34,7 @@ const mockReposRef: {
         categories: object;
         settings: object;
         expenses: object;
-        budgets: object;
         commitments: object;
-        payroll: object;
       }
     | null;
 } = { current: null };
@@ -119,23 +115,23 @@ async function setup(): Promise<TestDb> {
     categories: new DrizzleCategoryRepository(test.db as unknown as never),
     settings: new DrizzleSettingsRepository(test.db as unknown as never),
     expenses: new DrizzleExpenseRepository(test.db as unknown as never),
-    budgets: new DrizzleBudgetRepository(test.db as unknown as never),
     commitments: new DrizzleCommitmentRepository(test.db as unknown as never),
-    payroll: new DrizzlePayrollRepository(test.db as unknown as never),
   };
   return test;
 }
 
-describe('Settings screen (plan 016 — SET-1 buffer editor, SET-2 AI status)', () => {
+const has = (tree: ReactTestRenderer, testID: string): boolean =>
+  tree.root.findAllByProps({ testID }).length > 0;
+
+describe('Settings screen (plan 016 — SET-2 AI status)', () => {
   beforeEach(async () => {
     mockKeys.gemini = null;
     mockKeys.deepseek = null;
     await setup();
   });
 
-  it('shows the default RM300 buffer and the AI status lines from key presence', async () => {
+  it('shows the AI status lines from key presence', async () => {
     const tree = await renderScreen();
-    expect(textOf(tree.root, 'settings-buffer-current')).toBe('RM300.00');
     expect(textOf(tree.root, 'settings-ai-status-gemini')).toBe('Gemini · key not configured');
     expect(textOf(tree.root, 'settings-ai-status-deepseek')).toBe('DeepSeek · key not configured');
   });
@@ -146,145 +142,51 @@ describe('Settings screen (plan 016 — SET-1 buffer editor, SET-2 AI status)', 
     expect(textOf(tree.root, 'settings-ai-status-gemini')).toBe('Gemini · key configured');
     expect(textOf(tree.root, 'settings-ai-status-deepseek')).toBe('DeepSeek · key not configured');
   });
-
-  it('round-trips the buffer: save 0 (allowed) and reload shows RM0.00', async () => {
-    const tree = await renderScreen();
-    const input = tree.root.findByProps({ testID: 'settings-buffer-input' });
-    await act(async () => {
-      input.props.onChangeText('0');
-    });
-    await act(async () => {
-      tree.root.findByProps({ testID: 'settings-buffer-save' }).props.onPress();
-    });
-    expect(textOf(tree.root, 'settings-buffer-current')).toBe('RM0.00');
-  });
-
-  it('rejects a negative buffer with an inline error and keeps the current value', async () => {
-    const tree = await renderScreen();
-    const input = tree.root.findByProps({ testID: 'settings-buffer-input' });
-    await act(async () => {
-      input.props.onChangeText('-5');
-    });
-    await act(async () => {
-      tree.root.findByProps({ testID: 'settings-buffer-save' }).props.onPress();
-    });
-    expect(textOf(tree.root, 'settings-buffer-error')).toBe('Enter a valid amount (up to 2 decimal places)');
-    expect(textOf(tree.root, 'settings-buffer-current')).toBe('RM300.00');
-  });
 });
-/* ------------------------------------------------------------------ *
- * Payroll in — the standing split and the deposit it applies.
- * ------------------------------------------------------------------ */
 
-async function press(tree: ReactTestRenderer, testID: string): Promise<void> {
-  const node = tree.root.findByProps({ testID });
-  await act(async () => {
-    (node.props as { onPress(): void }).onPress();
-  });
-  await act(async () => {}); // flush the service call + reload
-}
-
-/** Enter an amount in the allocation sheet's POS money field. */
-async function typeAllocation(tree: ReactTestRenderer, digits: string): Promise<void> {
-  const matches = tree.root.findAll((n) => n.props?.testID === 'payroll-allocation-amount');
-  const input = matches[matches.length - 1];
-  await act(async () => {
-    (input.props as { onChangeText(text: string): void }).onChangeText(digits);
-  });
-}
-
-const has = (tree: ReactTestRenderer, testID: string): boolean =>
-  tree.root.findAllByProps({ testID }).length > 0;
-
-describe('Settings screen — payroll in', () => {
-  let db: TestDb;
-
+describe('Settings screen — plan 020 scope', () => {
   beforeEach(async () => {
     mockKeys.gemini = null;
     mockKeys.deepseek = null;
-    db = await setup();
-    const accounts = new DrizzleAccountRepository(db.db as unknown as never);
+    const test = await setup();
+    const accounts = new DrizzleAccountRepository(test.db as unknown as never);
     await accounts.create({ userId: 1, name: 'Savings', type: 'bank', initialBalanceSen: 20_000 });
-    await accounts.create({ userId: 1, name: 'Spending', type: 'cash', initialBalanceSen: 5_000 });
-    await accounts.create({ userId: 1, name: 'Citi', type: 'credit_card', initialBalanceSen: 50_000 });
   });
 
-  it('starts empty, with the deposit button disabled', async () => {
+  it('no longer renders the safety-buffer editor', async () => {
     const tree = await renderScreen();
-    expect(has(tree, 'payroll-empty')).toBe(true);
-    expect(tree.root.findByProps({ testID: 'payroll-in-button' }).props.disabled).toBe(true);
+    for (const id of [
+      'settings-buffer-current',
+      'settings-buffer-input',
+      'settings-buffer-save',
+      'settings-buffer-error',
+    ]) {
+      expect(has(tree, id)).toBe(false);
+    }
   });
 
-  it('adds a slice per account and totals the split', async () => {
+  it('no longer renders the payroll section', async () => {
     const tree = await renderScreen();
-
-    await press(tree, 'payroll-add-allocation');
-    // Credit cards are not offered as payroll targets.
-    expect(has(tree, 'payroll-allocation-account-1')).toBe(true);
-    expect(has(tree, 'payroll-allocation-account-3')).toBe(false);
-
-    await press(tree, 'payroll-allocation-account-1');
-    await typeAllocation(tree, '150000'); // RM1,500.00
-    await press(tree, 'payroll-allocation-save');
-
-    await press(tree, 'payroll-add-allocation');
-    await press(tree, 'payroll-allocation-account-2');
-    await typeAllocation(tree, '50000'); // RM500.00
-    await press(tree, 'payroll-allocation-save');
-
-    expect(textOf(tree.root, 'payroll-line-1')).toContain('Savings');
-    expect(textOf(tree.root, 'payroll-line-1')).toContain('RM1,500.00');
-    expect(textOf(tree.root, 'payroll-total')).toBe('RM2,000.00');
-    expect(tree.root.findByProps({ testID: 'payroll-in-button' }).props.disabled).toBe(false);
+    for (const id of [
+      'trigger-payroll-btn',
+      'payroll-in-button',
+      'payroll-add-allocation',
+      'payroll-empty',
+      'payroll-total',
+      'payroll-last-run',
+    ]) {
+      expect(has(tree, id)).toBe(false);
+    }
+    expect(tree.root.findAll((n) => typeof n.props?.testID === 'string' && n.props.testID.startsWith('payroll-'))).toHaveLength(0);
   });
 
-  it('asks before depositing — the button alone moves no money', async () => {
+  it('still renders accounts, categories, AI config and logout', async () => {
     const tree = await renderScreen();
-    await press(tree, 'payroll-add-allocation');
-    await press(tree, 'payroll-allocation-account-1');
-    await typeAllocation(tree, '150000');
-    await press(tree, 'payroll-allocation-save');
-    expect(has(tree, 'confirm-sheet')).toBe(false);
-
-    await press(tree, 'payroll-in-button');
-    expect(has(tree, 'confirm-sheet')).toBe(true);
-    // The confirm names the split, and nothing has been written yet.
-    expect(textOf(tree.root, 'confirm-sheet-message')).toContain('Savings  +RM1,500.00');
-    expect(textOf(tree.root, 'confirm-sheet-message')).toContain('Total RM1,500.00');
-    expect(textOf(tree.root, 'account-balance-1')).toBe('RM200.00');
-    expect(has(tree, 'payroll-last-run')).toBe(false);
-
-    // Backing out leaves the balance alone.
-    await press(tree, 'confirm-sheet-cancel');
-    expect(has(tree, 'confirm-sheet')).toBe(false);
-    expect(textOf(tree.root, 'account-balance-1')).toBe('RM200.00');
-  });
-
-  it('deposits the split into the accounts on confirm', async () => {
-    const tree = await renderScreen();
-    await press(tree, 'payroll-add-allocation');
-    await press(tree, 'payroll-allocation-account-1');
-    await typeAllocation(tree, '150000');
-    await press(tree, 'payroll-allocation-save');
-
-    await press(tree, 'payroll-in-button'); // opens the confirm
-    await press(tree, 'confirm-sheet-confirm');
-
-    // The account row reflects the credited balance: 200.00 + 1,500.00.
-    expect(textOf(tree.root, 'account-balance-1')).toBe('RM1,700.00');
-    expect(has(tree, 'payroll-last-run')).toBe(true);
-  });
-
-  it('removes a slice', async () => {
-    const tree = await renderScreen();
-    await press(tree, 'payroll-add-allocation');
-    await press(tree, 'payroll-allocation-account-1');
-    await typeAllocation(tree, '150000');
-    await press(tree, 'payroll-allocation-save');
-    expect(has(tree, 'payroll-line-1')).toBe(true);
-
-    await press(tree, 'payroll-line-remove-1');
-    expect(has(tree, 'payroll-line-1')).toBe(false);
-    expect(has(tree, 'payroll-empty')).toBe(true);
+    expect(has(tree, 'accounts-stack')).toBe(true);
+    expect(has(tree, 'settings-accounts-list')).toBe(true);
+    expect(has(tree, 'account-row-1')).toBe(true);
+    expect(has(tree, 'settings-categories-add')).toBe(true);
+    expect(has(tree, 'ai-config-section')).toBe(true);
+    expect(has(tree, 'settings-logout')).toBe(true);
   });
 });

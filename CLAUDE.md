@@ -85,8 +85,12 @@ Non-negotiable invariants — breaking one breaks tests and the migration story:
   materialized only inside the query window).
 - **Mark-paid is one transaction**: paid row + `remaining_sen` decrement + linked expense + optional
   account balance adjustment. `expenses.commitment_payment_id` is UNIQUE, which is what makes a
-  double-tap idempotent. Budgets are idempotent via `UNIQUE(user_id, category_id, month, year)` upsert.
-- **Payroll-in** (`PayrollService`, `payroll_allocations`) is a standing split of pay across
+  double-tap idempotent.
+- **No budgets, safety buffer, safe-to-spend or daily allowance** — removed in plan 020
+  (`docs/plans/020-scope-reset-credit-bills.md`). Home shows *spent this month* and *due by end of
+  month* (unpaid commitment slots before next month start, overdue included).
+- **Payroll-in** (`PayrollService`, `payroll_allocations`) — UI hidden since plan 020; service,
+  table and tests are kept so it can return. It is a standing split of pay across
   accounts, applied by one button. It *credits balances only* — the app models expenses, not income,
   so a deposit writes no expense row and the engine is untouched. Credit cards are refused as targets
   (their balance is money owed). The deposit and its last-run stamp are one transaction.

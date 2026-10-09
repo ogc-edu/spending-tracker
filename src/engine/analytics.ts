@@ -74,31 +74,6 @@ export function topCategories(
     .slice(0, Math.max(0, n));
 }
 
-export interface BudgetUtilizationResult {
-  /**
-   * Percentage of the budget used, one decimal, floored; NULL when no budget
-   * is set (budgetSen null) or the budget is 0/negative (division by zero —
-   * treated as "no budget", mirroring budgets.ts).
-   */
-  pct: number | null;
-  /** spent > budget (spent == budget is exactly on budget, NOT over — BUD-2 boundary). */
-  overBudget: boolean;
-}
-
-/** Budget utilization for analytics (PRD AN-2); see BudgetUtilizationResult. */
-export function budgetUtilization(
-  spentSen: number,
-  budgetSen: number | null,
-): BudgetUtilizationResult {
-  if (budgetSen === null || budgetSen <= 0) {
-    return { pct: null, overBudget: false };
-  }
-  return {
-    pct: Math.floor((spentSen * 1000) / budgetSen) / 10,
-    overBudget: spentSen > budgetSen,
-  };
-}
-
 /**
  * Month-end projection (PRD AN-3): `spent ÷ elapsedDays × daysInMonth`,
  * floored to the sen. The product `spent × daysInMonth` is computed FIRST

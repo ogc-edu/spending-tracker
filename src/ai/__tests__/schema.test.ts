@@ -7,7 +7,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   AIResultSchema,
-  AllowanceSnapshotSchema,
   AskSnapshotSchema,
   DebtSnapshotSchema,
   SpendingSnapshotSchema,
@@ -83,7 +82,6 @@ const spending = {
   changePct: -6.25,
   avgDailySen: 9_677,
   projectionSen: 300_000,
-  utilization: { pct: 10.0, overBudget: false },
   topCategories: [
     { name: 'Food', amountSen: 120_000 },
     { name: 'Transport', amountSen: 50_000 },
@@ -92,19 +90,6 @@ const spending = {
     { name: 'Food', amountSen: 120_000 },
     { name: 'Transport', amountSen: 50_000 },
   ],
-};
-
-/** Hand-computed allowance snapshot fixture. */
-const allowance = {
-  availableSen: 500_000,
-  upcomingSen: 200_000,
-  remainingBudgetSen: 300_000,
-  bufferSen: 50_000,
-  safeSen: 250_000,
-  dailyAllowanceSen: 8_333,
-  daysRemaining: 30,
-  // Plan 015 — the no-budget signal is part of the allowance shape.
-  hasBudget: true,
 };
 
 describe('DebtSnapshotSchema', () => {
@@ -163,60 +148,18 @@ describe('SpendingSnapshotSchema', () => {
     ).toBe(false);
   });
 
-  it('accepts a null utilization (no overall budget set — plan 014)', () => {
-    expect(
-      SpendingSnapshotSchema.safeParse({ ...spending, utilization: null }).success,
-    ).toBe(true);
-  });
-
   it('rejects a missing projectionSen (pace context is part of the shape)', () => {
     const { projectionSen: _omit, ...rest } = spending;
     expect(SpendingSnapshotSchema.safeParse(rest).success).toBe(false);
   });
 
-  it('rejects an overBudget that is not a boolean', () => {
-    expect(
-      SpendingSnapshotSchema.safeParse({
-        ...spending,
-        utilization: { pct: 10.0, overBudget: 'yes' },
-      }).success,
-    ).toBe(false);
-  });
-});
-
-describe('AllowanceSnapshotSchema', () => {
-  it('accepts the allowance fixture — including a deficit safeSen', () => {
-    expect(
-      AllowanceSnapshotSchema.safeParse({ ...allowance, safeSen: -10_000 }).success,
-    ).toBe(true);
-  });
-
-  it('rejects a missing daysRemaining', () => {
-    const { daysRemaining: _omit, ...rest } = allowance;
-    expect(AllowanceSnapshotSchema.safeParse(rest).success).toBe(false);
-  });
-
-  it('rejects a non-integer sen', () => {
-    expect(
-      AllowanceSnapshotSchema.safeParse({ ...allowance, bufferSen: 49.9 }).success,
-    ).toBe(false);
-  });
-
-  it('rejects a missing hasBudget (the AI must never guess at a budget)', () => {
-    const { hasBudget: _omit, ...rest } = allowance;
-    expect(AllowanceSnapshotSchema.safeParse({ ...rest, safeSen: -10_000 }).success).toBe(
-      false,
-    );
-  });
-
-  it('accepts hasBudget false (the no-budget state)', () => {
-    expect(
-      AllowanceSnapshotSchema.safeParse({
-        ...allowance,
-        hasBudget: false,
-        remainingBudgetSen: 0,
-      }).success,
-    ).toBe(true);
+  it('strips a stray budget utilization (plan 020 — budgets no longer exist)', () => {
+    const result = SpendingSnapshotSchema.safeParse({
+      ...spending,
+      utilization: { pct: 10.0, overBudget: false },
+    });
+    expect(result.success).toBe(true);
+    expect('utilization' in (result.success ? result.data : {})).toBe(false);
   });
 });
 
@@ -226,14 +169,6 @@ const ask = {
   monthLabel: 'August 2026',
   availableSen: 500_000,
   spentSen: 300_000,
-  hasBudget: true,
-  budgetSen: 600_000,
-  remainingBudgetSen: 300_000,
-  bufferSen: 50_000,
-  safeSen: 250_000,
-  dailyAllowanceSen: 8_333,
-  daysRemaining: 30,
-  deficit: false,
   upcomingThisMonthSen: 200_000,
   upcomingThisMonth: [{ name: 'Rent', dueDate: '2026-08-25', amountSen: 200_000 }],
   nextMonthSen: 120_000,
@@ -246,8 +181,24 @@ describe('AskSnapshotSchema', () => {
     expect(AskSnapshotSchema.safeParse(ask).success).toBe(true);
   });
 
-  it('accepts a null budgetSen (no overall budget)', () => {
-    expect(AskSnapshotSchema.safeParse({ ...ask, budgetSen: null }).success).toBe(true);
+  it('strips the removed budget / buffer / safe-to-spend / allowance terms (plan 020)', () => {
+    const result = AskSnapshotSchema.safeParse({
+      ...ask,
+      budgetSen: 600_000,
+      bufferSen: 50_000,
+      safeSen: 250_000,
+      dailyAllowanceSen: 8_333,
+    });
+    expect(result.success).toBe(true);
+    const data = result.success ? result.data : {};
+    for (const key of ['budgetSen', 'bufferSen', 'safeSen', 'dailyAllowanceSen']) {
+      expect(key in data).toBe(false);
+    }
+  });
+
+  it('rejects a missing spentSen', () => {
+    const { spentSen: _omit, ...rest } = ask;
+    expect(AskSnapshotSchema.safeParse(rest).success).toBe(false);
   });
 
   it('rejects a missing nextMonth (the shape is fixed)', () => {

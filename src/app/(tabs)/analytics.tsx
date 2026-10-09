@@ -64,7 +64,7 @@ export default function AnalyticsScreen() {
     const repos = repositories();
     const cfg = new AiConfigService(repos.settings, authService);
     return {
-      service: new AnalyticsService(repos.expenses, repos.budgets, repos.categories, authService),
+      service: new AnalyticsService(repos.expenses, repos.categories, authService),
       aiService: createAIService('fake', {}, aiServiceOptions(cfg)),
     };
   }, [authService]);

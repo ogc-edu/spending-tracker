@@ -69,41 +69,6 @@ export const accounts = sqliteTable(
   (t) => [index('accounts_user_id_idx').on(t.userId)],
 );
 
-export const budgets = sqliteTable(
-  'budgets',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id),
-    /** NULL = overall monthly budget; set = per-category budget. */
-    categoryId: integer('category_id').references(() => categories.id),
-    /** 1–12. */
-    month: integer('month').notNull(),
-    year: integer('year').notNull(),
-    amountSen: integer('amount_sen').notNull(),
-    createdAt: integer('created_at')
-      .notNull()
-      .$defaultFn(() => Date.now()),
-    updatedAt: integer('updated_at')
-      .notNull()
-      .$defaultFn(() => Date.now()),
-  },
-  (t) => [
-    // Upsert semantics: editing a month's (category) budget replaces its row.
-    // Caveat (SQLite): NULLs are distinct in unique indexes, so an "overall"
-    // row (category_id NULL) is not deduped by this constraint — feature 007's
-    // repository enforces the single-overall-row invariant via its upsert query.
-    unique('budgets_user_category_month_year_unique').on(
-      t.userId,
-      t.categoryId,
-      t.month,
-      t.year,
-    ),
-    index('budgets_user_id_idx').on(t.userId),
-  ],
-);
-
 export const commitments = sqliteTable(
   'commitments',
   {
@@ -243,8 +208,6 @@ export const settings = sqliteTable('settings', {
   userId: integer('user_id')
     .primaryKey()
     .references(() => users.id),
-  /** Formula buffer for safe-to-spend (PRD §8.4); default RM 300. */
-  safetyBufferSen: integer('safety_buffer_sen').notNull().default(30000),
   /** 'gemini' | 'deepseek' | NULL = none configured (no fallback). */
   aiActiveProvider: text('ai_active_provider'),
   aiModelGemini: text('ai_model_gemini'),
@@ -262,8 +225,6 @@ export type Category = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
-export type Budget = typeof budgets.$inferSelect;
-export type NewBudget = typeof budgets.$inferInsert;
 export type Commitment = typeof commitments.$inferSelect;
 export type NewCommitment = typeof commitments.$inferInsert;
 export type CommitmentPayment = typeof commitmentPayments.$inferSelect;

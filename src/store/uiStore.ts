@@ -16,7 +16,7 @@ import type { PeriodPreset } from '@/utils/dates';
 /** Default view = current month (matches the dashboard); one tap clears to All (plan 006). */
 const DEFAULT_PERIOD: PeriodPreset = 'thisMonth';
 
-/** Selected calendar month for month-scoped tabs (Budgets 007, Analytics 011) — ARCH §5. */
+/** Selected calendar month for the month-scoped Analytics tab (011) — ARCH §5. */
 export interface MonthSelection {
   /** 1–12. */
   month: number;
@@ -46,7 +46,7 @@ interface UiState {
   lastUsedCategoryId: number | null;
   lastUsedAccountId: number | null;
   expenseFilter: ExpenseFilterState;
-  /** Month-scoped tabs (Budgets, Analytics) share this selection — plan 007 §UI. */
+  /** The Analytics month selection — plan 011 §UI. */
   selectedMonth: MonthSelection;
   /** Record after a successful expense create/edit (plan 005 fast entry). */
   setLastUsed(categoryId: number, accountId: number): void;
@@ -60,7 +60,7 @@ interface UiState {
   setExpenseCustomRange(from: string, to: string): void;
   /** FlatList onEndReached — the ONLY setter that preserves/paginates offset. */
   setExpenseOffset(offset: number): void;
-  /** Move the shared month selection (Budgets/Analytics). */
+  /** Move the Analytics month selection. */
   setSelectedMonth(month: MonthSelection): void;
   /** Record the account after a commitment payment (plan 008 mark-paid prefill). */
   setLastUsedAccount(accountId: number | null): void;

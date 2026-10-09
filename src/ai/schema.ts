@@ -54,28 +54,9 @@ export const SpendingSnapshotSchema = z.object({
   changePct: z.number().nullable(),
   avgDailySen: sen,
   projectionSen: sen,
-  utilization: z
-    .object({
-      pct: z.number().nullable(),
-      overBudget: z.boolean(),
-    })
-    .nullable(),
   topCategories: z.array(z.object({ name: z.string(), amountSen: sen })),
   // Category-level only — no free-text descriptions (A6).
   largest: z.array(z.object({ name: z.string(), amountSen: sen })).optional(),
-});
-
-export const AllowanceSnapshotSchema = z.object({
-  availableSen: sen,
-  upcomingSen: sen,
-  remainingBudgetSen: sen,
-  bufferSen: sen,
-  safeSen: sen,
-  dailyAllowanceSen: sen,
-  daysRemaining: z.number().int(),
-  // Plan 015 — the no-budget signal (`false` = UI shows "—"). Required: the
-  // AI must never guess at a budget the app does not have.
-  hasBudget: z.boolean(),
 });
 
 /* ------------------------------------------------------------------ *
@@ -93,14 +74,6 @@ export const AskSnapshotSchema = z.object({
   monthLabel: z.string(),
   availableSen: sen,
   spentSen: sen,
-  hasBudget: z.boolean(),
-  budgetSen: z.number().int().nullable(),
-  remainingBudgetSen: sen,
-  bufferSen: sen,
-  safeSen: sen,
-  dailyAllowanceSen: sen,
-  daysRemaining: z.number().int(),
-  deficit: z.boolean(),
   upcomingThisMonthSen: sen,
   upcomingThisMonth: z.array(AskCommitmentItemSchema),
   nextMonthSen: sen,
@@ -113,7 +86,6 @@ export const AskSnapshotSchema = z.object({
 export const AIContextSnapshotSchema: Record<AIContext, z.ZodType> = {
   debt: DebtSnapshotSchema,
   spending: SpendingSnapshotSchema,
-  allowance: AllowanceSnapshotSchema,
   ask: AskSnapshotSchema,
 };
 

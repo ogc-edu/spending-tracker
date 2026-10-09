@@ -111,7 +111,7 @@ describe('PayrollRepository.deposit', () => {
     expect(await f.payroll.lastRunAt(f.userId)).toBe(2);
   });
 
-  it('creates the settings row when the user has none, and keeps the buffer default', async () => {
+  it('creates the settings row when the user has none', async () => {
     const f = fixture();
     const savings = await account(f, f.userId, 'Savings', 0);
     await f.payroll.upsert(f.userId, savings.id, 1_000);
@@ -120,7 +120,7 @@ describe('PayrollRepository.deposit', () => {
     await f.payroll.deposit(f.userId, 42);
     const row = f.test.db.select().from(settings).all()[0];
     expect(row?.payrollLastRunAt).toBe(42);
-    expect(row?.safetyBufferSen).toBe(30000);
+    expect(row?.aiActiveProvider).toBeNull();
   });
 
   it('throws — and writes nothing — when there is no split to apply', async () => {

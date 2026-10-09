@@ -29,11 +29,10 @@ import { cn } from '@/lib/utils';
 
 /** The prebuilt prompts shown as one-tap chips. Order = usefulness order. */
 export const ASK_SUGGESTIONS = [
-  'Explain my allowance',
-  'How much can I spend this month?',
+  'What do I need to pay by the end of this month?',
   'Explain my next month commitment',
   'Where is most of my money going?',
-  'Am I on track this month?',
+  'How does my spending compare to what is due?',
 ] as const;
 
 export interface AskAiCardProps {

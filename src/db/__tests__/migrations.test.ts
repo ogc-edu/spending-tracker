@@ -3,15 +3,15 @@
  * (drizzle/*.sql) on an in-memory better-sqlite3 DB (the Node harness).
  *
  * Covers the plan's Tests section: migration harness + sqlite_master checks,
- * seed idempotency, FK behavior, unique constraints (budgets key,
- * expenses.commitment_payment_id, users.email NOCASE), and CRUD smoke per table
- * with integer-sen values (no float coercion).
+ * seed idempotency, FK behavior, unique constraints
+ * (expenses.commitment_payment_id, users.email NOCASE), and CRUD smoke per table
+ * with integer-sen values (no float coercion). Plan 020's migration drops
+ * `budgets` and `settings.safety_buffer_sen` — asserted absent below.
  */
 import { describe, expect, it } from '@jest/globals';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   accounts,
-  budgets,
   categories,
   commitmentPayments,
   commitments,
@@ -33,7 +33,6 @@ const TABLES = [
   'categories',
   'accounts',
   'expenses',
-  'budgets',
   'commitments',
   'commitment_payments',
   'settings',
@@ -48,8 +47,6 @@ const INDEXES = [
   'expenses_category_id_idx',
   'expenses_user_id_idx',
   'expenses_commitment_payment_id_unique',
-  'budgets_user_id_idx',
-  'budgets_user_category_month_year_unique',
   'commitments_user_id_idx',
   'commitments_status_idx',
   'commitment_payments_user_id_idx',
@@ -114,6 +111,24 @@ describe('migration harness', () => {
     }
   });
 
+  it('plan 020: budgets and the safety buffer are gone after migrating', () => {
+    const test = createMigratedTestDb();
+    expect(tableNames(test)).not.toContain('budgets');
+    expect(indexNames(test).filter((name) => name.startsWith('budgets_'))).toEqual([]);
+    expect(columnsOf(test, 'settings')).not.toContain('safety_buffer_sen');
+    // The remaining settings columns survive the DROP COLUMN.
+    expect(columnsOf(test, 'settings')).toEqual(
+      expect.arrayContaining([
+        'user_id',
+        'ai_active_provider',
+        'ai_model_gemini',
+        'ai_model_deepseek',
+        'payroll_last_run_at',
+        'updated_at',
+      ]),
+    );
+  });
+
   it('creates versioned bookkeeping rows one-per-migration in __drizzle_migrations', () => {
     const test = createTestDb();
     runMigrations(test.db);
@@ -150,7 +165,7 @@ describe('migration harness', () => {
   it('categories stays global while every financial table carries user_id', () => {
     const { test } = fixture();
     expect(columnsOf(test, 'categories')).not.toContain('user_id');
-    for (const table of ['accounts', 'expenses', 'budgets', 'commitments', 'commitment_payments']) {
+    for (const table of ['accounts', 'expenses', 'commitments', 'commitment_payments']) {
       expect(columnsOf(test, table)).toContain('user_id');
     }
     expect(columnsOf(test, 'settings')).toContain('user_id');
@@ -161,10 +176,8 @@ describe('migration harness', () => {
     const moneyColumns: [string, string[]][] = [
       ['accounts', ['balance_sen']],
       ['expenses', ['amount_sen']],
-      ['budgets', ['amount_sen']],
       ['commitments', ['total_sen', 'remaining_sen', 'payment_sen']],
       ['commitment_payments', ['amount_sen']],
-      ['settings', ['safety_buffer_sen']],
     ];
     for (const [table, cols] of moneyColumns) {
       const info = test.sqlite.prepare(`PRAGMA table_info(${table})`).all() as {
@@ -229,16 +242,6 @@ describe('foreign keys', () => {
     ).toThrow(/FOREIGN KEY/i);
   });
 
-  it('rejects a budget row referencing a bogus category', () => {
-    const { test, userId } = fixture();
-    expect(() =>
-      test.db
-        .insert(budgets)
-        .values({ userId, categoryId: 99999, month: 9, year: 2026, amountSen: 500000 })
-        .run(),
-    ).toThrow(/FOREIGN KEY/i);
-  });
-
   it('rejects a settings row for a nonexistent user', () => {
     const test = createMigratedTestDb();
     expect(() => test.db.insert(settings).values({ userId: 99999 }).run()).toThrow(
@@ -248,40 +251,6 @@ describe('foreign keys', () => {
 });
 
 describe('unique constraints', () => {
-  it('rejects duplicate budgets per (user, category, month, year)', () => {
-    const { test, userId, categoryId } = fixture();
-    test.db
-      .insert(budgets)
-      .values({ userId, categoryId, month: 9, year: 2026, amountSen: 500000 })
-      .run();
-    expect(() =>
-      test.db
-        .insert(budgets)
-        .values({ userId, categoryId, month: 9, year: 2026, amountSen: 700000 })
-        .run(),
-    ).toThrow(/UNIQUE/i);
-  });
-
-  it('still allows the same (category, month, year) for a different user', () => {
-    const { test, categoryId } = fixture();
-    const other = Number(
-      test.db
-        .insert(users)
-        .values({ email: 'other@example.com', passwordHash: 'hash' })
-        .run().lastInsertRowid,
-    );
-    test.db
-      .insert(budgets)
-      .values({ userId: other, categoryId, month: 9, year: 2026, amountSen: 100000 })
-      .run();
-    expect(() =>
-      test.db
-        .insert(budgets)
-        .values({ userId: other, categoryId, month: 9, year: 2026, amountSen: 300000 })
-        .run(),
-    ).toThrow(/UNIQUE/i);
-  });
-
   it('rejects a second expense linked to the same commitment payment (D3 idempotency)', () => {
     const { test, userId, categoryId } = fixture();
     const commitmentId = Number(
@@ -402,21 +371,6 @@ describe('CRUD smoke (integer sen round-trip)', () => {
     expect(typeof row?.updatedAt).toBe('number');
   });
 
-  it('budgets month/year ints and sen', () => {
-    const { test, userId, categoryId } = fixture();
-    test.db
-      .insert(budgets)
-      .values({ userId, categoryId, month: 12, year: 2026, amountSen: 150000 })
-      .run();
-    const row = test.db
-      .select()
-      .from(budgets)
-      .where(and(eq(budgets.month, 12), eq(budgets.year, 2026)))
-      .get();
-    expect(row?.amountSen).toBe(150000);
-    expect(Number.isInteger(row?.amountSen)).toBe(true);
-  });
-
   it('commitments: nullable total_sen (ongoing) vs fixed', () => {
     const { test, userId } = fixture();
     const ongoingId = Number(
@@ -507,33 +461,30 @@ describe('CRUD smoke (integer sen round-trip)', () => {
     expect(row?.status).toBe('paid');
   });
 
-  it('settings: safety_buffer_sen default 30000, per-user PK, non-secret AI prefs', () => {
+  it('settings: per-user PK, non-secret AI prefs', () => {
     const { test, userId } = fixture();
     test.db.insert(settings).values({ userId }).run(); // defaults only
     const row = test.db.select().from(settings).where(eq(settings.userId, userId)).get();
-    expect(row?.safetyBufferSen).toBe(30000);
     expect(row?.aiActiveProvider).toBeNull();
     expect(row?.aiModelGemini).toBeNull();
     expect(row?.aiModelDeepseek).toBeNull();
 
     // a second row for the same user is rejected by the PK (upsert replaces instead)
-    expect(() => test.db.insert(settings).values({ userId, safetyBufferSen: 50000 }).run()).toThrow(
-      /UNIQUE/i,
-    );
+    expect(() =>
+      test.db.insert(settings).values({ userId, aiActiveProvider: 'deepseek' }).run(),
+    ).toThrow(/UNIQUE/i);
 
     // upsert semantics (repositories, feature 010): onConflictDoUpdate replaces the row
     test.db
       .insert(settings)
       .values({
         userId,
-        safetyBufferSen: 50000,
         aiActiveProvider: 'gemini',
         aiModelGemini: 'gemini-2.5-pro',
       })
       .onConflictDoUpdate({
         target: settings.userId,
         set: {
-          safetyBufferSen: 50000,
           aiActiveProvider: 'gemini',
           aiModelGemini: 'gemini-2.5-pro',
           updatedAt: Date.now(),
@@ -541,7 +492,6 @@ describe('CRUD smoke (integer sen round-trip)', () => {
       })
       .run();
     const updated = test.db.select().from(settings).where(eq(settings.userId, userId)).get();
-    expect(updated?.safetyBufferSen).toBe(50000);
     expect(updated?.aiActiveProvider).toBe('gemini');
   });
 });

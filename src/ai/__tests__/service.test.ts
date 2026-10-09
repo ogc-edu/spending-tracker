@@ -14,7 +14,6 @@ import type {
   AIErrorReason,
   AIProvider,
   AIProviderName,
-  AllowanceSnapshot,
   AIContext,
   AskSnapshot,
   DebtSnapshot,
@@ -42,23 +41,10 @@ const spendingSnapshot: SpendingSnapshot = {
   changePct: -6.25,
   avgDailySen: 9_677,
   projectionSen: 300_000,
-  utilization: { pct: 10.0, overBudget: false },
   topCategories: [
     { name: 'Food', amountSen: 120_000 },
     { name: 'Transport', amountSen: 50_000 },
   ],
-};
-
-const allowanceSnapshot: AllowanceSnapshot = {
-  availableSen: 500_000,
-  upcomingSen: 200_000,
-  remainingBudgetSen: 300_000,
-  bufferSen: 50_000,
-  safeSen: 250_000,
-  dailyAllowanceSen: 8_333,
-  daysRemaining: 30,
-  // Plan 015 — the no-budget signal is part of the allowance payload.
-  hasBudget: true,
 };
 
 const askSnapshot: AskSnapshot = {
@@ -66,14 +52,6 @@ const askSnapshot: AskSnapshot = {
   monthLabel: 'August 2026',
   availableSen: 500_000,
   spentSen: 300_000,
-  hasBudget: true,
-  budgetSen: 600_000,
-  remainingBudgetSen: 300_000,
-  bufferSen: 50_000,
-  safeSen: 250_000,
-  dailyAllowanceSen: 8_333,
-  daysRemaining: 30,
-  deficit: false,
   upcomingThisMonthSen: 200_000,
   upcomingThisMonth: [{ name: 'Rent', dueDate: '2026-08-25', amountSen: 200_000 }],
   nextMonthSen: 120_000,
@@ -84,13 +62,12 @@ const askSnapshot: AskSnapshot = {
 const SNAPSHOTS: Record<AIContext, unknown> = {
   debt: debtSnapshot,
   spending: spendingSnapshot,
-  allowance: allowanceSnapshot,
   ask: askSnapshot,
 };
 
 /** Every snapshot is a pure, JSON-serializable DTO (plan §Requirements). */
 describe('snapshot serialization', () => {
-  it.each(['debt', 'spending', 'allowance', 'ask'] as const)(
+  it.each(['debt', 'spending', 'ask'] as const)(
     '%s snapshot round-trips through JSON without loss',
     (context) => {
       const snapshot = SNAPSHOTS[context];
@@ -102,7 +79,6 @@ describe('snapshot serialization', () => {
 describe('prompt registry', () => {
   it('has a fixed template for every context', () => {
     expect(Object.keys(SYSTEM_PROMPTS).sort()).toEqual([
-      'allowance',
       'ask',
       'debt',
       'spending',
@@ -119,10 +95,9 @@ describe('prompt registry', () => {
 
     await svc.analyze('debt', debtSnapshot);
     await svc.analyze('spending', spendingSnapshot);
-    await svc.analyze('allowance', allowanceSnapshot);
     await svc.analyze('ask', askSnapshot, { question: 'How much can I spend?' });
 
-    const sent = [0, 1, 2, 3].map((i) => fake.lastRequest).filter(Boolean);
+    const sent = [0, 1, 2].map((i) => fake.lastRequest).filter(Boolean);
     for (const req of sent) {
       expect(req?.systemPrompt).toBe(SYSTEM_PROMPTS[req!.context]);
       // The free-text question is NEVER part of the fixed instruction.
@@ -232,7 +207,7 @@ describe('AIService.analyze — optional question (plan 019)', () => {
     const fake = new FakeProvider();
     const svc = createAIService('fake', { fake });
 
-    await svc.analyze('allowance', allowanceSnapshot);
+    await svc.analyze('spending', spendingSnapshot);
 
     expect(fake.lastRequest).not.toHaveProperty('question');
   });

@@ -1,16 +1,10 @@
 /**
- * Dashboard tab (Plan 003 — Asymmetrical Bento Grid cash flow intelligence hub)
- *
- * Structure:
- * 1. Hero Bento Tile: Daily allowance A_daily with MoneyDisplay hero size,
- *    total discretionary pool S_safe, status indicator (StatusPill),
- *    and tri-column liquid/budget metrics.
- * 2. Modular Split Row:
- *    - Left: Cash Flow Equation (Liquid − Bills − Reserve = S_safe) with bottom sheet breakdown.
- *    - Right: Upcoming Commitments countdown (next 2 maturing bills with countdown chips & quick-settle).
- * 3. Monthly Budget Snapshot: spent vs target progress with BudgetMeter.tsx.
- * 4. Contextual AI Daily Insight: on-device velocity analysis & free-form money inquiries.
- * 5. Floating Action Dock: one-tap triggers for + Add Expense, Transfer, and Scan Receipt.
+ * Dashboard tab. Plan 020 cut it down to what the user reads:
+ * 1. Month summary: spent this month + due by end of month.
+ * 2. Commitments due by end of month.
+ * 3. Category summary.
+ * 4. "Ask about your money" AI box.
+ * Plus the Add-expense FAB.
  *
  * Invariants:
  * - Deterministic data flow: CashFlowService.snapshot(now) is the sole source of truth.
@@ -18,15 +12,7 @@
  * - Pure integer sen.
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -39,19 +25,18 @@ import { toAskSnapshot } from '@/services/toAskSnapshot';
 import { createAIService } from '@/ai/AIService';
 import { AIUnavailableError, toAIError } from '@/ai/errors';
 import type { AIResult, AskSnapshot } from '@/ai/types';
-import { formatDayLabel, nextMonthStartDate } from '@/utils/dates';
+import { formatDayLabel, formatMonthLabel, nextMonthStartDate } from '@/utils/dates';
 import { colors, spacing } from '@/theme';
 import { EmptyState } from '@/components/EmptyState';
 import { InlineError } from '@/components/ui/InlineError';
 import { SkeletonHome } from '@/components/ui/Skeleton';
 import { useUiStore } from '@/store/uiStore';
-import { HeroCard } from '@/components/dashboard/HeroCard';
-import { FormulaCard } from '@/components/dashboard/FormulaCard';
+import { MonthSummaryCard } from '@/components/dashboard/MonthSummaryCard';
 import { UpcomingList } from '@/components/dashboard/UpcomingList';
 import { CategorySummary } from '@/components/dashboard/CategorySummary';
-import { BudgetBar } from '@/components/dashboard/BudgetBar';
 import { AskAiCard } from '@/components/dashboard/AskAiCard';
 import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
+import { Fab } from '@/components/ui/Fab';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -80,9 +65,7 @@ export default function DashboardScreen() {
       cashflow: new CashFlowService(
         repos.accounts,
         repos.expenses,
-        repos.budgets,
         repos.commitments,
-        repos.settings,
         authService,
       ),
       categories: new CategoryService(repos.categories),
@@ -96,7 +79,6 @@ export default function DashboardScreen() {
   );
 
   const [snapshot, setSnapshot] = useState<CashFlowSnapshot | null>(null);
-  const [snapshotAt, setSnapshotAt] = useState<Date | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,7 +99,6 @@ export default function DashboardScreen() {
         services.categories.list(),
       ]);
       setSnapshot(snap);
-      setSnapshotAt(now);
       setCategories(cats);
       setError(null);
     } catch (loadError: unknown) {
@@ -166,10 +147,10 @@ export default function DashboardScreen() {
 
   const onAsk = useCallback(
     (question: string) => {
-      if (!snapshot || !snapshotAt) return;
-      void runAsk(question, toAskSnapshot(snapshot, snapshotAt, categories));
+      if (!snapshot) return;
+      void runAsk(question, toAskSnapshot(snapshot, categories));
     },
-    [snapshot, snapshotAt, categories, runAsk],
+    [snapshot, categories, runAsk],
   );
 
   const onAskRetry = useCallback(() => {
@@ -214,7 +195,7 @@ export default function DashboardScreen() {
         <EmptyState
           icon="wallet-outline"
           title="No accounts yet"
-          body="Add an account to start tracking your available money, safe-to-spend and commitments."
+          body="Add an account to start tracking your spending and commitments."
           action={{ label: 'Create an account', onPress: () => router.navigate('/settings' as never) }}
           testID="dashboard-empty-accounts"
         />
@@ -222,10 +203,9 @@ export default function DashboardScreen() {
     );
   }
 
-  const noData = snapshot.spentSen === 0 && snapshot.upcomingItems.length === 0 && !snapshot.hasBudget;
+  const noData = snapshot.spentSen === 0 && snapshot.upcomingItems.length === 0;
   const dueBeforeLabel = formatDayLabel(nextMonthStartDate(snapshot.month.year, snapshot.month.month));
   const topCategories = snapshot.categorySummary.slice(0, 5);
-  const goToBudgets = () => router.navigate('/budgets' as never);
   const goToAnalytics = () => router.navigate('/analytics' as never);
 
   return (
@@ -248,31 +228,19 @@ export default function DashboardScreen() {
             <EmptyState
               icon="receipt-outline"
               title="No data yet"
-              body="Record an expense, set a budget, or add a commitment to bring your cash flow to life."
+              body="Record an expense or add a commitment to get started."
               action={{ label: 'Record an expense', onPress: () => router.push('/expenses/new' as never) }}
               testID="dashboard-empty-data"
             />
           ) : null}
 
-          {/* 1. Hero Bento Tile: Daily allowance, safe-to-spend pool, and available/spent/remaining */}
-          <HeroCard
-            availableSen={snapshot.availableSen}
+          <MonthSummaryCard
             spentSen={snapshot.spentSen}
-            remainingSen={snapshot.hasBudget ? snapshot.remainingSen : null}
-            onSetBudget={goToBudgets}
-            safeSen={snapshot.safeSen}
-            dailyAllowanceSen={snapshot.dailyAllowanceSen}
-            deficit={snapshot.deficit}
-            bufferSen={snapshot.bufferSen}
-            pctUsed={snapshot.budgetMetrics.pctUsed}
+            dueSen={snapshot.upcomingSen}
+            monthLabel={formatMonthLabel(snapshot.month.year, snapshot.month.month)}
           />
 
-          {/* 2. Modular Bento Split Row: Cash Flow Equation (Left) & Upcoming Commitments (Right) */}
-          <View className="flex-row gap-3 mb-4">
-            <FormulaCard
-              breakdown={snapshot.breakdown}
-              safeSen={snapshot.safeSen}
-            />
+          <View className="mb-4">
             <UpcomingList
               items={snapshot.upcomingItems}
               totalSen={snapshot.upcomingSen}
@@ -294,17 +262,7 @@ export default function DashboardScreen() {
             />
           ) : null}
 
-          {/* 3. Monthly Budget Snapshot */}
-          <BudgetBar
-            budget={snapshot.budget}
-            spentSen={snapshot.spentSen}
-            remainingSen={snapshot.remainingSen}
-            pctUsed={snapshot.budgetMetrics.pctUsed}
-            overBudget={snapshot.budgetMetrics.overBudget}
-            onSetBudget={goToBudgets}
-          />
-
-          {/* 4. Contextual AI Daily Insight */}
+          {/* Ask about your money (plan 019) */}
           <AskAiCard
             ai={aiState}
             label={aiQuestion ? `You asked: ${aiQuestion}` : null}
@@ -316,45 +274,7 @@ export default function DashboardScreen() {
         </View>
       </KeyboardAwareScrollView>
 
-      {/* 5. Floating Action Dock */}
-      <View
-        className="absolute left-4 right-4 flex-row items-center justify-between bg-card/95 border border-border/80 rounded-2xl p-2 shadow-lg"
-        style={{ bottom: Math.max(insets.bottom, 16) }}
-        testID="dashboard-floating-dock"
-      >
-        <Pressable
-          onPress={() => router.push('/expenses/new' as never)}
-          className="flex-1 flex-row items-center justify-center bg-primary rounded-xl py-3 px-3 gap-1.5"
-          accessibilityRole="button"
-          accessibilityLabel="Add expense"
-          testID="dashboard-add-expense-fab"
-        >
-          <Ionicons name="add" size={20} color="#090B10" />
-          <Text className="text-sm font-bold text-primary-foreground">Add Expense</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.push('/expenses/new' as never)}
-          className="flex-row items-center justify-center py-3 px-3 ml-2 rounded-xl border border-border/60 bg-muted/30"
-          accessibilityRole="button"
-          accessibilityLabel="Transfer funds"
-          testID="dashboard-action-transfer"
-        >
-          <Ionicons name="swap-horizontal" size={18} color={colors.text} />
-          <Text className="text-xs font-semibold text-foreground ml-1.5">Transfer</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.push('/expenses/new' as never)}
-          className="flex-row items-center justify-center py-3 px-3 ml-2 rounded-xl border border-border/60 bg-muted/30"
-          accessibilityRole="button"
-          accessibilityLabel="Scan receipt"
-          testID="dashboard-action-scan"
-        >
-          <Ionicons name="camera-outline" size={18} color={colors.text} />
-          <Text className="text-xs font-semibold text-foreground ml-1.5">Scan</Text>
-        </Pressable>
-      </View>
+      <Fab onPress={() => router.push('/expenses/new' as never)} label="Add expense" testID="add-expense-fab" />
     </View>
   );
 }

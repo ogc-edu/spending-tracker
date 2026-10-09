@@ -31,7 +31,6 @@ const analyticsSnapshot: AnalyticsSpendingSnapshot = {
     { categoryId: 1, categoryName: 'Food', amountSen: 12_750 },
     { categoryId: 3, categoryName: 'Transport', amountSen: 800 },
   ],
-  utilization: null, // no OVERALL budget set
   projectionSen: 13_550, // past month → identity
   elapsedDays: 31,
   daysInMonth: 31,
@@ -49,7 +48,6 @@ describe('toSpendingSnapshot', () => {
       changePct: -83.1,
       avgDailySen: 437,
       projectionSen: 13_550,
-      utilization: null,
       topCategories: [
         { name: 'Food', amountSen: 12_750 },
         { name: 'Transport', amountSen: 800 },
@@ -62,24 +60,8 @@ describe('toSpendingSnapshot', () => {
     });
   });
 
-  it('maps an overall budget onto utilization, preserving overBudget', () => {
-    const withBudget: AnalyticsSpendingSnapshot = {
-      ...analyticsSnapshot,
-      utilization: { pct: 45.2, overBudget: false },
-    };
-    expect(toSpendingSnapshot(withBudget).utilization).toEqual({
-      pct: 45.2,
-      overBudget: false,
-    });
-
-    const over: AnalyticsSpendingSnapshot = {
-      ...analyticsSnapshot,
-      utilization: { pct: 135.5, overBudget: true },
-    };
-    expect(toSpendingSnapshot(over).utilization).toEqual({
-      pct: 135.5,
-      overBudget: true,
-    });
+  it('sends no budget utilization (plan 020 — budgets were removed)', () => {
+    expect(toSpendingSnapshot(analyticsSnapshot)).not.toHaveProperty('utilization');
   });
 
   it('carries a null changePct through (zero baseline — "no comparison")', () => {

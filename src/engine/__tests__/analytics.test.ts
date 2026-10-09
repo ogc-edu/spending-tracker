@@ -2,14 +2,12 @@
  * Plan 009 — engine analytics math (pure). Fixture matrix per plan §Tests:
  * MoM absolute + floored-one-decimal percentage (positive, negative, zero,
  * baseline-zero → null), avgDaily floors, largest/top ordering with ties,
- * budget utilization (echoes the 007 fixtures: 12.0% / exact-100 boundary /
- * over-budget / 0.3% floor), projection floor-correct, and pureness
+ * projection floor-correct, and pureness
  * (Date.now mocked to throw — this module has zero imports by construction).
  */
 import { describe, expect, it, jest } from '@jest/globals';
 import {
   avgDaily,
-  budgetUtilization,
   largestExpenses,
   monthOverMonth,
   projectMonthEnd,
@@ -132,45 +130,6 @@ describe('topCategories (PRD AN-2)', () => {
   });
 });
 
-describe('budgetUtilization (PRD AN-2, BUD-2)', () => {
-  it('no budget → { pct: null, overBudget: false }', () => {
-    expect(budgetUtilization(5000, null)).toEqual({ pct: null, overBudget: false });
-  });
-
-  it('guards division by zero / negative budgets (treated as no budget)', () => {
-    expect(budgetUtilization(5000, 0)).toEqual({ pct: null, overBudget: false });
-    expect(budgetUtilization(5000, -100)).toEqual({ pct: null, overBudget: false });
-  });
-
-  it('partial spend: one-decimal floored pct (echoes the 007 fixture: 12050 on 100000 → 12.0)', () => {
-    expect(budgetUtilization(12050, 100000)).toEqual({ pct: 12.0, overBudget: false });
-  });
-
-  it('spent == budget is exactly 100.0 and NOT over (boundary)', () => {
-    expect(budgetUtilization(100000, 100000)).toEqual({ pct: 100.0, overBudget: false });
-  });
-
-  it('spent == budget + 1 sen IS over-budget, pct stays 100.0 (floored)', () => {
-    // 100001×1000/100000 = 1000.01 → floor 1000 → 100.0
-    expect(budgetUtilization(100001, 100000)).toEqual({ pct: 100.0, overBudget: true });
-  });
-
-  it('over budget: pct exceeds 100 (60000 on 50000 → 120.0)', () => {
-    expect(budgetUtilization(60000, 50000)).toEqual({ pct: 120.0, overBudget: true });
-  });
-
-  it('zero spend: 0.0%, not over', () => {
-    expect(budgetUtilization(0, 100000)).toEqual({ pct: 0.0, overBudget: false });
-  });
-
-  it('floors at one decimal with integer-exact sen math (echoes 007: 104/105 on 30000 → 0.3)', () => {
-    expect(budgetUtilization(104, 30000).pct).toBe(0.3); // 3.466… → 3 → 0.3
-    expect(budgetUtilization(105, 30000).pct).toBe(0.3); // 3.5 → 3 → 0.3, never rounds up
-    // 11111 on 33333 → 333.33… → 333 → 33.3 — no float drift
-    expect(budgetUtilization(11111, 33333).pct).toBe(33.3);
-  });
-});
-
 describe('projectMonthEnd (PRD AN-3)', () => {
   it('scales spent ÷ elapsed × daysInMonth exactly', () => {
     expect(projectMonthEnd(150000, 15, 30)).toBe(300000); // 2× spending pace
@@ -204,14 +163,12 @@ describe('pureness — no hidden clock, zero imports (ARCH §6)', () => {
     let daily: number;
     let largest: number;
     let top: number;
-    let util: { pct: number | null; overBudget: boolean };
     let proj: number;
     try {
       mom = monthOverMonth(12000, 10000);
       daily = avgDaily(150000, 7);
       largest = largestExpenses([{ amountSen: 5 }, { amountSen: 9 }], 1).length;
       top = topCategories(new Map([[1, 8]]), 1).length;
-      util = budgetUtilization(12050, 100000);
       proj = projectMonthEnd(100000, 7, 31);
     } finally {
       spy.mockRestore();
@@ -220,7 +177,6 @@ describe('pureness — no hidden clock, zero imports (ARCH §6)', () => {
     expect(daily).toBe(21428);
     expect(largest).toBe(1);
     expect(top).toBe(1);
-    expect(util.pct).toBe(12.0);
     expect(proj).toBe(442857);
   });
 });

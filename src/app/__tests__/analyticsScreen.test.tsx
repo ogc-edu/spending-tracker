@@ -40,7 +40,6 @@ import { insertDefaultCategoriesIfEmpty } from '@/db/seed';
 import { categories as categoriesTable, users } from '@/db/schema';
 import type { Account, Category, User } from '@/db/schema';
 import { DrizzleAccountRepository } from '@/repositories/drizzle/accountRepository';
-import { DrizzleBudgetRepository } from '@/repositories/drizzle/budgetRepository';
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
 import { DrizzleCommitmentRepository } from '@/repositories/drizzle/commitmentRepository';
 import { DrizzleExpenseRepository } from '@/repositories/drizzle/expenseRepository';
@@ -202,7 +201,6 @@ async function makeFixture({
     accounts: accountRepo,
     categories: new DrizzleCategoryRepository(test.db as unknown as never),
     expenses: new DrizzleExpenseRepository(test.db as unknown as never),
-    budgets: new DrizzleBudgetRepository(test.db as unknown as never),
     commitments: new DrizzleCommitmentRepository(test.db as unknown as never),
     payroll: new DrizzlePayrollRepository(test.db as unknown as never),
     settings: new DrizzleSettingsRepository(test.db as unknown as never),
@@ -308,7 +306,6 @@ function expectedAugustPayload(): Record<string, unknown> {
     changePct: -83.1, // floor(−66450×1000/80000)/10 = −83.1
     avgDailySen: 437, // floor(13550/31): past month, fully elapsed
     projectionSen: 13_550, // identity for a completed month
-    utilization: null, // no OVERALL budget row
     topCategories: [
       { name: 'Food', amountSen: 12_750 },
       { name: 'Transport', amountSen: 800 },
@@ -355,6 +352,14 @@ describe('Analytics — "Analyze my spending" (plan 014)', () => {
 
     // And the card renders the (canned) result under the chip.
     expect(textOf(tree.root, 'ai-analysis-summary')).toContain('Fake analysis summary.');
+  });
+
+  it('no longer renders budget utilization (plan 020 removed budgets)', async () => {
+    await makeFixture();
+    selectMonth(8, 2026);
+    const tree = await render(<AnalyticsScreen />);
+    expect(hasTestID(tree.root, 'analytics-stats')).toBe(true);
+    expect(hasTestID(tree.root, 'analytics-stat-utilization')).toBe(false);
   });
 
   it('null MoM baseline (previous month empty) → changePct null + prompt covers "no comparison"', async () => {

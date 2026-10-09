@@ -6,8 +6,8 @@
  * receives exactly what the Analytics screen renders (same month, same
  * numbers — no recomputation, no drift; the screen captures this mapping at
  * tap time). The AI snapshot is validated by the 012 facade schema, extended
- * in 014 with `monthLabel`/`projectionSen`/`utilization` — the budget-pressure
- * and pace context AN-5 needs (the prompt only references supplied values).
+ * in 014 with `monthLabel`/`projectionSen` — the pace context AN-5 needs (the
+ * prompt only references supplied values). Plan 020 dropped `utilization`.
  *
  * A6 hygiene: category names + amounts only — free-text expense descriptions
  * never cross this boundary (the analytics snapshot already strips them).
@@ -26,13 +26,6 @@ export function toSpendingSnapshot(snapshot: AnalyticsSpendingSnapshot): AISpend
     changePct: snapshot.changePct,
     avgDailySen: snapshot.avgDailySen,
     projectionSen: snapshot.projectionSen,
-    utilization:
-      snapshot.utilization === null
-        ? null
-        : {
-            pct: snapshot.utilization.pct,
-            overBudget: snapshot.utilization.overBudget,
-          },
     topCategories: snapshot.topCategories.map((category) => ({
       name: category.categoryName,
       amountSen: category.amountSen,

@@ -4,7 +4,7 @@
  * pickers' "+" chip and the Settings multi-select manager). Categories are
  * GLOBAL (no user_id, A10) — shared by all users, seeded exactly once by 002.
  * `list` returns seed order (by id). Delete is LIST-ONLY (user rule):
- * expenses/budgets that reference the row are NEVER touched — SQLite FK
+ * expenses that reference the row are NEVER touched — SQLite FK
  * enforcement is suspended for the single delete statement.
  */
 import { eq, sql } from 'drizzle-orm';
@@ -40,7 +40,7 @@ export class DrizzleCategoryRepository implements CategoryRepository {
 
   async remove(id: number): Promise<void> {
     // List-only deletion (user rule, 016 follow-up): removing a category
-    // NEVER cascades — expenses and budgets keep their category_id (their
+    // NEVER cascades — expenses keep their category_id (their
     // rows are left untouched; dangling ids render with a generic label).
     // SQLite FKs are ON per connection, so enforcement is suspended for this
     // single statement (SQLite disallows toggling foreign_keys inside a

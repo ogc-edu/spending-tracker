@@ -384,7 +384,7 @@ export function ExpenseForm({
         title="Delete category"
         message={
           confirmDelete
-            ? `"${confirmDelete.name}" is removed from the picker only — expenses and budgets that already use it are left unchanged.`
+            ? `"${confirmDelete.name}" is removed from the picker only — expenses that already use it are left unchanged.`
             : ''
         }
         confirmLabel="Delete"

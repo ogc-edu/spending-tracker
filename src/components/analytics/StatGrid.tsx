@@ -13,7 +13,6 @@
  *  - testID="analytics-total"
  *  - testID="analytics-stat-avg"
  *  - testID="analytics-stat-largest"
- *  - testID="analytics-stat-utilization"
  *  - testID="analytics-stat-projection"
  */
 import { Text, View } from 'react-native';
@@ -27,7 +26,6 @@ import { formatSen } from '@/utils/money';
 export function StatGrid({ snapshot }: { snapshot: SpendingSnapshot }) {
   const largest = snapshot.largest[0] ?? null;
   const topCategory = snapshot.topCategories[0] ?? null;
-  const utilization = snapshot.utilization;
 
   const topCategoryShare =
     snapshot.totalSen > 0 && topCategory
@@ -138,20 +136,6 @@ export function StatGrid({ snapshot }: { snapshot: SpendingSnapshot }) {
             ) : (
               <Text className="text-xs text-muted-foreground font-medium mt-0.5">—</Text>
             )}
-          </View>
-          <View testID="analytics-stat-utilization" className="mt-2 pt-2 border-t border-border/40">
-            <Text
-              className={`text-[11px] font-medium ${
-                utilization?.overBudget ? 'text-destructive font-bold' : 'text-muted-foreground'
-              }`}
-              numberOfLines={1}
-            >
-              {utilization === null
-                ? 'No budget set'
-                : utilization.overBudget
-                  ? `Budget: ${utilization.pct?.toFixed(1)}% (Over)`
-                  : `Budget: ${utilization.pct?.toFixed(1)}% used`}
-            </Text>
           </View>
         </BentoCard>
       </View>
