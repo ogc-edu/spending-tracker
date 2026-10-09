@@ -7,12 +7,11 @@
  * Data flow per plan §Technical Design:
  *   rows     = ExpenseRepository.listForMonth(selected month)   // (005)
  *   prevRows = ExpenseRepository.listForMonth(previous month)   // comparison is vs the PREVIOUS calendar month (AN-4)
- *   budget   = BudgetRepository.overallFor(selected month)      // (007) utilization
  *
  * CONSTRAINT: the service contains NO money arithmetic. Every figure is
  * produced by a pure 009 (or 005) engine function — monthlyTotals,
  * expenseTotalsByCategory, monthOverMonth, avgDaily, largestExpenses,
- * topCategories, budgetUtilization, projectMonthEnd — from explicitly
+ * topCategories, projectMonthEnd — from explicitly
  * resolved inputs. The only math here is CALENDAR math (previous month,
  * elapsed days), which the engine delegates to the caller by design.
  *
@@ -23,15 +22,10 @@
  */
 import { z } from 'zod';
 import type { Expense } from '@/db/schema';
-import type {
-  BudgetRepository,
-  CategoryRepository,
-  ExpenseRepository,
-} from '@/repositories/types';
+import type { CategoryRepository, ExpenseRepository } from '@/repositories/types';
 import { monthlyTotals, expenseTotalsByCategory, type MonthScope } from '@/engine/totals';
 import {
   avgDaily,
-  budgetUtilization,
   largestExpenses,
   monthOverMonth,
   projectMonthEnd,
@@ -73,13 +67,6 @@ export interface LargestExpense {
   categoryName: string;
 }
 
-/** Budget utilization for the selected month — null when no OVERALL budget is set. */
-export interface SnapshotUtilization {
-  /** Percentage of the budget used, one decimal, floored; null only via an impossible bad row. */
-  pct: number | null;
-  overBudget: boolean;
-}
-
 /** The typed, JSON-serializable analytics snapshot (014's exact AI payload). */
 export interface SpendingSnapshot {
   month: AnalyticsMonth;
@@ -99,8 +86,6 @@ export interface SpendingSnapshot {
   largest: LargestExpense[];
   /** Top 5 highest-spending categories, descending. */
   topCategories: CategorySpend[];
-  /** null = no overall budget for the month ("no budget"). */
-  utilization: SnapshotUtilization | null;
   /** End-of-month projection `spent ÷ elapsedDays × daysInMonth`, floored (AN-3). */
   projectionSen: number;
   /** Completed days of the selected month (0 on the 1st / future months). */
@@ -120,7 +105,6 @@ function previousMonth(scope: AnalyticsMonth): AnalyticsMonth {
 export class AnalyticsService {
   constructor(
     private readonly expenses: ExpenseRepository,
-    private readonly budgets: BudgetRepository,
     private readonly categories: CategoryRepository,
     private readonly auth: CurrentUserSource,
     /** Injectable clock for deterministic elapsed-day tests; the app passes nothing. */
@@ -173,10 +157,9 @@ export class AnalyticsService {
     const scope = parsed.data;
     const previous = previousMonth(scope);
 
-    const [rows, prevRows, budget, categoryRows] = await Promise.all([
+    const [rows, prevRows, categoryRows] = await Promise.all([
       this.expenses.listForMonth(userId, scope.year, scope.month),
       this.expenses.listForMonth(userId, previous.year, previous.month),
-      this.budgets.overallFor(userId, scope.month, scope.year),
       this.categories.list(),
     ]);
 
@@ -215,7 +198,6 @@ export class AnalyticsService {
       avgDailySen: avgDaily(totalSen, elapsedDays),
       largest: (largestExpenses(rows, 5) as Expense[]).map(toLargest),
       topCategories: topCategories(byCategory, 5).map(toCategorySpend),
-      utilization: budget === null ? null : budgetUtilization(totalSen, budget.amountSen),
       projectionSen: projectMonthEnd(totalSen, elapsedDays, days),
       elapsedDays,
       daysInMonth: days,

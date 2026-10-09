@@ -1,14 +1,13 @@
 /**
  * Plan 016 follow-up — CategoryService management: create (validation,
  * case-insensitive uniqueness, default icon type) and delete (expenses
- * reassigned to Other, per-category budget refs dropped, Other protected,
+ * keep their category_id — no cascade, Other protected,
  * missing idempotent). Real drizzle repos over the migrated test DB, seeded
  * with the 12 default categories (Other = the fallback).
  */
 import { describe, expect, it } from '@jest/globals';
 import {
   accounts as accountsTable,
-  budgets as budgetsTable,
   categories as categoriesTable,
   expenses as expensesTable,
   users,
@@ -88,23 +87,6 @@ describe('CategoryService.delete', () => {
     // The expense keeps its category_id — no reassignment, no cascade.
     const expense = (await f.test.db.select().from(expensesTable))[0] as unknown as { categoryId: number };
     expect(expense.categoryId).toBe(food.id);
-  });
-
-  it('leaves per-category budget rows untouched too (dangling reference is fine)', async () => {
-    const f = await makeFixture();
-    const travel = f.categories.find((c) => c.name.toLowerCase() === 'travel');
-    if (!travel) throw new Error('no Travel');
-    await f.test.db.insert(budgetsTable).values({
-      userId: f.user.id,
-      categoryId: travel.id,
-      month: 9,
-      year: 2026,
-      amountSen: 50000,
-    });
-    await f.service.delete(travel.id);
-    const rows = await f.test.db.select().from(budgetsTable);
-    expect(rows.length).toBe(1);
-    expect(rows[0]?.categoryId).toBe(travel.id); // kept, not nulled
     // FK enforcement is back ON after the delete (per-connection pragma).
     expect(f.test.sqlite.pragma('foreign_keys', { simple: true })).toBe(1);
   });

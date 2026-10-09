@@ -4,42 +4,28 @@
  * other tabs show and pushes them through the pure engine (009); the screen
  * renders the result with NO arithmetic of its own (ARCH §1, NFR-7).
  *
- * Pipeline (ARCH §8):
+ * Pipeline (ARCH §8; plan 020 removed budget / buffer / safe-to-spend /
+ * daily allowance — Home now answers "what did I spend" and "what is due"):
  *   available = AccountRepository.sumBalances        (credit-card owed negative)
  *   spent     = ExpenseRepository.listForMonth → engine.monthlyTotals
- *   budget    = BudgetRepository.overallFor          (null = none set)
- *   remaining = budget ? max(0, budget − spent) : 0  (D2 — spent term cancels)
  *   upcoming  = engine.upcomingCommitments(active, paid, nextMonthStart)  (008)
- *   buffer    = SettingsRepository.buffer            (default RM300, SET-1)
- *   safe      = engine.safeToSpend(...)              (may be negative → deficit)
- *   daily     = engine.dailyAllowance(safe, today, monthEnd)
- *   breakdown = engine.cashFlowBreakdown(...)        (Σ = safe — the formula card)
+ *               — "due by end of this month", overdue included
  *   summary   = engine.expenseTotalsByCategory → topCategories (DASH-2)
  *
- * The snapshot is typed and serializable — it doubles as the AI allowance
- * payload in 015 (aggregates + category ids only; no free-text descriptions).
+ * The snapshot is typed and serializable — the ask box maps it onto the AI
+ * payload (aggregates + category ids only; no free-text descriptions).
  * `now` is derived by the caller at call time (focus refresh / pull-to-
  * refresh), so the calendar rolls over without restart (A4: no caching).
  */
 import { topCategories } from '@/engine/analytics';
-import { budgetMetrics, type BudgetMetrics } from '@/engine/budgets';
-import {
-  cashFlowBreakdown,
-  dailyAllowance,
-  safeToSpend,
-  type CashFlowBreakdownItem,
-} from '@/engine/cashflow';
 import { upcomingCommitments, type CommitmentLike } from '@/engine/commitments';
 import { expenseTotalsByCategory, monthlyTotals } from '@/engine/totals';
-import type { Budget } from '@/db/schema';
 import type {
   AccountRepository,
-  BudgetRepository,
   CommitmentRepository,
   ExpenseRepository,
-  SettingsRepository,
 } from '@/repositories/types';
-import { monthEndDate, nextMonthStartDate, toLocalDateString } from '@/utils/dates';
+import { nextMonthStartDate } from '@/utils/dates';
 import type { CurrentUserSource } from './AccountService';
 
 /** One upcoming slot, shaped for the dashboard list (name from the DB row). */
@@ -50,6 +36,8 @@ export interface UpcomingSnapshotItem {
   /** `YYYY-MM-DD` — the derived due date (ARCH §7). */
   dueDate: string;
   amountSen: number;
+  /** 'monthly' | 'one_time' — plan 017: drives the row's leading glyph. */
+  frequency: 'monthly' | 'one_time';
 }
 
 /** One row of the category summary (DASH-2) — id + total; names resolved by the UI. */
@@ -60,8 +48,7 @@ export interface CategorySummaryItem {
 
 /**
  * The full deterministic dashboard view (PRD DASH-1..5). Every number is
- * engine-computed; nulls are absent data (no budget / no accounts), never
- * errors.
+ * engine-computed.
  */
 export interface CashFlowSnapshot {
   /** The current calendar month scope (derived from `now`, device-local). */
@@ -70,30 +57,23 @@ export interface CashFlowSnapshot {
   availableSen: number;
   /** Σ expenses dated in `month` — paid commitment payments included (D3). */
   spentSen: number;
-  /** The month's overall budget row, or null when unset (UI: "—" + prompt). */
-  budget: Budget | null;
-  /** `budget !== null` — drives the "Set a budget" prompt. */
-  hasBudget: boolean;
-  /** max(0, budget − spent) with a budget, else 0 (D2 — the formula term). */
-  remainingSen: number;
-  /** Σ unpaid payment amounts due before next month start (008, PRD COM-5). */
+  /**
+   * Σ unpaid payment amounts due before next month start (008, PRD COM-5) —
+   * Home's "due by end of this month"; overdue slots included.
+   */
   upcomingSen: number;
   /** The upcoming slots, due-date ascending — the dashboard's "next 3" list. */
   upcomingItems: UpcomingSnapshotItem[];
-  /** The safety buffer term (SET-1; default RM300 until edited). */
-  bufferSen: number;
-  /** available − upcoming − remaining − buffer; MAY be negative (deficit). */
-  safeSen: number;
-  /** `safeSen < 0` — first-class UI state, never styled as success. */
-  deficit: boolean;
-  /** floor(safe / days remaining incl. today) — hidden ("—") on deficit. */
-  dailyAllowanceSen: number;
-  /** Signed, labelled terms summing to safeSen (DASH-3 formula card / 015). */
-  breakdown: CashFlowBreakdownItem[];
+  /**
+   * Plan 019 — Σ unpaid commitment slots due in the NEXT calendar month
+   * (the ask box's "total commitment next month"). Derived from the same
+   * rows/engine call as `upcomingSen`; never rendered by the dashboard.
+   */
+  nextMonthSen: number;
+  /** The next calendar month's unpaid slots — ask-box context (plan 019). */
+  nextMonthItems: UpcomingSnapshotItem[];
   /** Category totals for the month, descending by amount (DASH-2). */
   categorySummary: CategorySummaryItem[];
-  /** Budget-bar metrics (007) — pct null when no budget. */
-  budgetMetrics: BudgetMetrics;
   /** Account count — 0 drives the empty-accounts CTA (plan §Edge cases). */
   accountCount: number;
 }
@@ -107,9 +87,7 @@ export class CashFlowService {
   constructor(
     private readonly accounts: AccountRepository,
     private readonly expenses: ExpenseRepository,
-    private readonly budgets: BudgetRepository,
     private readonly commitments: CommitmentRepository,
-    private readonly settings: SettingsRepository,
     private readonly auth: CurrentUserSource,
   ) {}
 
@@ -132,20 +110,15 @@ export class CashFlowService {
     const year = now.getFullYear();
     const scope = { month, year };
 
-    const [availableSen, accounts, spentRows, budget, commitments, paidPayments, bufferSen] =
-      await Promise.all([
-        this.accounts.sumBalances(userId),
-        this.accounts.list(userId),
-        this.expenses.listForMonth(userId, year, month),
-        this.budgets.overallFor(userId, month, year),
-        this.commitments.list(userId),
-        this.commitments.paidPayments(userId),
-        this.settings.buffer(userId),
-      ]);
+    const [availableSen, accounts, spentRows, commitments, paidPayments] = await Promise.all([
+      this.accounts.sumBalances(userId),
+      this.accounts.list(userId),
+      this.expenses.listForMonth(userId, year, month),
+      this.commitments.list(userId),
+      this.commitments.paidPayments(userId),
+    ]);
 
     const spentSen = monthlyTotals(spentRows, scope);
-    // D2: the budget term is max(0, budget − spent); 0 when no budget is set.
-    const remainingSen = budget ? Math.max(0, budget.amountSen - spentSen) : 0;
 
     // 008: unpaid slots due before the start of next month (overdue included).
     const windowEnd = nextMonthStartDate(year, month);
@@ -158,21 +131,17 @@ export class CashFlowService {
       windowEnd,
     );
 
-    const safe = safeToSpend({
-      availableSen,
-      upcomingSen: upcoming.totalSen,
-      remainingBudgetSen: remainingSen,
-      bufferSen,
-    });
-
-    const today = toLocalDateString(now);
-    const daily = dailyAllowance(safe.safeSen, today, monthEndDate(year, month));
-    const breakdown = cashFlowBreakdown({
-      availableSen,
-      upcomingSen: upcoming.totalSen,
-      remainingBudgetSen: remainingSen,
-      bufferSen,
-    });
+    // Plan 019 — the NEXT calendar month's unpaid slots, for the ask box.
+    // Same rows, one window further out; filtering at `windowEnd` drops
+    // overdue/this-month slots, so `nextMonth` is exactly next month.
+    const [nextYear, nextMonthNumber] = windowEnd.split('-').map(Number);
+    const nextWindow = upcomingCommitments(
+      commitments as CommitmentLike[],
+      paidPayments,
+      nextMonthStartDate(nextYear as number, nextMonthNumber as number),
+    );
+    const nextMonthItems = nextWindow.items.filter((item) => item.dueDate >= windowEnd);
+    const nextMonthSen = nextMonthItems.reduce((sum, item) => sum + item.amountSen, 0);
 
     // DASH-2: category totals sorted by amount (engine, stable ties).
     const byCategory = expenseTotalsByCategory(spentRows, scope);
@@ -189,9 +158,6 @@ export class CashFlowService {
       month: { month, year },
       availableSen,
       spentSen,
-      budget,
-      hasBudget: budget !== null,
-      remainingSen,
       upcomingSen: upcoming.totalSen,
       upcomingItems: upcoming.items
         .map((item) => ({
@@ -199,15 +165,20 @@ export class CashFlowService {
           name: nameById.get(item.commitment.id) ?? String(item.commitment.id),
           dueDate: item.dueDate,
           amountSen: item.amountSen,
+          frequency: item.commitment.frequency,
         }))
         .sort(byDueDateAsc),
-      bufferSen,
-      safeSen: safe.safeSen,
-      deficit: safe.deficit,
-      dailyAllowanceSen: daily,
-      breakdown,
+      nextMonthSen,
+      nextMonthItems: nextMonthItems
+        .map((item) => ({
+          commitmentId: item.commitment.id,
+          name: nameById.get(item.commitment.id) ?? String(item.commitment.id),
+          dueDate: item.dueDate,
+          amountSen: item.amountSen,
+          frequency: item.commitment.frequency,
+        }))
+        .sort(byDueDateAsc),
       categorySummary,
-      budgetMetrics: budgetMetrics(budget?.amountSen ?? null, spentSen),
       accountCount: accounts.length,
     };
   }

@@ -89,6 +89,18 @@ export class DrizzleAccountRepository implements AccountRepository {
    * explicit guard gives a friendly message while the FK constraint is the
    * backstop. Scoped by userId so it can never affect another user's account.
    */
+  /** Single user-scoped UPDATE; a missing row means "not this user's account". */
+  async setBalance(userId: number, id: number, balanceSen: number): Promise<Account> {
+    const rows = (await (this.db
+      .update(accounts)
+      .set({ balanceSen, updatedAt: Date.now() })
+      .where(and(eq(accounts.userId, userId), eq(accounts.id, id)))
+      .returning() as unknown as Promise<Account[]>)) as Account[];
+    const row = rows[0];
+    if (!row) throw new Error('Account not found');
+    return row;
+  }
+
   async delete(userId: number, id: number): Promise<void> {
     const refs = await this.countExpenses(userId, id);
     if (refs > 0) {

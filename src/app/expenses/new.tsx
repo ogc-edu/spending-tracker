@@ -6,7 +6,8 @@
  * last-used picks are stored for the NEXT fast entry.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -15,7 +16,7 @@ import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
 import { ExpenseForm } from '@/components/ExpenseForm';
-import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 import { useToast } from '@/components/ToastProvider';
 import { useUiStore } from '@/store/uiStore';
 import { todayLocal } from '@/utils/dates';
@@ -28,6 +29,7 @@ function errMsg(error: unknown): string {
 
 export default function NewExpenseScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { authService } = useAuth();
   const toast = useToast();
   const { lastUsedCategoryId, lastUsedAccountId } = useUiStore();
@@ -73,6 +75,7 @@ export default function NewExpenseScreen() {
       await services.expenses.create(input);
       // Fast entry (EXP-8): remember the picks for next time.
       useUiStore.getState().setLastUsed(input.categoryId, input.accountId);
+      toast.show('Expense saved');
       router.back();
     } catch (error: unknown) {
       toast.show(`Could not add expense: ${errMsg(error)}`);
@@ -91,9 +94,9 @@ export default function NewExpenseScreen() {
 
   if (accounts.length === 0) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>No accounts yet</Text>
-        <Text style={styles.emptyBody}>
+      <View className="flex-1 bg-background items-center justify-center p-6" style={styles.center}>
+        <Text className="text-lg font-bold text-foreground mb-2" style={styles.emptyTitle}>No accounts yet</Text>
+        <Text className="text-sm text-muted-foreground text-center leading-6" style={styles.emptyBody}>
           Add an account in Settings → Accounts before recording expenses — every expense adjusts its account balance.
         </Text>
       </View>
@@ -107,35 +110,42 @@ export default function NewExpenseScreen() {
   };
 
   return (
-    <KeyboardScreen>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="new-expense-screen">
-        <ExpenseForm
-          categories={categories}
-          accounts={accounts}
-          defaults={defaults}
-          submitLabel="Add expense"
-          onSubmit={handleSubmit}
-          submitting={submitting}
-          onCancel={() => router.back()}
-          onCreateCategory={async (name, icon) => {
-            const created = await services.categories.create(name, icon);
-            setCategories((prev) => [...prev, created]);
-            return created;
-          }}
-          onDeleteCategory={async (id) => {
-            await services.categories.delete(id);
-            setCategories((prev) => prev.filter((c) => c.id !== id));
-          }}
-        />
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.cancelLinkLabel}>Cancel</Text>
-        </Pressable>
-      </ScrollView>
-    </KeyboardScreen>
+    <KeyboardAwareScrollView
+      className="flex-1 bg-background"
+      style={styles.container}
+      contentContainerStyle={[
+        styles.content,
+        { paddingBottom: Math.max(spacing.xxl, insets.bottom + spacing.xl) },
+      ]}
+      testID="new-expense-screen"
+    >
+      <ExpenseForm
+        categories={categories}
+        accounts={accounts}
+        defaults={defaults}
+        submitLabel="Add expense"
+        onSubmit={handleSubmit}
+        submitting={submitting}
+        onCancel={() => router.back()}
+        onCreateCategory={async (name, icon) => {
+          const created = await services.categories.create(name, icon);
+          setCategories((prev) => [...prev, created]);
+          return created;
+        }}
+        onDeleteCategory={async (id) => {
+          await services.categories.delete(id);
+          setCategories((prev) => prev.filter((c) => c.id !== id));
+        }}
+      />
+      <Pressable
+        onPress={() => router.back()}
+        className="items-center py-4 min-h-[44px] justify-center active:opacity-60"
+        style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
+        accessibilityRole="button"
+      >
+        <Text className="text-muted-foreground text-base font-semibold" style={styles.cancelLinkLabel}>Cancel</Text>
+      </Pressable>
+    </KeyboardAwareScrollView>
   );
 }
 

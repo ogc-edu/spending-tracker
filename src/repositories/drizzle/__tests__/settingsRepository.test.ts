@@ -2,7 +2,7 @@
  * Plan 013 — DrizzleSettingsRepository AI-pref methods against the
  * better-sqlite3 harness: all-null defaults for a rowless user, upsert
  * semantics (single row per user, patched fields only), explicit null clears,
- * and coexistence with the plan-010 buffer. Keys never appear here.
+ * and coexistence with the payroll last-run stamp. Keys never appear here.
  */
 import { describe, expect, it } from '@jest/globals';
 import { eq } from 'drizzle-orm';
@@ -66,13 +66,14 @@ describe('DrizzleSettingsRepository AI prefs (plan 013)', () => {
     expect((await repo.aiPrefs(userId)).aiModelDeepseek).toBeNull();
   });
 
-  it('coexists with the plan-010 buffer (same row, both defaults intact)', async () => {
-    const { repo, userId } = await setup();
+  it('coexists with the payroll last-run stamp (same row, neither clobbered)', async () => {
+    const { test, repo, userId } = await setup();
     await repo.setAiPrefs(userId, { aiActiveProvider: 'gemini' });
+    await test.db.update(settings).set({ payrollLastRunAt: 42 }).where(eq(settings.userId, userId));
 
-    expect(await repo.buffer(userId)).toBe(30000); // column default preserved
-
-    await repo.setBuffer(userId, 50000);
+    await repo.setAiPrefs(userId, { aiModelGemini: 'gemini-x' });
+    const row = (await test.db.select().from(settings).where(eq(settings.userId, userId)))[0];
+    expect(row?.payrollLastRunAt).toBe(42);
     expect((await repo.aiPrefs(userId)).aiActiveProvider).toBe('gemini');
   });
 

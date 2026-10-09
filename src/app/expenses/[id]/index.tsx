@@ -21,7 +21,10 @@ import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/components/ToastProvider';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { Card } from '@/components/ui/Card';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -131,17 +134,18 @@ export default function ExpenseDetailScreen() {
   const linked = expense.commitmentPaymentId !== null;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="expense-detail-screen">
+    <ScrollView className="flex-1 bg-background" style={styles.container} contentContainerStyle={styles.content} testID="expense-detail-screen">
       {linked ? (
-        <View style={styles.linkedBadge}>
+        <View className="flex-row items-center justify-center gap-1.5 bg-warning/10 border border-warning/20 rounded-lg py-2.5 mb-4" style={styles.linkedBadge}>
           <Ionicons name="link-outline" size={16} color={colors.warning} />
-          <Text style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
+          <Text className="text-warning text-xs font-bold" style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
         </View>
       ) : null}
 
-      <View style={styles.card}>
-        <View style={styles.amountRow}>
+      <Card>
+        <View className="flex-row items-center gap-3 mb-3" style={styles.amountRow}>
           <Text
+            className="text-3xl font-extrabold text-foreground flex-1 tracking-tight"
             style={styles.amount}
             numberOfLines={1}
             accessibilityLabel={`Expense amount, ${spokenMoneyLabel(expense.amountSen)}`}
@@ -151,49 +155,45 @@ export default function ExpenseDetailScreen() {
           </Text>
           {!linked ? (
             <>
-              {/* Plan 016 follow-up: actions in the card header — light-gray Edit pill + trash top-right. */}
-              <Pressable
+              <Button
+                label="Edit"
+                variant="secondary"
+                icon="create-outline"
                 onPress={() => router.push(`/expenses/${expense.id}/edit` as never)}
-                style={({ pressed }) => [styles.editPill, pressed && styles.pressed]}
-                accessibilityRole="button"
                 testID="expense-detail-edit"
-              >
-                <Ionicons name="create-outline" size={15} color={colors.muted} />
-                <Text style={styles.editPillLabel}>Edit</Text>
-              </Pressable>
-              <Pressable
+              />
+              <IconButton
+                icon="trash-outline"
+                tone="danger"
+                filled
+                label="Delete expense"
                 onPress={handleDelete}
-                style={({ pressed }) => [styles.trashButton, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Delete expense"
                 testID="expense-detail-delete"
-              >
-                <Ionicons name="trash-outline" size={20} color={colors.danger} />
-              </Pressable>
+              />
             </>
           ) : null}
         </View>
-        <View style={styles.row}>
+        <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
           <Ionicons name={category?.icon as never} size={18} color={categoryColor(expense.categoryId)} />
-          <Text style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
+          <Text className="text-base text-foreground font-semibold flex-1" style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
         </View>
-        <View style={styles.row}>
+        <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
           <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-          <Text style={styles.rowValue}>
+          <Text className="text-base text-foreground flex-1" style={styles.rowValue}>
             {formatDayLabel(expense.date)} · {expense.date}
           </Text>
         </View>
         {account ? (
-          <View style={styles.row}>
+          <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
             <Ionicons name="wallet-outline" size={18} color={colors.muted} />
-            <Text style={styles.rowValue}>{account.name}</Text>
+            <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{account.name}</Text>
           </View>
         ) : null}
-        {expense.description ? <Text style={styles.description}>{expense.description}</Text> : null}
-      </View>
+        {expense.description ? <Text className="text-base text-muted-foreground mt-1 italic" style={styles.description}>{expense.description}</Text> : null}
+      </Card>
 
       {linked ? (
-        <Text style={styles.linkedHint}>
+        <Text className="text-xs text-muted-foreground leading-relaxed mb-4 mt-3" style={styles.linkedHint}>
           This expense was created when you marked a commitment payment as paid. To change or remove it, un-pay the
           payment in Commitments.
         </Text>
@@ -234,16 +234,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   linkedBadgeLabel: { color: colors.warning, fontSize: typography.caption, fontWeight: '700' },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-  },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, flex: 1 },
+  amount: { fontSize: typography.display, fontWeight: '800', color: colors.text, flex: 1, fontVariant: moneyFontVariant, letterSpacing: -0.5 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   rowValue: { fontSize: typography.body, color: colors.text, flex: 1 },
   description: {
@@ -253,27 +245,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   linkedHint: { fontSize: typography.caption, color: colors.muted, lineHeight: 18, marginBottom: spacing.lg },
-  editPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    borderRadius: spacing.lg,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    minHeight: 34,
-  },
-  editPillLabel: { color: colors.muted, fontSize: typography.caption, fontWeight: '600' },
-  trashButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.dangerSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   button: {
     borderWidth: 1,
     borderColor: colors.border,

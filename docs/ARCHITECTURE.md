@@ -50,7 +50,7 @@ spending-tracker/
 ├── app/                          # Expo Router
 │   ├── _layout.tsx               # init gate + AuthProvider routing gate
 │   ├── login.tsx / register.tsx  # auth screens (outside tabs)
-│   ├── (tabs)/                   # Dashboard, Expenses, Budgets, Commitments, Analytics, Settings
+│   ├── (tabs)/                   # Dashboard, Expenses, Commitments, Analytics (+ Settings, off-bar)
 │   ├── expenses/{new,[id],edit}.tsx
 │   └── commitments/{new,[id]}.tsx
 ├── src/
@@ -62,7 +62,7 @@ spending-tracker/
 │   ├── repositories/
 │   │   ├── types.ts              # interfaces (future cloud impls implement the same)
 │   │   └── drizzle/              # Drizzle implementations, one file per entity
-│   ├── services/                 # AuthService, ExpenseService, BudgetService, CommitmentService,
+│   ├── services/                 # AuthService, ExpenseService, CommitmentService,
 │   │                             # AccountService, CashFlowService, AnalyticsService
 │   ├── engine/                   # PURE financial engine (no imports of db/services)
 │   ├── ai/
@@ -86,11 +86,10 @@ Refined from the spec schema (money columns suffixed `_sen`; two structural addi
 | `categories` | id, name, icon, type, created_at | seeded with the 12 defaults; **global** (shared by all users); editable in a future version |
 | `accounts` | id, **user_id FK**, name, type (`cash`\|`bank`\|`ewallet`\|`credit_card`), balance_sen, created_at, updated_at | balance_sen on a credit card = **amount owed** (positive); counted negatively in "available" |
 | `expenses` | id, **user_id FK**, amount_sen, category_id FK, description, date (TEXT `YYYY-MM-DD`, local), account_id FK **nullable**, **commitment_payment_id FK nullable UNIQUE**, created_at, updated_at | unique link enforces D3 idempotency (a payment's expense is created exactly once) |
-| `budgets` | id, **user_id FK**, category_id FK **nullable** (NULL = overall), month (1–12), year, amount_sen, **UNIQUE(user_id, category_id, month, year)** | upsert semantics: editing a month's budget replaces its row |
 | `commitments` | id, **user_id FK**, name, type, **total_sen nullable**, remaining_sen, payment_sen, frequency (`monthly`\|`one_time`), start_date, end_date **nullable**, due_date, status (`active`\|`completed`\|`cancelled`), **archived_at nullable**, created_at, updated_at | total_sen NULL = ongoing recurring (rent/subscription); fixed otherwise; `archived_at` = soft-delete (C1, plan 008) |
 | `commitment_payments` | id, **user_id FK**, commitment_id FK, amount_sen, due_date, paid_date **nullable**, status (`paid`) | **stores only PAID payments** (see §7); unpaid schedule is derived |
 
-Foreign keys enforced (PRAGMA foreign_keys = ON). Indexes: `users(email)` (unique covers it), `expenses(date)`, `expenses(category_id)`, `budgets(user_id,category_id,month,year)` (unique covers it), `commitments(status)`, `commitment_payments(commitment_id)`, plus a `user_id` index on each financial table.
+Foreign keys enforced (PRAGMA foreign_keys = ON). Indexes: `users(email)` (unique covers it), `expenses(date)`, `expenses(category_id)`, `commitments(status)`, `commitment_payments(commitment_id)`, plus a `user_id` index on each financial table.
 
 ## 5. State Management
 
@@ -103,15 +102,14 @@ Foreign keys enforced (PRAGMA foreign_keys = ON). Indexes: `users(email)` (uniqu
 `src/engine/` — zero imports from `db/`, `services/`, or `ai/`. Every function takes explicit inputs including a `referenceDate`/month:
 
 - `monthlyTotals(expenses, {month, year}) → {total, perCategory}`
-- `budgetMetrics(budgetSen, spentSen) → {spent, remaining, pctUsed, overBudget}`
 - `commitmentSchedule(commitment) → Payment[]` (derivation, §7)
 - `upcomingCommitments(commitments, paidPayments, windowEnd) → {total, items}` (unpaid, due < windowEnd, incl. overdue)
-- `safeToSpend({availableSen, upcomingSen, remainingBudgetSen, bufferSen}) → {safe, dailyAllowance}` — PRD §8.4 formula; `safe` may be negative (deficit)
-- `dailyAllowance(safeSen, today, monthEnd) → sen` — integer floor to sen
-- `analytics(expenses, {month, year}, previousMonth) → {total, momChangePct, avgDaily, largest, topCategories, budgetUtilization, projection}`
+- `analytics(expenses, {month, year}, previousMonth) → {total, momChangePct, avgDaily, largest, topCategories, projection}`
+
+Plan 020 removed `budgetMetrics`, `safeToSpend`, `dailyAllowance` and `budgetUtilization` along with budgets, the safety buffer, safe-to-spend and the daily allowance.
 - `projectMonthEnd(spentSen, elapsedDays, daysInMonth)` — `spent ÷ elapsed × daysInMonth`, floor to sen
 
-**Rounding policy (documented, deterministic):** divisions floor to the nearest sen; percentages are displayed with one decimal, computed from integer sen (e.g. `floor(spent×1000/budget)/10`).
+**Rounding policy (documented, deterministic):** divisions floor to the nearest sen; percentages are displayed with one decimal, computed from integer sen (e.g. `floor(change×1000/previous)/10`).
 
 ## 7. Commitment Schedule Derivation
 
@@ -134,26 +132,24 @@ Day-of-month clamping: when a month lacks the anchor day (e.g., Jan 31 → Feb),
 ```
 Screen (Dashboard) → CashFlowService.snapshot(now)
   → AccountRepository.sumBalances (credit-card owed amounts subtracted)
-  → ExpenseRepository.sumByMonth
-  → BudgetRepository.overallFor(month, year)
-  → CommitmentRepository.allActive + paidPayments
-  → engine.safeToSpend(...)            // PRD §8.4
-  → typed snapshot {available, spent, budget, remaining, upcoming, safe, daily, breakdown[{label, amount}]}
+  → ExpenseRepository.listForMonth → engine.monthlyTotals
+  → CommitmentRepository.list + paidPayments → engine.upcomingCommitments(…, nextMonthStart)
+  → typed snapshot {available, spent, upcoming (= due by end of month), upcomingItems, nextMonth, categorySummary}
 ```
 
-The snapshot is what the UI renders and what "Explain my allowance" sends to AI (with the formula's components).
+The snapshot is what the UI renders and what the Dashboard **"Ask about your money"** box sends to AI (mapped to the ask payload, with this month's and next month's commitments). Plan 020 removed the budget, buffer, safe-to-spend and daily-allowance terms.
 
 ## 9. AI Service
 
 ```ts
 interface AIService {
-  analyze(context: "debt" | "spending" | "allowance", snapshot: FinancialSnapshot): Promise<AIResult>;
+  analyze(context: "debt" | "spending" | "ask", snapshot: FinancialSnapshot, options?: { question?: string }): Promise<AIResult>;
 }
 ```
 
 - Two providers behind the abstraction (A14): `GeminiProvider` (**API-key auth** via `x-goog-api-key`, never OAuth — AQ-format keys live-verified 2026-09-01; v1beta REST) and `DeepSeekProvider` (OpenAI-compatible `chat/completions` + `GET /models` at `api.deepseek.com`, `Authorization: Bearer` — API shape verified from official docs; live check when a user key is added). Both implement `testConnection` / `listModels` / `generate`; **no models are hardcoded — discovery only**, with manual model-ID entry as the fallback.
-- **Input hygiene:** AI receives aggregates and category names only — raw free-text descriptions are **not** sent (reduces sensitive data leakage and prompt-injection surface).
-- **Output hygiene:** response parsed and Zod-validated (`AIResult {summary, points[]}` — presentation only, never merged into financial state). Failures map to a typed `AIUnavailableError` (offline/timeout/HTTP/key).
+- **Input hygiene:** AI receives aggregates and category names only — raw free-text descriptions are **not** sent (reduces sensitive data leakage and prompt-injection surface). Plan 019 adds one exception, made safe: the Dashboard **"Ask about your money"** box sends a user-typed `question` (≤ `MAX_QUESTION_CHARS`) as a **separate, length-capped field** after the snapshot. It is never interpolated into the fixed system instruction, which explicitly tells the model to treat the question as data — not as an instruction that changes the contract — and still forbids raw descriptions.
+- **Output hygiene:** response parsed and Zod-validated (`AIResult {summary, points[]}` — presentation only, never merged into financial state). The parser is tolerant of benign provider variance before validation: markdown fences/prose and single-object array wrappers are unwrapped, a string `points` is coerced, and a list longer than `MAX_POINTS` is truncated — only genuinely malformed output maps to `invalidResponse`. Failures map to a typed `AIUnavailableError` (offline/timeout/HTTP/key).
 - **Keys (BYOK):** user-supplied, per local user, in **expo-secure-store** (`key:{provider}:{userId}`) — never SQLite/Zustand/AsyncStorage; masked in UI; never logged or committed. No bundled key, no OAuth. Active provider + per-provider selected model persist as non-secret preferences in the `settings` table (010). **No automatic fallback** — the user explicitly picks the active provider; with none configured, AI actions show "No AI provider configured" and the app works fully.
 - Adding a future provider = new class behind `AIService`; the engine and UI never change (PRD AI-5).
 
@@ -164,7 +160,6 @@ interface AIService {
 | Register | Login screen → AuthService.register → hash (PBKDF2-SHA256) + insert + session → Redirect to (tabs) |
 | Login / logout | Login screen → AuthService.login → verify → session / logout clears → Redirect; root gate blocks tabs while signed out |
 | Add/edit/delete expense | Screen (Zod form) → ExpenseService → drizzle **transaction** {expense row ± account balance} → screen refetch on focus |
-| Set budget | Screen → BudgetService.upsert (unique-key replace) |
 | Create commitment | Screen → CommitmentService → insert + `remaining_sen = total`; schedule derived, nothing else written |
 | Mark payment paid | Screen → CommitmentService.markPaid (transaction as §7) |
 | Dashboard | §8 pipeline, computed per render |
@@ -176,8 +171,7 @@ interface AIService {
 - **Migration failure at startup** → full-screen error with Retry (no partial state).
 - **Write failures** → Drizzle transaction rollback; user-visible toast; state unchanged.
 - **AI unavailable** → inline error panel on the contextual action only; all other functionality untouched (PRD §11.16, NFR-1).
-- **Deficit state** (safe < 0) → rendered as a warning state, not an error; dashboard prompts "cover commitments + buffer before discretionary spending".
-- **Double-tap / races** → unique constraint on `expenses.commitment_payment_id` + upsert-on-budget-key make writes idempotent.
+- **Double-tap / races** → unique constraint on `expenses.commitment_payment_id` makes mark-paid idempotent.
 
 ## 12. Security Boundaries
 

@@ -15,3 +15,12 @@ export const PROVIDER_ICONS: Record<ConfigurableAIProvider, 'sparkles-outline' |
   gemini: 'sparkles',
   deepseek: 'sparkles-outline',
 };
+
+/**
+ * Plan 016 — the AI status line ("Gemini · key configured / not
+ * configured"). Pure so tests can pin it; the Settings screen renders one
+ * line per provider from the SecureStore key presence (013's config).
+ */
+export function aiStatusLabel(provider: ConfigurableAIProvider, configured: boolean): string {
+  return `${PROVIDER_LABELS[provider]} · key ${configured ? 'configured' : 'not configured'}`;
+}

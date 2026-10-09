@@ -3,14 +3,19 @@
  * opened from the expense form's "+" chip (which replaced the built-in
  * "Other" chip position). A name input + a curated icon grid + Save:
  * pure typing is the input here (short, single field), and the save path is
+ * The sheet lifts itself above the soft keyboard (useKeyboardInset), so the
+ * name field stays visible while it is being typed. The save path is
  * validated (empty name / duplicate surfaced inline; the service is the
  * source of truth — errors bubble to `error`).
  */
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '@/theme';
 import { CATEGORY_ICON_CHOICES } from './categoryMeta';
+import { Sheet } from '@/components/ui/Sheet';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
 
 export interface CategoryAddSheetProps {
   visible: boolean;
@@ -57,23 +62,24 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} accessibilityViewIsModal>
-      <View style={styles.overlay}>
-        <Pressable style={styles.scrim} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
-        <View style={styles.card} testID="category-add-sheet">
-          <Text style={styles.title} testID="category-add-title">
-            Add category
-          </Text>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Add category"
+      titleTestID="category-add-title"
+      closeLabel="Close"
+      cardTestID="category-add-sheet"
+    >
 
-          <Text style={styles.label} nativeID="category-add-label-name">
+          <Text className="text-sm font-semibold text-foreground mb-1.5 mt-3" style={styles.label} nativeID="category-add-label-name">
             Name
           </Text>
-          <TextInput
+          <Input
+            className={error ? 'border-destructive' : undefined}
             style={[styles.input, error && styles.inputError]}
             value={name}
             onChangeText={setName}
             placeholder="e.g. Pets"
-            placeholderTextColor={colors.muted}
             maxLength={24}
             autoFocus
             editable={!saving}
@@ -82,12 +88,12 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
             testID="category-add-name"
           />
           {error ? (
-            <Text style={styles.fieldError} testID="category-add-error">
+            <Text className="mt-1 text-xs text-destructive" style={styles.fieldError} testID="category-add-error">
               {error}
             </Text>
           ) : null}
 
-          <Text style={styles.label}>Icon</Text>
+          <Text className="text-sm font-semibold text-foreground mb-2 mt-3" style={styles.label}>Icon</Text>
           <View style={styles.iconGrid}>
             {CATEGORY_ICON_CHOICES.map((choice) => {
               const selected = icon === choice;
@@ -107,41 +113,26 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
             })}
           </View>
 
-          <Pressable
-            onPress={() => void onSavePress()}
-            style={[styles.save, (saving || name.trim() === '') && styles.buttonDisabled]}
-            disabled={saving || name.trim() === ''}
-            accessibilityRole="button"
-            testID="category-add-save"
-          >
-            <Text style={styles.saveLabel}>{saving ? 'Saving…' : 'Save category'}</Text>
-          </Pressable>
-          <Pressable
-            onPress={onClose}
-            style={styles.cancel}
-            disabled={saving}
-            accessibilityRole="button"
-            testID="category-add-cancel"
-          >
-            <Text style={styles.cancelLabel}>Cancel</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+        <Button
+          label="Save category"
+          variant="primary"
+          busy={saving}
+          disabled={saving || name.trim() === ''}
+          onPress={() => void onSavePress()}
+          testID="category-add-save"
+        />
+        <Button
+          label="Cancel"
+          variant="secondary"
+          disabled={saving}
+          onPress={onClose}
+          testID="category-add-cancel"
+        />
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  card: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    padding: spacing.xl,
-    paddingBottom: spacing.xxl,
-  },
-  title: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.lg },
   label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs, marginTop: spacing.md },
   input: {
     borderWidth: 1,
@@ -168,25 +159,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   iconSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  save: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-  },
-  saveLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
-  cancel: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.md,
-    backgroundColor: colors.background,
-  },
-  cancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.7 },
 });

@@ -1,15 +1,25 @@
+import '../../global.css';
 import { useCallback, useEffect, useState } from 'react';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
+import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PortalHost } from '@rn-primitives/portal';
 import { initDb } from '@/db';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { DbErrorScreen } from '@/components/DbErrorScreen';
 import { DbLoadingScreen } from '@/components/DbLoadingScreen';
 import { ToastProvider } from '@/components/ToastProvider';
+
+// Prevent splash screen from auto-hiding until initial fonts, db, and auth are verified
+SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.setOptions({
+  duration: 350,
+  fade: true,
+});
 
 // TEMP (QA sweep only): dev-build LogBox strips block bottom taps while
 // offline (dev-tools websocket failures). REVERT BEFORE COMMIT.
@@ -29,6 +39,12 @@ type DbState = { status: 'loading' } | { status: 'error'; error: unknown } | { s
 
 function RootStack() {
   const { status } = useAuth();
+
+  useEffect(() => {
+    if (status !== 'loading') {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [status]);
 
   if (status === 'loading') {
     return <DbLoadingScreen />;
@@ -72,6 +88,12 @@ export default function RootLayout() {
     runInit();
   }, [runInit]);
 
+  useEffect(() => {
+    if (dbState.status === 'error') {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [dbState.status]);
+
   if (!fontsLoaded || dbState.status === 'loading') {
     return <DbLoadingScreen />;
   }
@@ -87,6 +109,7 @@ export default function RootLayout() {
           <RootStack />
         </ToastProvider>
       </AuthProvider>
+      <PortalHost />
     </SafeAreaProvider>
   );
 }

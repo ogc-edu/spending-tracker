@@ -1,44 +1,73 @@
 /**
- * Commitments tab (plan 008 / COM-1..4) — the active commitments list.
+ * Commitments tab (Plan 006 — Commitments & Subscriptions Screen Redesign)
  *
- * Per row: semantic type icon, name, next due (first UNPAID slot), an
- * OVERDUE badge in danger color when that slot is in the past (never hidden —
- * overdue stays visible), a status badge (completed / cancelled), and
- * paid/total progress like "2/6" for fixed schedules (paid count only for
- * ongoing, which has no cap).
+ * Overhauled into sleek Digital Passes representing the 3 obligation models:
+ * 1. Fixed Amortizing Loan Pass: (testID="loan-card-{id}")
+ *    - Displays payoff status, progress via BudgetMeter, remaining balance, months to maturity.
+ * 2. Recurring Subscription Pass: (testID="subscription-card-{id}")
+ *    - Displays monthly fee via MoneyDisplay, renewal countdown, auto-debit account.
+ * 3. One-Off Obligation Pass: (testID="obligation-card-{id}")
+ *    - Displays maturity date, total amount due via MoneyDisplay, settled status.
  *
- * Derived values come from the pure engine over service-fetched rows (the
- * budgets-screen pattern — no SQL, no money math here). The list re-reads
- * SQLite on focus (A4) so mark-paid/cancel/archive elsewhere appears on
- * return. Archived commitments (C1) live in their own bottom section with a
- * Restore action — hidden from the main list, never deleted data.
+ * Retains all preserved test contracts:
+ * - testID="commitment-row-{id}", testID="commitment-name-{id}", testID="commitment-next-due-{id}"
+ * - testID="commitments-screen", testID="commitments-list"
+ * - testID="commitments-archived-toggle", testID="commitment-restore-{id}", testID="add-commitment-fab"
+ * - testID="commitments-empty", testID="commitments-loading", testID="commitments-error"
+ *
+ * Automated "Mark as Paid" ledger synchronization workflow:
+ * - Linked expense created, funding account debited, commitment marked paid, remaining balance updated.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
-import type { Commitment, CommitmentPayment } from '@/db/schema';
+import type { Account, Commitment, CommitmentPayment } from '@/db/schema';
 import { CommitmentService } from '@/services/CommitmentService';
-import { commitmentSchedule, type CommitmentLike, type ScheduledPayment } from '@/engine/commitments';
+import { AccountService } from '@/services/AccountService';
+import {
+  commitmentSchedule,
+  compareByNextDue,
+  type CommitmentLike,
+  type ScheduledPayment,
+} from '@/engine/commitments';
+import { useUiStore } from '@/store/uiStore';
 import { addMonthsClamped, formatDayLabel, todayLocal } from '@/utils/dates';
 import { colors, spacing, typography } from '@/theme';
 import { COMMITMENT_TYPE_ICONS } from '@/components/commitmentMeta';
 import { categoryColor } from '@/components/categoryMeta';
 import { EmptyState } from '@/components/EmptyState';
+import { Fab } from '@/components/ui/Fab';
+import { InlineError } from '@/components/ui/InlineError';
+import { SkeletonRow } from '@/components/ui/Skeleton';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { BudgetMeter } from '@/components/ui/BudgetMeter';
+import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
+import { StatusPill } from '@/components/ui/StatusPill';
+import { PaymentFlowSheet } from '@/components/PaymentFlowSheet';
 import { useToast } from '@/components/ToastProvider';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Progress "2/6" for bounded schedules; free-form paid count for ongoing. */
-function progressLabel(commitment: Commitment, paid: CommitmentPayment[], slots: ScheduledPayment[]): string {
-  if (commitment.totalSen !== null) {
-    return `${paid.length}/${slots.length}`;
-  }
-  return `${paid.length} paid`;
+function daysUntilDue(todayStr: string, dueStr: string): number {
+  const [y1, m1, d1] = todayStr.split('-').map(Number);
+  const [y2, m2, d2] = dueStr.split('-').map(Number);
+  const ms1 = Date.UTC(y1, m1 - 1, d1);
+  const ms2 = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((ms2 - ms1) / (1000 * 60 * 60 * 24));
+}
+
+type ObligationKind = 'loan' | 'subscription' | 'obligation';
+
+function getObligationKind(commitment: Commitment): ObligationKind {
+  if (commitment.frequency === 'one_time') return 'obligation';
+  if (commitment.totalSen !== null) return 'loan';
+  return 'subscription';
 }
 
 /**
@@ -53,45 +82,70 @@ function scheduleFor(commitment: Commitment): ScheduledPayment[] {
 
 export default function CommitmentsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { authService } = useAuth();
   const toast = useToast();
+  const lastUsedAccountId = useUiStore((s) => s.lastUsedAccountId);
 
+  const repos = useMemo(() => repositories(), []);
   const service = useMemo(() => {
-    const repos = repositories();
     return new CommitmentService(repos.commitments, authService);
-  }, [authService]);
+  }, [repos.commitments, authService]);
 
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [archived, setArchived] = useState<Commitment[]>([]);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [payments, setPayments] = useState<CommitmentPayment[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Mark as Paid flow sheet
+  const [payingState, setPayingState] = useState<{
+    commitment: Commitment;
+    slot: ScheduledPayment;
+  } | null>(null);
+
   const load = useCallback(async () => {
     try {
-      const [rows, arch, paid] = await Promise.all([
+      const accountService = repos.accounts
+        ? new AccountService(repos.accounts, authService)
+        : null;
+
+      const [rows, arch, paid, accs] = await Promise.all([
         service.list(),
         service.listArchived(),
         service.allPaidPayments(),
+        accountService ? accountService.list() : Promise.resolve([]),
       ]);
       setCommitments(rows);
       setArchived(arch);
       setPayments(paid);
+      setAccounts(accs);
       setError(null);
     } catch (loadError: unknown) {
       setError(errMsg(loadError));
     } finally {
       setLoading(false);
     }
-  }, [service]);
+  }, [service, repos.accounts, authService]);
 
   useFocusEffect(
     useCallback(() => {
       void load();
     }, [load]),
   );
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
 
   /** dueDate of the first unpaid slot, or null (all paid / no schedule). */
   const nextDue = useCallback(
@@ -105,6 +159,25 @@ export default function CommitmentsScreen() {
     [payments],
   );
 
+  /**
+   * Default order: soonest obligation first (overdue at the top, "All paid"
+   * at the bottom) — the comparator is the engine's, this only feeds it the
+   * derived next-due dates.
+   */
+  const orderByNextDue = useCallback(
+    (rows: Commitment[]): Commitment[] =>
+      [...rows].sort((a, b) =>
+        compareByNextDue(
+          { nextDue: nextDue(a), name: a.name, id: a.id },
+          { nextDue: nextDue(b), name: b.name, id: b.id },
+        ),
+      ),
+    [nextDue],
+  );
+
+  const orderedCommitments = useMemo(() => orderByNextDue(commitments), [commitments, orderByNextDue]);
+  const orderedArchived = useMemo(() => orderByNextDue(archived), [archived, orderByNextDue]);
+
   const handleRestore = (commitment: Commitment) => {
     setBusy(true);
     service
@@ -116,80 +189,412 @@ export default function CommitmentsScreen() {
 
   const today = todayLocal();
 
-  const renderRow = (commitment: Commitment) => {
+  const getAutoDebitAccount = (commitment: Commitment): string => {
+    const lastUsed = accounts.find((a) => a.id === lastUsedAccountId);
+    if (lastUsed) return lastUsed.name;
+    if (accounts.length > 0) return accounts[0].name;
+    return "Touch 'n Go";
+  };
+
+  const handleOpenMarkPaid = (commitment: Commitment, dueDate: string) => {
+    const slot = scheduleFor(commitment).find((s) => s.dueDate === dueDate) ?? {
+      dueDate,
+      amountSen: commitment.paymentSen,
+      index: 0,
+    };
+    setPayingState({ commitment, slot });
+  };
+
+  const handleConfirmMarkPaid = async (accountId: number | null) => {
+    if (!payingState) return;
+    setBusy(true);
+    try {
+      await service.markPaid(payingState.commitment.id, payingState.slot.dueDate, accountId);
+      if (accountId !== null) useUiStore.getState().setLastUsedAccount(accountId);
+      setPayingState(null);
+      toast.show('Payment marked paid');
+      await load();
+    } catch (paymentError: unknown) {
+      toast.show(`Could not mark payment paid: ${errMsg(paymentError)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renderDigitalPass = (commitment: Commitment) => {
+    const kind = getObligationKind(commitment);
     const due = nextDue(commitment);
     const overdue = due !== null && due < today;
-    const slots = scheduleFor(commitment);
-    const paid = payments.filter((p) => p.commitmentId === commitment.id);
-    const progress = progressLabel(commitment, paid, slots);
+    const canMarkPaid = commitment.status === 'active' && commitment.archivedAt === null;
+    const iconName = (COMMITMENT_TYPE_ICONS[commitment.type as keyof typeof COMMITMENT_TYPE_ICONS] ?? 'calendar-outline') as never;
+
+    if (kind === 'loan') {
+      const totalSen = commitment.totalSen ?? 0;
+      const remainingSen = commitment.remainingSen;
+      const paidSen = Math.max(0, totalSen - remainingSen);
+      const paidKeys = new Set(
+        payments.filter((p) => p.commitmentId === commitment.id).map((p) => p.dueDate),
+      );
+      const unpaidSlots = scheduleFor(commitment).filter((slot) => !paidKeys.has(slot.dueDate));
+      const monthsLeft = unpaidSlots.length;
+      const payoffPercent = totalSen > 0 ? (paidSen / totalSen) * 100 : remainingSen === 0 ? 100 : 0;
+
+      return (
+        <Pressable
+          key={commitment.id}
+          onPress={() => router.push(`/commitments/${commitment.id}` as never)}
+          style={({ pressed }) => [styles.cardPressable, pressed && styles.pressed]}
+          accessibilityRole="button"
+          testID={`commitment-row-${commitment.id}`}
+        >
+          <BentoCard
+            testID={`loan-card-${commitment.id}`}
+            className="border border-border/60 bg-card rounded-2xl p-4"
+          >
+            {/* Header: Icon, Name, Status Pill */}
+            <View className="flex-row items-center gap-2.5">
+              <View
+                style={[styles.iconWrap, { backgroundColor: `${categoryColor(commitment.id)}22` }]}
+              >
+                <Ionicons name={iconName} size={20} color={categoryColor(commitment.id)} />
+              </View>
+              <Text
+                style={styles.name}
+                numberOfLines={1}
+                testID={`commitment-name-${commitment.id}`}
+              >
+                {commitment.name}
+              </Text>
+              <StatusPill
+                variant={
+                  commitment.status === 'completed'
+                    ? 'healthy'
+                    : commitment.status === 'cancelled'
+                      ? 'neutral'
+                      : overdue
+                        ? 'danger'
+                        : 'accent'
+                }
+                label={
+                  commitment.status === 'completed'
+                    ? 'Paid Off'
+                    : commitment.status === 'cancelled'
+                      ? 'Cancelled'
+                      : overdue
+                        ? 'Overdue'
+                        : 'Active'
+                }
+                dot
+              />
+            </View>
+
+            {/* Hairline Divider */}
+            <View className="border-t border-border/40 my-3" />
+
+            {/* Repayment and Next Due */}
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-1.5 flex-wrap">
+                <Text className="text-xs text-muted-foreground font-medium">Repayment:</Text>
+                <MoneyDisplay amountInSen={commitment.paymentSen} size="sm" />
+                <Text className="text-xs text-muted-foreground font-medium">/ month</Text>
+              </View>
+              <Text
+                testID={`commitment-next-due-${commitment.id}`}
+                className={`text-xs ${overdue ? 'text-destructive font-bold' : 'text-muted-foreground font-semibold'}`}
+              >
+                {due !== null
+                  ? `${overdue ? 'Overdue · ' : 'Next due · '}${formatDayLabel(due)}`
+                  : 'All paid'}
+              </Text>
+            </View>
+
+            {/* Balance and Progress */}
+            <View className="flex-row items-center justify-between mt-2 flex-wrap gap-1">
+              <View className="flex-row items-center gap-1 flex-wrap">
+                <Text className="text-xs text-muted-foreground font-medium">Balance:</Text>
+                <MoneyDisplay amountInSen={remainingSen} size="xs" />
+                <Text className="text-xs text-muted-foreground font-medium">/</Text>
+                <MoneyDisplay amountInSen={totalSen} size="xs" />
+                <Text className="text-xs text-muted-foreground font-medium">
+                  ({monthsLeft} {monthsLeft === 1 ? 'mo' : 'mos'} left)
+                </Text>
+              </View>
+              <Text className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                {payoffPercent.toFixed(1)}% Paid Off
+              </Text>
+            </View>
+            <BudgetMeter
+              spentSen={paidSen}
+              totalSen={totalSen}
+              customColor="bg-emerald-500"
+              heightClass="h-2"
+              className="mt-2"
+            />
+
+            {/* Mark as Paid Action */}
+            {canMarkPaid && due !== null ? (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleOpenMarkPaid(commitment, due);
+                }}
+                disabled={busy}
+                accessibilityRole="button"
+                className="mt-3 flex-row items-center justify-center gap-1.5 bg-emerald-600 dark:bg-emerald-500 rounded-xl py-2 px-3 min-h-[44px]"
+                testID={`mark-paid-button-${commitment.id}`}
+              >
+                <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
+                <Text className="text-white text-xs font-bold">Mark as Paid</Text>
+              </Pressable>
+            ) : null}
+          </BentoCard>
+        </Pressable>
+      );
+    }
+
+    if (kind === 'subscription') {
+      const daysUntil = due ? daysUntilDue(today, due) : null;
+      let renewalCountdown = 'All paid';
+      if (due !== null && daysUntil !== null) {
+        if (daysUntil < 0) renewalCountdown = `Overdue · ${formatDayLabel(due)}`;
+        else if (daysUntil === 0) renewalCountdown = 'Renews today';
+        else if (daysUntil === 1) renewalCountdown = 'Renews in 1 day';
+        else renewalCountdown = `Renews in ${daysUntil} days`;
+      }
+
+      return (
+        <Pressable
+          key={commitment.id}
+          onPress={() => router.push(`/commitments/${commitment.id}` as never)}
+          style={({ pressed }) => [styles.cardPressable, pressed && styles.pressed]}
+          accessibilityRole="button"
+          testID={`commitment-row-${commitment.id}`}
+        >
+          <BentoCard
+            testID={`subscription-card-${commitment.id}`}
+            className="border border-border/60 bg-card rounded-2xl p-4"
+          >
+            {/* Header */}
+            <View className="flex-row items-center gap-2.5">
+              <View
+                style={[styles.iconWrap, { backgroundColor: `${categoryColor(commitment.id)}22` }]}
+              >
+                <Ionicons name={iconName} size={20} color={categoryColor(commitment.id)} />
+              </View>
+              <Text
+                style={styles.name}
+                numberOfLines={1}
+                testID={`commitment-name-${commitment.id}`}
+              >
+                {commitment.name}
+              </Text>
+              <StatusPill
+                variant={
+                  commitment.status === 'cancelled'
+                    ? 'neutral'
+                    : overdue
+                      ? 'danger'
+                      : 'accent'
+                }
+                label={
+                  commitment.status === 'cancelled'
+                    ? 'Cancelled'
+                    : overdue
+                      ? 'Overdue'
+                      : 'Active'
+                }
+                dot
+              />
+            </View>
+
+            {/* Hairline Divider */}
+            <View className="border-t border-border/40 my-3" />
+
+            {/* Monthly Fee and Renewal Countdown */}
+            <View className="flex-row items-center justify-between flex-wrap gap-1">
+              <View className="flex-row items-center gap-1.5 flex-wrap">
+                <Text className="text-xs text-muted-foreground font-medium">Monthly Fee:</Text>
+                <MoneyDisplay amountInSen={commitment.paymentSen} size="sm" />
+                <Text className="text-xs text-muted-foreground font-medium">•</Text>
+                <Text
+                  testID={`commitment-next-due-${commitment.id}`}
+                  className={`text-xs ${overdue ? 'text-destructive font-bold' : 'text-muted-foreground font-semibold'}`}
+                >
+                  {renewalCountdown}
+                </Text>
+              </View>
+            </View>
+
+            {/* Auto-debit Account */}
+            <Text className="text-xs text-muted-foreground mt-2 font-medium">
+              Auto-debit Account:{' '}
+              <Text className="text-foreground font-semibold">
+                {getAutoDebitAccount(commitment)}
+              </Text>
+            </Text>
+
+            {/* Mark as Paid Action */}
+            {canMarkPaid && due !== null ? (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleOpenMarkPaid(commitment, due);
+                }}
+                disabled={busy}
+                accessibilityRole="button"
+                className="mt-3 flex-row items-center justify-center gap-1.5 bg-emerald-600 dark:bg-emerald-500 rounded-xl py-2 px-3 min-h-[44px]"
+                testID={`mark-paid-button-${commitment.id}`}
+              >
+                <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
+                <Text className="text-white text-xs font-bold">Mark as Paid</Text>
+              </Pressable>
+            ) : null}
+          </BentoCard>
+        </Pressable>
+      );
+    }
+
+    // One-Off Obligation Pass
     return (
       <Pressable
         key={commitment.id}
         onPress={() => router.push(`/commitments/${commitment.id}` as never)}
-        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.cardPressable, pressed && styles.pressed]}
         accessibilityRole="button"
         testID={`commitment-row-${commitment.id}`}
       >
-        <View style={[styles.iconWrap, { backgroundColor: `${categoryColor(commitment.id)}22` }]}>
-          <Ionicons
-            name={(COMMITMENT_TYPE_ICONS[commitment.type as keyof typeof COMMITMENT_TYPE_ICONS] ?? 'calendar-outline') as never}
-            size={20}
-            color={categoryColor(commitment.id)}
-          />
-        </View>
-        <View style={styles.body}>
-          <Text style={styles.name} numberOfLines={1}>
-            {commitment.name}
-          </Text>
-          <View style={styles.metaLine}>
-            {due !== null ? (
-              <Text
-                style={[styles.dueText, overdue && styles.overdueText]}
-                testID={`commitment-next-due-${commitment.id}`}
-              >
-                {overdue ? 'Overdue · ' : 'Next due · '}
-                {formatDayLabel(due)}
-              </Text>
-            ) : (
-              <Text style={styles.dueText}>All paid</Text>
-            )}
-            <Text style={styles.progress}>{progress}</Text>
+        <BentoCard
+          testID={`obligation-card-${commitment.id}`}
+          className="border border-border/60 bg-card rounded-2xl p-4"
+        >
+          {/* Header */}
+          <View className="flex-row items-center gap-2.5">
+            <View
+              style={[styles.iconWrap, { backgroundColor: `${categoryColor(commitment.id)}22` }]}
+            >
+              <Ionicons name={iconName} size={20} color={categoryColor(commitment.id)} />
+            </View>
+            <Text
+              style={styles.name}
+              numberOfLines={1}
+              testID={`commitment-name-${commitment.id}`}
+            >
+              {commitment.name}
+            </Text>
+            <StatusPill
+              variant={
+                commitment.status === 'completed' || due === null
+                  ? 'healthy'
+                  : commitment.status === 'cancelled'
+                    ? 'neutral'
+                    : overdue
+                      ? 'danger'
+                      : 'accent'
+              }
+              label={
+                commitment.status === 'completed' || due === null
+                  ? 'Settled'
+                  : commitment.status === 'cancelled'
+                    ? 'Cancelled'
+                    : overdue
+                      ? 'Overdue'
+                      : 'Active'
+              }
+              dot
+            />
           </View>
-        </View>
-        {commitment.status !== 'active' ? (
-          <View style={[styles.statusBadge, commitment.status === 'cancelled' && styles.statusCancelled]}>
-            <Text style={styles.statusLabel}>{commitment.status === 'completed' ? 'Done' : 'Cancelled'}</Text>
+
+          {/* Hairline Divider */}
+          <View className="border-t border-border/40 my-3" />
+
+          {/* Maturity Date and Total Amount Due */}
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xs text-muted-foreground font-medium">Maturity Date:</Text>
+            <Text
+              testID={`commitment-next-due-${commitment.id}`}
+              className={`text-xs ${overdue ? 'text-destructive font-bold' : 'text-muted-foreground font-semibold'}`}
+            >
+              {due !== null
+                ? overdue
+                  ? `Overdue · ${formatDayLabel(due)}`
+                  : formatDayLabel(due)
+                : 'Settled'}
+            </Text>
           </View>
-        ) : null}
-        <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+
+          <View className="flex-row items-center justify-between mt-2">
+            <Text className="text-xs text-muted-foreground font-medium">Total Amount Due:</Text>
+            <MoneyDisplay amountInSen={commitment.paymentSen} size="sm" />
+          </View>
+
+          {/* Mark as Paid Action */}
+          {canMarkPaid && due !== null ? (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                handleOpenMarkPaid(commitment, due);
+              }}
+              disabled={busy}
+              accessibilityRole="button"
+              className="mt-3 flex-row items-center justify-center gap-1.5 bg-emerald-600 dark:bg-emerald-500 rounded-xl py-2 px-3 min-h-[44px]"
+              testID={`mark-paid-button-${commitment.id}`}
+            >
+              <Ionicons name="checkmark-circle-outline" size={16} color="#ffffff" />
+              <Text className="text-white text-xs font-bold">Mark as Paid</Text>
+            </Pressable>
+          ) : null}
+        </BentoCard>
       </Pressable>
     );
   };
 
   return (
-    <View style={styles.container} testID="commitments-screen">
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    <View
+      className="flex-1 bg-background"
+      style={{ paddingTop: insets.top }}
+      testID="commitments-screen"
+    >
+      {error ? <InlineError message={error} testID="commitments-error" /> : null}
 
       {loading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator />
+        <View style={styles.centerBox} testID="commitments-loading">
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: insets.bottom + 88 },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={colors.muted}
+            />
+          }
+        >
           {commitments.length === 0 ? (
             <EmptyState
               icon="calendar-outline"
               title="No commitments"
               body="Debts, bills, rent and installments — mark payments paid as they happen."
-              action={{ label: 'Add commitment', onPress: () => router.push('/commitments/new' as never) }}
+              action={{
+                label: 'Add commitment',
+                onPress: () => router.push('/commitments/new' as never),
+              }}
               testID="commitments-empty"
             />
           ) : (
-            commitments.map(renderRow)
+            <View testID="commitments-list" className="gap-3">
+              {orderedCommitments.map(renderDigitalPass)}
+            </View>
           )}
 
           {archived.length > 0 ? (
-            <>
+            <View className="mt-6">
               {/* Collapsed by default — one tappable section row; tap to expand. */}
               <Pressable
                 onPress={() => setArchivedOpen((v) => !v)}
@@ -216,7 +621,7 @@ export default function CommitmentsScreen() {
                   <Text style={styles.sectionNote}>
                     Restore anytime — payments and expenses stay intact.
                   </Text>
-                  {archived.map((commitment) => (
+                  {orderedArchived.map((commitment) => (
                     <View key={commitment.id} style={styles.archivedRow}>
                       <Text style={[styles.name, styles.archivedName]} numberOfLines={1}>
                         {commitment.name}
@@ -235,57 +640,59 @@ export default function CommitmentsScreen() {
                   ))}
                 </>
               ) : null}
-            </>
+            </View>
           ) : null}
 
           <View style={styles.spacer} />
         </ScrollView>
       )}
 
-      <Pressable
+      <Fab
         onPress={() => router.push('/commitments/new' as never)}
-        style={({ pressed }) => (pressed ? [styles.fab, styles.fabPressed] : styles.fab)}
-        accessibilityRole="button"
-        accessibilityLabel="Add commitment"
+        label="Add commitment"
         testID="add-commitment-fab"
-      >
-        <Ionicons name="add" size={30} color="#fff" />
-      </Pressable>
+      />
+
+      <PaymentFlowSheet
+        visible={payingState !== null}
+        slot={payingState?.slot ?? { dueDate: '', amountSen: 0, index: 0 }}
+        accounts={accounts}
+        initialAccountId={
+          lastUsedAccountId !== null && accounts.some((a) => a.id === lastUsedAccountId)
+            ? lastUsedAccountId
+            : accounts[0]?.id ?? null
+        }
+        busy={busy}
+        onConfirm={handleConfirmMarkPaid}
+        onCancel={() => setPayingState(null)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { paddingTop: spacing.md, paddingBottom: spacing.xxl * 2 },
-  errorText: {
-    fontSize: typography.body,
-    color: colors.danger,
-    paddingHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: spacing.md,
   },
-  centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2 },
-  row: {
-    flexDirection: 'row',
+  centerBox: { alignItems: 'center', paddingTop: spacing.xxl * 2, paddingHorizontal: 16 },
+  cardPressable: {
+    marginBottom: 0,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: spacing.md,
+    justifyContent: 'center',
   },
+  name: { fontSize: typography.body, fontWeight: '700', color: colors.text, flex: 1 },
   archivedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     minHeight: 48,
-    marginHorizontal: spacing.xl,
     marginBottom: spacing.sm,
-    marginTop: spacing.md,
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -294,48 +701,9 @@ const styles = StyleSheet.create({
   },
   archivedHeaderLabel: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
   archivedHeaderHint: { flex: 1, fontSize: typography.caption, color: colors.muted, textAlign: 'right' },
-  iconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  body: { flex: 1 },
-  name: { fontSize: typography.body, fontWeight: '700', color: colors.text },
-  metaLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
-  dueText: { fontSize: typography.caption, color: colors.muted, fontWeight: '600', flexShrink: 1 },
-  overdueText: { color: colors.danger, fontWeight: '700' },
-  progress: {
-    fontSize: typography.caption,
-    color: colors.text,
-    fontWeight: '600',
-    backgroundColor: colors.background,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  statusBadge: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-  },
-  statusCancelled: { backgroundColor: colors.dangerSoft },
-  statusLabel: { fontSize: typography.caption, fontWeight: '700', color: colors.accent },
-  sectionTitle: {
-    fontSize: typography.emphasis,
-    fontWeight: '800',
-    color: colors.text,
-    marginHorizontal: spacing.xl,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
-    letterSpacing: -0.2,
-  },
   sectionNote: {
     fontSize: typography.caption,
     color: colors.muted,
-    marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
     fontWeight: '500',
   },
@@ -344,7 +712,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     backgroundColor: colors.surface,
-    marginHorizontal: spacing.xl,
     marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -352,25 +719,8 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   archivedName: { flex: 1, color: colors.muted, fontWeight: '500' },
-  restoreButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  restoreButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44, paddingHorizontal: 8 },
   restoreLabel: { color: colors.accent, fontSize: typography.caption, fontWeight: '700' },
   spacer: { height: spacing.lg },
-  fab: {
-    position: 'absolute',
-    right: spacing.xl,
-    bottom: spacing.xl,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 6,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  fabPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.8 },
 });

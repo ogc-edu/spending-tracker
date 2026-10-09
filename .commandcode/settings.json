@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(ls:*)",
+      "Shell(xcrun:*)",
+      "Shell(which adb emulator 2>&1; echo \"---ANDROID_HOME---\"; echo \"$ANDROID_HOME\"; ls ~/Library/Android/sdk 2>&1 | head -5; echo \"---java---\"; which java 2>&1)",
+      "Shell(~/Library/Android/sdk/platform-tools/adb devices 2>&1; echo \"---AVDS---\"; ~/Library/Android/sdk/emulator/emulator -list-avds 2>&1; echo \"---APK---\"; ls android/app/build/outputs/apk/debug/ 2>&1 | head)",
+      "Shell(adb:*)",
+      "Shell(npm:*)",
+      "Shell(npx expo lint 2 >& 1)",
+      "Shell(npx jest 2 >& 1)",
+      "Shell(grep:*)",
+      "Shell(git:*)",
+      "Shell(npx jest src/components/__tests__/toastProvider.test.tsx src/components/__tests__/emptyState.test.tsx 2 >& 1)",
+      "Shell(ls -la android/gradlew 2>&1; echo \"--- java ---\"; java -version 2>&1 | head -3; echo \"--- ANDROID_HOME ---\"; echo \"$ANDROID_HOME\"; echo \"--- adb ---\"; adb devices -l; echo \"--- usb ---\"; system_profiler SPUSBDataType 2>/dev/null | grep -iE \"android|oppo|oneplus|xiaomi|samsung|pixel\" | head)",
+      "Shell(./gradlew:*)",
+      "Shell(find android/app/build -name \"index.android.bundle\" -exec ls -lh {} \\; 2>/dev/null; echo \"=== source edit time ===\"; ls -l src/components/ui/Fab.tsx; echo \"=== device ===\"; adb devices -l)",
+      "Shell(for i in $(seq 1 20); do state=$(adb get-state 2>/dev/null); if [ \"$state\" = \"device\" ]; then echo \"AUTHORIZED\"; adb devices -l; exit 0; fi; sleep 2; done; echo \"STILL_NOT_AUTHORIZED\"; adb devices -l)",
+      "Shell(adb shell am force-stop com.anonymous.spendingtracker; adb shell monkey -p com.anonymous.spendingtracker -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6; adb shell dumpsys activity activities | grep -E \"mResumedActivity|topResumedActivity\" | head -3)",
+      "Shell(adb exec-out screencap -p > /private/tmp/commandcode-501/-Users-ooiguancheng-Documents-projects-spending-tracker/12916023-8f36-409a-bef2-81abb16ec5d8/scratchpad/home.png && ls -lh /private/tmp/commandcode-501/-Users-ooiguancheng-Documents-projects-spending-tracker/12916023-8f36-409a-bef2-81abb16ec5d8/scratchpad/home.png)",
+      "Shell(adb shell input tap 404 2657; sleep 3; adb exec-out screencap -p > /private/tmp/commandcode-501/-Users-ooiguancheng-Documents-projects-spending-tracker/12916023-8f36-409a-bef2-81abb16ec5d8/scratchpad/expenses.png; echo captured)",
+      "Shell(git commit -F - <<'EOF' fix(ui): restore the Fab fill on Android — masked ripple, not borderless The add-expense FAB rendered as a bare white \"+\" with no green circle on Android. Root cause: `android_ripple={{ borderless: true }}`. On the New Architecture (RN 0.86 / SDK 57) a borderless ripple makes the Pressable drop its backgroundColor (facebook/react-native#48552) — the component is the only borderless ripple in the design system; Button, Chip, List and ExpenseRow all use masked ripples. - borderless: false (masked to the rounded outline; drop the now-meaningless `radius`, which only applies to borderless ripples) - icon color colors.surface -> colors.onAccent, matching the Button / ExpenseForm convention for glyphs on accent fills (same #FFFFFF value) - borderRadius 29 -> radius.full token Verified on the device (CPH2521): release APK installed, Expenses tab shows the solid green circular FAB. typecheck + lint clean. Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

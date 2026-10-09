@@ -6,12 +6,14 @@
  * list refreshes on focus (SQLite is the source of truth, A4).
  */
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
 import { CommitmentService } from '@/services/CommitmentService';
 import { CommitmentForm } from '@/components/CommitmentForm';
+import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { useToast } from '@/components/ToastProvider';
 import type { CommitmentInput } from '@/repositories/types';
 import { colors, spacing, typography } from '@/theme';
 
@@ -22,6 +24,7 @@ function errMsg(error: unknown): string {
 export default function NewCommitmentScreen() {
   const router = useRouter();
   const { authService } = useAuth();
+  const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
 
   const service = useMemo(() => {
@@ -33,35 +36,40 @@ export default function NewCommitmentScreen() {
     setSubmitting(true);
     try {
       await service.create(input);
+      toast.show('Commitment added');
       router.back();
     } catch (error: unknown) {
-      Alert.alert('Add commitment', errMsg(error));
+      toast.show(`Could not add commitment: ${errMsg(error)}`);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      testID="new-commitment-screen"
-    >
-      <CommitmentForm
-        submitLabel="Add commitment"
-        onSubmit={handleSubmit}
-        submitting={submitting}
-        onCancel={() => router.back()}
-      />
-      <Pressable
-        onPress={() => router.back()}
-        style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
-        accessibilityRole="button"
+    <KeyboardScreen>
+      <ScrollView
+        className="flex-1 bg-background"
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        testID="new-commitment-screen"
       >
-        <Text style={styles.cancelLinkLabel}>Cancel</Text>
-      </Pressable>
-    </ScrollView>
+        <CommitmentForm
+          submitLabel="Add commitment"
+          onSubmit={handleSubmit}
+          submitting={submitting}
+          onCancel={() => router.back()}
+        />
+        <Pressable
+          onPress={() => router.back()}
+          className="items-center py-4 min-h-[44px] justify-center active:opacity-60"
+          style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Text className="text-muted-foreground text-base font-semibold" style={styles.cancelLinkLabel}>Cancel</Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardScreen>
   );
 }
 

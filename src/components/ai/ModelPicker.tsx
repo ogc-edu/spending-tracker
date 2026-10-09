@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
-  useButtonLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
+  useButtonLabel: { color: colors.onAccent, fontSize: typography.emphasis, fontWeight: '600' },
   modelRow: {
     flexDirection: 'row',
     alignItems: 'center',

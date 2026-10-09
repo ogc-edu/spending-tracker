@@ -20,13 +20,16 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 import { COMMITMENT_TYPES, type CommitmentInput } from '@/repositories/types';
 import { formatDDMMYYYY, isValidDateStr } from '@/utils/dates';
 import { parseMoneyToSen } from '@/utils/money';
 import { colors, spacing, typography } from '@/theme';
 import { CalendarSheet } from './CalendarSheet';
+import { Chip } from '@/components/ui/Chip';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
 import { COMMITMENT_TYPE_ICONS, COMMITMENT_TYPE_LABELS } from './commitmentMeta';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen. */
@@ -175,23 +178,22 @@ export function CommitmentForm({
       control={control}
       name={name}
       render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-        <View style={styles.field}>
-          <Text style={styles.label}>
+        <View className="mb-4" style={styles.field}>
+          <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>
             {label}
             {props.optional ? ' (optional)' : ''}
           </Text>
-          <TextInput
-            style={[styles.input, error && styles.inputError]}
+          <Input
+            className={error ? 'border-destructive' : undefined}
             keyboardType={props.keyboardType ?? 'default'}
             placeholder={props.placeholder}
-            placeholderTextColor={colors.muted}
             value={value}
             onChangeText={onChange}
             onBlur={onBlur}
             editable={!submitting}
             testID={`commitment-form-${name}`}
           />
-          {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+          {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
         </View>
       )}
     />
@@ -214,29 +216,32 @@ export function CommitmentForm({
       render={({ field: { value }, fieldState: { error } }) => {
         const minDate = name === 'endDate' && getValues('startDate') ? getValues('startDate') : undefined;
         return (
-          <View style={styles.field}>
-            <Text style={styles.label}>
+          <View className="mb-4" style={styles.field}>
+            <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>
               {label}
               {props.optional ? ' (optional)' : ''}
             </Text>
             <Pressable
               onPress={() => setDateField(name)}
               disabled={submitting}
+              className={`flex-row items-center gap-2 border rounded-lg px-4 py-3 bg-card min-h-[48px] ${
+                error ? 'border-destructive' : 'border-border'
+              }`}
               style={({ pressed }) => [styles.dateField, error && styles.inputError, pressed && styles.pressed]}
               accessibilityRole="button"
               accessibilityLabel={`${label}, ${value ? `${formatDDMMYYYY(value)}, picked` : 'not picked'}`}
               testID={`commitment-form-${name}`}
             >
               <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-              <Text style={[styles.dateValue, !value && styles.datePlaceholder]}>
+              <Text className={`flex-1 text-base font-semibold ${value ? 'text-foreground' : 'text-muted font-normal'}`} style={[styles.dateValue, !value && styles.datePlaceholder]}>
                 {value ? formatDDMMYYYY(value) : (props.placeholder ?? 'Select a date')}
               </Text>
               <Ionicons name="chevron-down" size={16} color={colors.muted} />
             </Pressable>
             {minDate ? (
-              <Text style={styles.dateHint}>Earliest: {formatDDMMYYYY(minDate)}</Text>
+              <Text className="mt-1 text-xs text-muted" style={styles.dateHint}>Earliest: {formatDDMMYYYY(minDate)}</Text>
             ) : null}
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
           </View>
         );
       }}
@@ -257,19 +262,15 @@ export function CommitmentForm({
             {options.map((option) => {
               const selected = value === option.value;
               return (
-                <Pressable
+                <Chip
                   key={option.value}
+                  label={option.label}
+                  icon={option.icon as never}
+                  iconColor={colors.muted}
+                  selected={selected}
                   onPress={() => onChange(option.value)}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
                   testID={`commitment-form-${name}-${option.value}`}
-                >
-                  {option.icon ? (
-                    <Ionicons name={option.icon as never} size={15} color={selected ? colors.surface : colors.muted} />
-                  ) : null}
-                  <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{option.label}</Text>
-                </Pressable>
+                />
               );
             })}
           </View>
@@ -309,24 +310,22 @@ export function CommitmentForm({
       />
 
       <View style={styles.actions}>
-        <Pressable
+        <Button
+          label={submitLabel}
+          variant="primary"
+          flex
+          busy={submitting}
           onPress={handleSubmit(onValid)}
-          style={[styles.submit, submitting && styles.buttonDisabled]}
-          disabled={submitting}
-          accessibilityRole="button"
           testID="commitment-form-submit"
-        >
-          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitLabel}>{submitLabel}</Text>}
-        </Pressable>
-        <Pressable
-          onPress={onCancel}
-          style={styles.cancel}
+        />
+        <Button
+          label="Cancel"
+          variant="secondary"
+          flex
           disabled={submitting}
-          accessibilityRole="button"
+          onPress={onCancel}
           testID="commitment-form-cancel"
-        >
-          <Text style={styles.cancelLabel}>Cancel</Text>
-        </Pressable>
+        />
       </View>
 
       <CalendarSheet
@@ -385,37 +384,5 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.lg,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
-  chipLabelSelected: { color: colors.surface },
   actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
-  submit: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  buttonDisabled: { opacity: 0.7 },
-  submitLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
-  cancel: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  cancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
 });

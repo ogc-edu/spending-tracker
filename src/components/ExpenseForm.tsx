@@ -1,9 +1,9 @@
 /**
  * ExpenseForm (plan 005 UI) — add/edit expense form. React Hook Form + Zod
- * (the register/account-form pattern). Fields: amount (money string,
- * auto-focused for fast entry), category (chips grid from the seeded set),
+ * (the register/account-form pattern). Fields: amount (POS-style
+ * sen-first MoneyInput, auto-focused for fast entry), category (chips grid from the seeded set),
  * account (chips with the current balance + a projected balance after save),
- * date (YYYY-MM-DD, defaults to today), description (optional, ≤200).
+ * date (CalendarSheet picker, stored YYYY-MM-DD, defaults to today), description (optional, ≤200).
  *
  * The Zod schema here is the validation source of truth for the FORM (rejects
  * 0/negative/>2-decimal amounts, empty pickers, bad dates) — the service
@@ -15,17 +15,30 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 import type { Account, Category, Expense } from '@/db/schema';
-import { DATE_RE, isValidDateStr, todayLocal } from '@/utils/dates';
+import { DATE_RE, formatDDMMYYYY, isValidDateStr, todayLocal, toLocalDateString } from '@/utils/dates';
 import { formatSen, formatSenInput, parseMoneyToSen } from '@/utils/money';
 import { balanceEffectFor } from '@/services/ExpenseService';
 import type { ExpenseInput } from '@/repositories/types';
 import { colors, spacing, typography } from '@/theme';
 import { categoryColor } from './categoryMeta';
 import { CategoryAddSheet } from './CategoryAddSheet';
+import { CalendarSheet } from './CalendarSheet';
 import { ConfirmSheet } from './ConfirmSheet';
+import { useKeyboardAwareFocus } from './KeyboardAwareScrollView';
+import { MoneyInput } from './MoneyInput';
+import { Chip } from '@/components/ui/Chip';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { haptics } from '@/utils/haptics';
+
+function yesterdayLocal(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toLocalDateString(d);
+}
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.[0-9]{1,2})?$/;
@@ -86,7 +99,7 @@ export function ExpenseForm({
     setValue,
   } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
-    defaultValues: { amount: '', description: '', date: todayLocal(), ...defaults },
+    defaultValues: { amount: '0.00', description: '', date: todayLocal(), ...defaults },
   });
 
   // Category management state (plan 016 follow-up): armed = long-press
@@ -95,6 +108,12 @@ export function ExpenseForm({
   const [confirmDelete, setConfirmDelete] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  /** Calendar visibility for the date field (pick, don't type). */
+  const [dateOpen, setDateOpen] = useState(false);
+
+  // Every text input reports its focus so the screen's scroller can lift it
+  // above the keyboard (no-op when the form isn't inside one).
+  const onInputFocus = useKeyboardAwareFocus();
 
   // The built-in catch-all 'Other' is hidden from the picker — its slot is
   // the "+" Add chip. (Deleting a category never touches existing rows.)
@@ -142,20 +161,21 @@ export function ExpenseForm({
         name="amount"
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
           <View style={styles.field}>
-            <Text style={styles.label} nativeID="expense-form-label-amount">Amount (RM)</Text>
-            <TextInput
-              style={[styles.input, error && styles.inputError]}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              placeholderTextColor={colors.muted}
-              accessibilityLabel="Amount in ringgit"
-              accessibilityLabelledBy="expense-form-label-amount"
+            <Text style={styles.label} nativeID="expense-form-label-amount">Amount</Text>
+            {/* POS-style entry: digits fill in from the sen place (2,0,0 → RM2.00). */}
+            <MoneyInput
               value={value}
-              onChangeText={onChange}
+              variant="hero"
+              onChangeValue={onChange}
               onBlur={onBlur}
+              onFocus={onInputFocus}
               autoFocus
               editable={!submitting}
+              hasError={error !== undefined}
+              accessibilityLabel="Amount in ringgit"
+              accessibilityLabelledBy="expense-form-label-amount"
               testID="expense-form-amount"
+              containerTestID="money-input"
             />
             {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
           </View>
@@ -168,41 +188,29 @@ export function ExpenseForm({
         render={({ field: { value, onChange }, fieldState: { error } }) => (
           <View style={styles.field}>
             <Text style={styles.label}>Category</Text>
-            <View style={styles.chipWrap}>
+            <View style={styles.chipWrap} testID="category-matrix">
               {visibleCategories.map((category) => {
                 const selected = value === category.id;
                 const armed = armedDelete?.id === category.id;
                 return (
-                  <View key={category.id} style={styles.chipSlot}>
-                    <Pressable
+                  <View key={category.id} style={[styles.chipSlot, armed && styles.chipArmed]}>
+                    <Chip
+                      label={category.name}
+                      icon={category.icon as never}
+                      iconColor={categoryColor(category.id)}
+                      selected={selected}
                       onPress={() => {
                         if (armed) {
                           setArmedDelete(null); // tap again = disarm, never select
                           return;
                         }
+                        haptics.categorySelect();
                         onChange(category.id);
                       }}
                       onLongPress={() => setArmedDelete(armed ? null : category)}
                       delayLongPress={450}
-                      style={[
-                        styles.chip,
-                        selected && styles.chipSelected,
-                        armed && styles.chipArmed,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      accessibilityHint="Long-press to delete"
                       testID={`expense-form-category-${category.id}`}
-                    >
-                      <Ionicons
-                        name={category.icon as never}
-                        size={15}
-                        color={selected ? colors.surface : categoryColor(category.id)}
-                      />
-                      <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
-                        {category.name}
-                      </Text>
-                    </Pressable>
+                    />
                     {armed ? (
                       <Pressable
                         onPress={() => setConfirmDelete(category)}
@@ -211,23 +219,20 @@ export function ExpenseForm({
                         accessibilityLabel={`Delete ${category.name}`}
                         testID={`expense-form-category-delete-${category.id}`}
                       >
-                        <Ionicons name="remove" size={14} color="#fff" />
+                        <Ionicons name="remove" size={14} color={colors.onAccent} />
                       </Pressable>
                     ) : null}
                   </View>
                 );
               })}
               {/* The "+" chip replaces the built-in "Other" chip slot. */}
-              <Pressable
+              <Chip
+                label="Add"
+                icon="add"
+                iconColor={colors.accent}
                 onPress={() => setAddOpen(true)}
-                style={[styles.chip, styles.addChip]}
-                accessibilityRole="button"
-                accessibilityLabel="Add a new category"
                 testID="expense-form-category-add"
-              >
-                <Ionicons name="add" size={15} color={colors.accent} />
-                <Text style={[styles.chipLabel, styles.addChipLabel]}>Add</Text>
-              </Pressable>
+              />
             </View>
             {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
           </View>
@@ -244,18 +249,14 @@ export function ExpenseForm({
               {accounts.map((account) => {
                 const selected = value === account.id;
                 return (
-                  <Pressable
-                    key={account.id}
-                    onPress={() => onChange(account.id)}
-                    style={[styles.chip, selected && styles.chipSelected]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    testID={`expense-form-account-${account.id}`}
-                  >
-                    <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>
-                      {account.name}
-                    </Text>
-                  </Pressable>
+                  <View key={account.id} testID={`account-pill-${account.id}`}>
+                    <Chip
+                      label={account.name}
+                      selected={selected}
+                      onPress={() => onChange(account.id)}
+                      testID={`expense-form-account-${account.id}`}
+                    />
+                  </View>
                 );
               })}
             </View>
@@ -265,24 +266,48 @@ export function ExpenseForm({
         )}
       />
 
+      {/* Date is PICKED, never typed (the CommitmentForm pattern): the row opens
+          the CalendarSheet, so no keyboard can cover it and the stored value is
+          always a valid YYYY-MM-DD. */}
       <Controller
         control={control}
         name="date"
-        render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-          <View style={styles.field}>
-            <Text style={styles.label}>Date</Text>
-            <TextInput
-              style={[styles.input, error && styles.inputError]}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.muted}
-              accessibilityLabel="Date, YYYY dash MM dash DD"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              editable={!submitting}
+        render={({ field: { value }, fieldState: { error } }) => (
+          <View className="mb-4" style={styles.field}>
+            <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>Date</Text>
+            <View className="flex-row items-center gap-2 mb-2">
+              <Chip
+                label="Today"
+                selected={value === todayLocal()}
+                onPress={() => setValue('date', todayLocal(), { shouldValidate: true })}
+                className="min-h-[36px] py-1"
+              />
+              <Chip
+                label="Yesterday"
+                selected={value === yesterdayLocal()}
+                onPress={() => setValue('date', yesterdayLocal(), { shouldValidate: true })}
+                className="min-h-[36px] py-1"
+              />
+            </View>
+            <Pressable
+              onPress={() => setDateOpen(true)}
+              disabled={submitting}
+              className={`flex-row items-center gap-2 border rounded-lg px-4 py-3 bg-card min-h-[48px] ${
+                error ? 'border-destructive' : 'border-border'
+              }`}
+              style={({ pressed }) => [styles.dateField, error && styles.inputError, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`Date, ${value ? `${formatDDMMYYYY(value)}, picked` : 'not picked'}`}
+              accessibilityHint="Opens a calendar"
               testID="expense-form-date"
-            />
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            >
+              <Ionicons name="calendar-outline" size={18} color={colors.muted} />
+              <Text className={`flex-1 text-base font-semibold ${value ? 'text-foreground' : 'text-muted font-normal'}`} style={[styles.dateValue, !value && styles.datePlaceholder]}>
+                {value ? formatDDMMYYYY(value) : 'Select a date'}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={colors.muted} />
+            </Pressable>
+            {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
           </View>
         )}
       />
@@ -291,46 +316,58 @@ export function ExpenseForm({
         control={control}
         name="description"
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-          <View style={styles.field}>
-            <Text style={styles.label}>Description (optional)</Text>
-            <TextInput
+          <View className="mb-4" style={styles.field}>
+            <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>Description (optional)</Text>
+            <Input
+              className={`min-h-[64px] ${error ? 'border-destructive' : ''}`}
               style={[styles.input, styles.multiline, error && styles.inputError]}
               placeholder="e.g. lunch with team"
-              placeholderTextColor={colors.muted}
               accessibilityLabel="Description, optional"
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
+              onFocus={onInputFocus}
               multiline
               maxLength={200}
               editable={!submitting}
               testID="expense-form-description"
             />
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
           </View>
         )}
       />
 
       <View style={styles.actions}>
-        <Pressable
+        <Button
+          label={submitLabel}
+          variant="primary"
+          flex
+          busy={submitting}
           onPress={handleSubmit(onValid)}
-          style={[styles.submit, submitting && styles.buttonDisabled]}
-          disabled={submitting}
-          accessibilityRole="button"
           testID="expense-form-submit"
-        >
-          {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitLabel}>{submitLabel}</Text>}
-        </Pressable>
-        <Pressable
-          onPress={onCancel}
-          style={styles.cancel}
+        />
+        <Button
+          label="Cancel"
+          variant="secondary"
+          flex
           disabled={submitting}
-          accessibilityRole="button"
+          onPress={onCancel}
           testID="expense-form-cancel"
-        >
-          <Text style={styles.cancelLabel}>Cancel</Text>
-        </Pressable>
+        />
       </View>
+
+      <CalendarSheet
+        // Remount per open so the sheet anchors on the currently picked date.
+        key={dateOpen ? 'date-open' : 'date-closed'}
+        visible={dateOpen}
+        title="Select date"
+        value={watched.date ?? null}
+        onSelect={(iso) => {
+          setValue('date', iso, { shouldValidate: true });
+          setDateOpen(false);
+        }}
+        onCancel={() => setDateOpen(false)} // dismiss leaves the date untouched
+      />
 
       <CategoryAddSheet
         visible={addOpen}
@@ -347,7 +384,7 @@ export function ExpenseForm({
         title="Delete category"
         message={
           confirmDelete
-            ? `"${confirmDelete.name}" is removed from the picker only — expenses and budgets that already use it are left unchanged.`
+            ? `"${confirmDelete.name}" is removed from the picker only — expenses that already use it are left unchanged.`
             : ''
         }
         confirmLabel="Delete"
@@ -405,23 +442,25 @@ const styles = StyleSheet.create({
   },
   multiline: { minHeight: 64, textAlignVertical: 'top' },
   inputError: { borderColor: colors.danger },
-  fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chipSlot: { position: 'relative' },
-  chip: {
+  dateField: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: spacing.lg,
-    minHeight: 44, // touch target (plan 016 a11y)
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    borderRadius: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     backgroundColor: colors.surface,
+    minHeight: 48, // touch target (plan 016 a11y)
   },
-  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipArmed: { borderColor: colors.danger, borderWidth: 1.5, backgroundColor: colors.background },
+  dateValue: { flex: 1, fontSize: typography.body, color: colors.text, fontWeight: '600' },
+  datePlaceholder: { color: colors.muted, fontWeight: '400' },
+  pressed: { opacity: 0.7 },
+  fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  chipSlot: { position: 'relative', borderRadius: 999 },
+  chipArmed: { borderColor: colors.danger, borderWidth: 1.5, padding: 1 },
   minusBadge: {
     position: 'absolute',
     top: -8,
@@ -439,24 +478,17 @@ const styles = StyleSheet.create({
   addChipLabel: { color: colors.accent },
   chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
   chipLabelSelected: { color: colors.surface },
-  projected: { marginTop: spacing.sm, fontSize: typography.caption, color: colors.muted },
+  projected: {
+    marginTop: spacing.sm,
+    fontSize: typography.caption,
+    color: colors.accent,
+    fontWeight: '600',
+    backgroundColor: colors.accentSoft,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
   actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
-  submit: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  buttonDisabled: { opacity: 0.7 },
-  submitLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '600' },
-  cancel: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  cancelLabel: { color: colors.muted, fontSize: typography.emphasis, fontWeight: '600' },
 });

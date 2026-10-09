@@ -1,30 +1,19 @@
 /**
- * Dashboard tab (plan 010 / PRD DASH-1..5) — the product's heart: one
- * deterministic view of available money, spent, remaining budget, upcoming
- * commitments, safe-to-spend, daily allowance, the budget bar, and the
- * category summary (ARCH §8 pipeline).
+ * Dashboard tab. Plan 020 cut it down to what the user reads:
+ * 1. Month summary: spent this month + due by end of month.
+ * 2. Commitments due by end of month.
+ * 3. Category summary.
+ * 4. "Ask about your money" AI box.
+ * Plus the Add-expense FAB.
  *
- * Data flow: `CashFlowService.snapshot(now)` reads the same rows the other
- * tabs show and runs them through the pure engine — this screen contains NO
- * SQL and NO financial arithmetic (NFR-7). It re-reads on focus and supports
- * pull-to-refresh; `now` is derived at call time so the calendar rolls over
- * without restart (A4: no cache).
- *
- * First-class states (never crashes): no accounts → CTA to create one
- * (Settings/004); no overall budget → "—" + "Set a budget" prompt; deficit
- * (safe < 0) → the SafeToSpendCard's danger state + warning copy.
+ * Invariants:
+ * - Deterministic data flow: CashFlowService.snapshot(now) is the sole source of truth.
+ * - Zero arithmetic on screen.
+ * - Pure integer sen.
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -32,35 +21,51 @@ import type { Category } from '@/db/schema';
 import { CashFlowService, type CashFlowSnapshot } from '@/services/CashFlowService';
 import { CategoryService } from '@/services/CategoryService';
 import { AiConfigService, aiServiceOptions } from '@/services/AiConfigService';
-import { toAllowanceSnapshot } from '@/services/toAllowanceSnapshot';
+import { toAskSnapshot } from '@/services/toAskSnapshot';
 import { createAIService } from '@/ai/AIService';
 import { AIUnavailableError, toAIError } from '@/ai/errors';
-import type { AIResult } from '@/ai/types';
-import { formatDayLabel, nextMonthStartDate } from '@/utils/dates';
-import { colors, spacing, typography } from '@/theme';
-import { HeroCard } from '@/components/dashboard/HeroCard';
-import { SafeToSpendCard } from '@/components/dashboard/SafeToSpendCard';
-import { FormulaCard } from '@/components/dashboard/FormulaCard';
+import type { AIResult, AskSnapshot } from '@/ai/types';
+import { formatDayLabel, formatMonthLabel, nextMonthStartDate } from '@/utils/dates';
+import { colors, spacing } from '@/theme';
+import { EmptyState } from '@/components/EmptyState';
+import { InlineError } from '@/components/ui/InlineError';
+import { SkeletonHome } from '@/components/ui/Skeleton';
+import { useUiStore } from '@/store/uiStore';
+import { MonthSummaryCard } from '@/components/dashboard/MonthSummaryCard';
 import { UpcomingList } from '@/components/dashboard/UpcomingList';
-import { BudgetBar } from '@/components/dashboard/BudgetBar';
 import { CategorySummary } from '@/components/dashboard/CategorySummary';
+import { AskAiCard } from '@/components/dashboard/AskAiCard';
+import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
+import { Fab } from '@/components/ui/Fab';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Retry is a no-op while there is nothing to retry (idle/pending/result). */
+const NOOP_RETRY = (): void => {};
+
+function useSafeInsets() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
+
 export default function DashboardScreen() {
   const { authService } = useAuth();
   const router = useRouter();
+  const insets = useSafeInsets();
+  const setExpenseCategory = useUiStore((s) => s.setExpenseCategory);
+
   const services = useMemo(() => {
     const repos = repositories();
     return {
       cashflow: new CashFlowService(
         repos.accounts,
         repos.expenses,
-        repos.budgets,
         repos.commitments,
-        repos.settings,
         authService,
       ),
       categories: new CategoryService(repos.categories),
@@ -68,29 +73,22 @@ export default function DashboardScreen() {
     };
   }, [authService]);
 
-  // The ACTIVE provider (013): persisted choice + key + model via the config
-  // layer; with nothing configured, analyze() throws a typed error and the
-  // card shows "No AI provider configured" — the app works fully (DoD 16).
   const aiService = useMemo(
     () => createAIService('fake', {}, aiServiceOptions(services.aiConfig)),
     [services.aiConfig],
   );
 
   const [snapshot, setSnapshot] = useState<CashFlowSnapshot | null>(null);
-  // The reference date the current snapshot was built with — the AI payload's
-  // daysRemaining must agree with the snapshot's dailyAllowanceSen (015).
-  const [snapshotAt, setSnapshotAt] = useState<Date | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // "Explain my allowance" UI state (015) — pending / typed error / result.
   const [aiPending, setAiPending] = useState(false);
   const [aiError, setAiError] = useState<AIUnavailableError | null>(null);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
-  // Pending guard for rapid taps: one request in flight per snapshot (013/015
-  // behaviour — a double-tap must never fire a second analyze).
+  const [aiQuestion, setAiQuestion] = useState<string | null>(null);
+  const [aiPayload, setAiPayload] = useState<AskSnapshot | null>(null);
   const aiBusyRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -101,7 +99,6 @@ export default function DashboardScreen() {
         services.categories.list(),
       ]);
       setSnapshot(snap);
-      setSnapshotAt(now);
       setCategories(cats);
       setError(null);
     } catch (loadError: unknown) {
@@ -111,7 +108,6 @@ export default function DashboardScreen() {
     }
   }, [services.cashflow, services.categories]);
 
-  // Re-read SQLite every time the tab gains focus (ARCH §5) — no cache (A4).
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -127,32 +123,49 @@ export default function DashboardScreen() {
     }
   }, [load]);
 
-  /**
-   * "Explain my allowance" (015 / DASH-4): map the CURRENT snapshot (010) to
-   * the allowance payload — no recomputation — and dispatch to the active
-   * provider via AIService (012/013). The pending guard drops rapid
-   * double-taps: only one request may be in flight at a time.
-   */
-  const explainAllowance = useCallback(async () => {
-    if (aiBusyRef.current) return;
-    if (!snapshot || !snapshotAt) return;
-    aiBusyRef.current = true;
-    setAiPending(true);
-    setAiError(null);
-    setAiResult(null);
-    try {
-      const allowance = toAllowanceSnapshot(snapshot, snapshotAt);
-      const result = await aiService.analyze('allowance', allowance);
-      setAiResult(result);
-    } catch (err: unknown) {
-      // analyze() already throws typed AIUnavailableError; toAIError keeps it
-      // typed if anything unexpected slips through (012 contract).
-      setAiError(toAIError(err));
-    } finally {
-      aiBusyRef.current = false;
-      setAiPending(false);
-    }
-  }, [aiService, snapshot, snapshotAt]);
+  const runAsk = useCallback(
+    async (question: string, payload: AskSnapshot) => {
+      if (aiBusyRef.current) return;
+      aiBusyRef.current = true;
+      setAiPending(true);
+      setAiError(null);
+      setAiResult(null);
+      setAiQuestion(question);
+      setAiPayload(payload);
+      try {
+        const result = await aiService.analyze('ask', payload, { question });
+        setAiResult(result);
+      } catch (err: unknown) {
+        setAiError(toAIError(err));
+      } finally {
+        aiBusyRef.current = false;
+        setAiPending(false);
+      }
+    },
+    [aiService],
+  );
+
+  const onAsk = useCallback(
+    (question: string) => {
+      if (!snapshot) return;
+      void runAsk(question, toAskSnapshot(snapshot, categories));
+    },
+    [snapshot, categories, runAsk],
+  );
+
+  const onAskRetry = useCallback(() => {
+    if (aiQuestion && aiPayload) void runAsk(aiQuestion, aiPayload);
+  }, [aiQuestion, aiPayload, runAsk]);
+
+  const aiState = useMemo(
+    () => ({
+      pending: aiPending,
+      error: aiError,
+      result: aiResult,
+      onRetry: aiError ? onAskRetry : NOOP_RETRY,
+    }),
+    [aiPending, aiError, aiResult, onAskRetry],
+  );
 
   const refreshControl = (
     <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />
@@ -160,109 +173,115 @@ export default function DashboardScreen() {
 
   if (loading && !snapshot) {
     return (
-      <View style={styles.centerBox}>
-        <ActivityIndicator />
+      <View className="flex-1 items-center justify-center bg-background" style={styles.centerBox} testID="dashboard-loading">
+        <SkeletonHome />
       </View>
     );
   }
 
   if (error && !snapshot) {
     return (
-      <View style={styles.centerBox}>
-        <Text style={styles.errorText}>{error}</Text>
+      <View className="flex-1 items-center justify-center bg-background" style={styles.centerBox}>
+        <InlineError message={error} testID="dashboard-error" />
       </View>
     );
   }
 
   if (!snapshot) return null;
 
-  // No accounts: a first-class CTA, not a crash (plan §Edge cases).
   if (snapshot.accountCount === 0) {
     return (
-      <ScrollView contentContainerStyle={styles.emptyWrap} refreshControl={refreshControl} testID="dashboard-empty-accounts">
-        <Ionicons name="wallet-outline" size={44} color={colors.muted} />
-        <Text style={styles.emptyTitle}>No accounts yet</Text>
-        <Text style={styles.emptyBody}>
-          Add an account to start tracking your available money, safe-to-spend and commitments.
-        </Text>
-        <Pressable
-          onPress={() => router.navigate('/settings' as never)}
-          style={({ pressed }) => [styles.ctaButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-          testID="dashboard-create-account"
-        >
-          <Text style={styles.ctaLabel}>Create an account</Text>
-        </Pressable>
+      <ScrollView className="flex-1 bg-background" contentContainerStyle={styles.emptyWrap} refreshControl={refreshControl} testID="dashboard-empty-accounts">
+        <EmptyState
+          icon="wallet-outline"
+          title="No accounts yet"
+          body="Add an account to start tracking your spending and commitments."
+          action={{ label: 'Create an account', onPress: () => router.navigate('/settings' as never) }}
+          testID="dashboard-empty-accounts"
+        />
       </ScrollView>
     );
   }
 
+  const noData = snapshot.spentSen === 0 && snapshot.upcomingItems.length === 0;
   const dueBeforeLabel = formatDayLabel(nextMonthStartDate(snapshot.month.year, snapshot.month.month));
   const topCategories = snapshot.categorySummary.slice(0, 5);
-  const goToBudgets = () => router.navigate('/budgets' as never);
   const goToAnalytics = () => router.navigate('/analytics' as never);
 
   return (
-    <ScrollView contentContainerStyle={styles.content} refreshControl={refreshControl} testID="dashboard-screen">
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    <View className="flex-1 bg-background" testID="dashboard-screen">
+      <KeyboardAwareScrollView
+        className="flex-1 bg-background"
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: Math.max(insets.top, spacing.lg),
+            paddingBottom: Math.max(insets.bottom, 24) + 80,
+          },
+        ]}
+        refreshControl={refreshControl}
+      >
+        <View className="px-4">
+          {error ? <InlineError message={error} testID="dashboard-error" /> : null}
 
-      <HeroCard
-        availableSen={snapshot.availableSen}
-        spentSen={snapshot.spentSen}
-        remainingSen={snapshot.hasBudget ? snapshot.remainingSen : null}
-        onSetBudget={goToBudgets}
-      />
+          {noData ? (
+            <EmptyState
+              icon="receipt-outline"
+              title="No data yet"
+              body="Record an expense or add a commitment to get started."
+              action={{ label: 'Record an expense', onPress: () => router.push('/expenses/new' as never) }}
+              testID="dashboard-empty-data"
+            />
+          ) : null}
 
-      <SafeToSpendCard
-        safeSen={snapshot.safeSen}
-        deficit={snapshot.deficit}
-        dailyAllowanceSen={snapshot.dailyAllowanceSen}
-      />
+          <MonthSummaryCard
+            spentSen={snapshot.spentSen}
+            dueSen={snapshot.upcomingSen}
+            monthLabel={formatMonthLabel(snapshot.month.year, snapshot.month.month)}
+          />
 
-      <FormulaCard
-        breakdown={snapshot.breakdown}
-        safeSen={snapshot.safeSen}
-        onExplain={() => void explainAllowance()}
-        ai={{ pending: aiPending, error: aiError, result: aiResult, onRetry: () => void explainAllowance() }}
-      />
+          <View className="mb-4">
+            <UpcomingList
+              items={snapshot.upcomingItems}
+              totalSen={snapshot.upcomingSen}
+              dueBeforeLabel={dueBeforeLabel}
+              onOpenCommitment={(commitmentId) => router.push(`/commitments/${commitmentId}` as never)}
+            />
+          </View>
 
-      <BudgetBar
-        budget={snapshot.budget}
-        spentSen={snapshot.spentSen}
-        remainingSen={snapshot.remainingSen}
-        pctUsed={snapshot.budgetMetrics.pctUsed}
-        overBudget={snapshot.budgetMetrics.overBudget}
-        onSetBudget={goToBudgets}
-      />
+          {/* Category Summary (if spending recorded in categories) */}
+          {topCategories.length > 0 ? (
+            <CategorySummary
+              summary={topCategories}
+              categories={categories}
+              onShowAll={goToAnalytics}
+              onOpenCategory={(categoryId) => {
+                setExpenseCategory(categoryId);
+                router.navigate('/expenses' as never);
+              }}
+            />
+          ) : null}
 
-      <UpcomingList
-        items={snapshot.upcomingItems}
-        totalSen={snapshot.upcomingSen}
-        dueBeforeLabel={dueBeforeLabel}
-      />
+          {/* Ask about your money (plan 019) */}
+          <AskAiCard
+            ai={aiState}
+            label={aiQuestion ? `You asked: ${aiQuestion}` : null}
+            onSubmit={onAsk}
+            disabled={snapshot === null}
+          />
 
-      {topCategories.length > 0 ? (
-        <CategorySummary
-          summary={topCategories}
-          categories={categories}
-          onShowAll={goToAnalytics}
-        />
-      ) : null}
+          <View style={styles.spacer} />
+        </View>
+      </KeyboardAwareScrollView>
 
-      <View style={styles.spacer} />
-    </ScrollView>
+      <Fab onPress={() => router.push('/expenses/new' as never)} label="Add expense" testID="add-expense-fab" />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  content: { paddingTop: spacing.lg, paddingBottom: spacing.xxl },
-  errorText: {
-    fontSize: typography.body,
-    color: colors.danger,
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.lg,
-  },
+  content: { flexGrow: 1 },
   emptyWrap: {
     flexGrow: 1,
     alignItems: 'center',
@@ -270,15 +289,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     backgroundColor: colors.background,
   },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginTop: spacing.md, marginBottom: spacing.xs },
-  emptyBody: { fontSize: typography.body, color: colors.muted, textAlign: 'center', lineHeight: 21, marginBottom: spacing.lg },
-  ctaButton: {
-    backgroundColor: colors.accent,
-    borderRadius: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-  },
-  pressed: { opacity: 0.8 },
-  ctaLabel: { color: '#fff', fontSize: typography.body, fontWeight: '700' },
   spacer: { height: spacing.lg },
 });

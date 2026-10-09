@@ -1,0 +1,16 @@
+# Taste
+- Prefers the agent to actually implement changes rather than only describe them ("Do not stop after explaining what you would do. Actually modify the code."). Confidence: 0.85
+- When given multiple tasks, wants them executed strictly in order, fully implementing and verifying each one before moving to the next. Confidence: 0.8
+- Wants the existing implementation/architecture inspected and understood before any code is changed. Confidence: 0.8
+- Wants a concise summary after completing work covering: what changed, files/components modified, tests/verification performed, and any remaining issues. Confidence: 0.85
+- Wants the project's existing components, styling, design system, and framework conventions reused rather than new custom implementations. Confidence: 0.8
+- Explicitly wants unrelated functionality, business logic, database structure, and existing features left untouched. Confidence: 0.85
+- Prefers the platform/framework's recommended native components over custom builds (e.g. native date picker instead of a custom calendar). Confidence: 0.75
+- Rejects hard-coded magic offsets (e.g. fixed padding/translate values) in favor of solutions dynamically derived from actual device/keyboard dimensions. Confidence: 0.7
+- Prefers money inputs to behave like a POS/cash-entry field: digits represent cents, no manual decimal point, digits shift right-to-left, formatted consistently (e.g. RMX.XX). Confidence: 0.7
+- Wants confirmation modals for significant user actions (e.g. payroll allocation). Confidence: 0.65
+- Cares about polished, native-feeling mobile interactions (no flicker, faded placeholder before input, typing cursor, keyboard never covering focused inputs, dismissible pickers). Confidence: 0.75
+- Works on a mobile app project, testing on a connected Android device (Oppo), and expects the agent to install/run builds on it. Confidence: 0.65
+- Wants standalone release builds for device installs, not debug/dev builds — the app must run independently on the phone without Metro or a dev server (e.g. `assembleRelease` with an embedded JS bundle rather than `assembleDebug`). Confidence: 0.75
+- Wants Command Code configured to auto-approve commands rather than prompting for approval each time (e.g. sets permissions.defaultMode to auto-accept at user scope). Confidence: 0.8
+- Comfortable delegating git publish operations to the agent — happy for it to run `git push` to a shared remote when asked, rather than always doing it manually himself. Confidence: 0.6

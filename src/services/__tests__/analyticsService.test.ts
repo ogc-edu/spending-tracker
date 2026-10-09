@@ -2,8 +2,8 @@
  * Plan 011 — AnalyticsService fixture matrix (better-sqlite3 harness).
  * Per plan §Tests: totals + sorted breakdown; MoM absolute + floored pct
  * (incl. zero-baseline null); avg daily + elapsed days; top-5 largest (ties
- * stable, no description — A6) / top-5 categories; budget utilization (no
- * budget → null, over-budget flag); projection across day-of-month fixtures;
+ * stable, no description — A6) / top-5 categories; projection across
+ * day-of-month fixtures;
  * empty month → zeros, no NaN; snapshot JSON round-trips (the 014 payload);
  * month isolation; user scoping (A10); year rollover; leap February.
  *
@@ -22,12 +22,10 @@ import {
 import { createMigratedTestDb, type TestDb } from '@/db/testing';
 import { insertDefaultCategoriesIfEmpty } from '@/db/seed';
 import { DrizzleAccountRepository } from '@/repositories/drizzle/accountRepository';
-import { DrizzleBudgetRepository } from '@/repositories/drizzle/budgetRepository';
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
 import { DrizzleExpenseRepository } from '@/repositories/drizzle/expenseRepository';
 import type { CurrentUserSource } from '@/services/AccountService';
 import { ExpenseService } from '@/services/ExpenseService';
-import { BudgetService } from '@/services/BudgetService';
 import { AnalyticsService } from '@/services/AnalyticsService';
 import type { ExpenseInput } from '@/repositories/types';
 import { avgDaily, monthOverMonth, projectMonthEnd } from '@/engine/analytics';
@@ -42,7 +40,6 @@ interface Fixture {
   service: AnalyticsService;
   expenses: ExpenseService;
   otherExpenses: ExpenseService;
-  budgets: BudgetService;
 }
 
 /** Fresh migrated DB: two users, 12 categories, cash accounts + an injected clock. */
@@ -68,7 +65,6 @@ async function makeServiceFixture({
   const categories = test.db.select().from(categoriesTable).all() as Category[];
 
   const expenseRepo = new DrizzleExpenseRepository(test.db as unknown as never);
-  const budgetRepo = new DrizzleBudgetRepository(test.db as unknown as never);
   const catRepo = new DrizzleCategoryRepository(test.db as unknown as never);
   const accountRepo = new DrizzleAccountRepository(test.db as unknown as never);
 
@@ -84,10 +80,9 @@ async function makeServiceFixture({
     categories,
     cash,
     otherCash,
-    service: new AnalyticsService(expenseRepo, budgetRepo, catRepo, auth, now ? () => now : undefined),
+    service: new AnalyticsService(expenseRepo, catRepo, auth, now ? () => now : undefined),
     expenses: new ExpenseService(expenseRepo, catRepo, auth),
     otherExpenses: new ExpenseService(expenseRepo, catRepo, otherAuth),
-    budgets: new BudgetService(budgetRepo, catRepo, auth),
   };
 }
 
@@ -105,7 +100,7 @@ async function seedMainFixture(f: Fixture): Promise<void> {
   await f.otherExpenses.create({ amountSen: 999999, categoryId: f.categories[0]!.id, accountId: f.otherCash.id, date: '2026-09-09' }); // other user
 }
 
-/** The main Sept-2026 snapshot under the deterministic Sep-15 clock + budget cells. */
+/** The main Sept-2026 snapshot under the deterministic Sep-15 clock. */
 async function mainSnapshot() {
   const f = await makeServiceFixture({ now: new Date(2026, 8, 15) });
   await seedMainFixture(f);
@@ -245,27 +240,6 @@ describe('AnalyticsService top-5 largest / top-5 categories (AN-2)', () => {
   });
 });
 
-describe('AnalyticsService budget utilization (AN-2, 007)', () => {
-  it('no overall budget → utilization null ("no budget")', async () => {
-    const { snap } = await mainSnapshot();
-    expect(snap.utilization).toBeNull();
-  });
-
-  it('with a budget: one-decimal floored pct; over-budget flips the flag', async () => {
-    const { f } = await mainSnapshot();
-    await f.budgets.upsert({ categoryId: null, month: 9, year: 2026, amountSen: 300000 });
-    expect((await f.service.analyzePeriod({ month: 9, year: 2026 })).utilization).toEqual({
-      pct: 4.5, // 13550×1000/300000 = 45.1666 → 4.5
-      overBudget: false,
-    });
-    await f.budgets.upsert({ categoryId: null, month: 9, year: 2026, amountSen: 10000 });
-    expect((await f.service.analyzePeriod({ month: 9, year: 2026 })).utilization).toEqual({
-      pct: 135.5, // 13550×1000/10000 = 1355 → 135.5
-      overBudget: true,
-    });
-  });
-});
-
 describe('AnalyticsService projection (AN-3)', () => {
   it('floors spent ÷ elapsed × daysInMonth (product-first integer math)', async () => {
     const { snap } = await mainSnapshot();
@@ -292,7 +266,6 @@ describe('AnalyticsService empty month + serialization', () => {
     expect(snap.largest).toEqual([]);
     expect(snap.topCategories).toEqual([]);
     expect(snap.changePct).toBeNull();
-    expect(snap.utilization).toBeNull();
     expect(snap.elapsedDays).toBe(14); // still an elapsed current month
     expect(snap.avgDailySen).toBe(0);
     expect(snap.projectionSen).toBe(0);

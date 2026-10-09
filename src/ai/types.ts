@@ -11,8 +11,11 @@
  * (fake / gemini / deepseek) can implement it without importing the facade.
  */
 
-/** Fixed set of contextual AI actions (PRD AI-2 / ARCH §9). */
-export type AIContext = 'debt' | 'spending' | 'allowance';
+/**
+ * Fixed set of contextual AI actions (PRD AI-2 / ARCH §9; 'ask' = plan 019).
+ * Plan 020 removed 'allowance' along with the daily allowance itself.
+ */
+export type AIContext = 'debt' | 'spending' | 'ask';
 
 /** Providers behind the facade (AI-5). Only `fake` is real in plan 012. */
 export type AIProviderName = 'fake' | 'gemini' | 'deepseek';
@@ -36,6 +39,13 @@ export interface AIResult {
 /** Capped response size to keep the UI tight (plan Decisions). */
 export const MAX_SUMMARY_CHARS = 2000;
 export const MAX_POINTS = 5;
+
+/**
+ * Plan 019 — cap on the free-text question the dashboard ask box may send.
+ * The system instruction is fixed; the question is data supplied as its own
+ * user message, never interpolated into the prompt template.
+ */
+export const MAX_QUESTION_CHARS = 500;
 
 /* ------------------------------------------------------------------ *
  * Debt context — produced by CommitmentService (plan 008).
@@ -82,38 +92,52 @@ export interface SpendingSnapshot {
   avgDailySen: number;
   /** End-of-month projection, floored sen (AN-3) — pace context (plan 014). */
   projectionSen: number;
-  /** Budget pressure: null = no OVERALL budget set for the month (plan 014). */
-  utilization: { pct: number | null; overBudget: boolean } | null;
   topCategories: TopCategory[];
   /** Category-level "largest" breakdown — NO free-text descriptions (A6). */
   largest?: TopCategory[];
 }
 
 /* ------------------------------------------------------------------ *
- * Allowance context — produced by CashFlowService (plan 010).
+ * Ask context — produced by the Dashboard ask box (plan 019).
  * ------------------------------------------------------------------ */
 
-export interface AllowanceSnapshot {
+/** One commitment slot surfaced to the AI (name + due date + amount only). */
+export interface AskCommitmentItem {
+  name: string;
+  /** `YYYY-MM-DD`. */
+  dueDate: string;
+  amountSen: number;
+}
+
+/**
+ * Plan 019 — the dashboard "Ask about your money" payload: the month's
+ * spending and commitments due this month and next, plus category-name spend
+ * totals, so free-form questions ("what is my total commitment next month?")
+ * are answerable. Aggregates + names only — never a raw expense description
+ * (A6). Plan 020 dropped the budget / buffer / safe-to-spend / allowance terms.
+ */
+export interface AskSnapshot {
+  /** `YYYY-MM` of the current month. */
+  month: string;
+  /** Display label, e.g. "September 2026". */
+  monthLabel: string;
   availableSen: number;
-  upcomingSen: number;
-  remainingBudgetSen: number;
-  bufferSen: number;
-  safeSen: number;
-  dailyAllowanceSen: number;
-  daysRemaining: number;
-  /**
-   * Whether an overall budget is set (plan 015). `false` when the UI shows
-   * "—" for the remaining budget — the AI must never invent one. Present on
-   * every allowance payload, so a missing flag is a shape error, not a gap.
-   */
-  hasBudget: boolean;
+  spentSen: number;
+  /** Σ unpaid commitments due before next month (the dashboard's "upcoming"). */
+  upcomingThisMonthSen: number;
+  upcomingThisMonth: AskCommitmentItem[];
+  /** Σ unpaid commitment slots due in the NEXT calendar month. */
+  nextMonthSen: number;
+  nextMonth: AskCommitmentItem[];
+  /** Category-name spend totals for the current month (no descriptions). */
+  topCategories: TopCategory[];
 }
 
 /** Snapshot associated with each context. */
 export interface AIContextSnapshotMap {
   debt: DebtSnapshot;
   spending: SpendingSnapshot;
-  allowance: AllowanceSnapshot;
+  ask: AskSnapshot;
 }
 
 /* ------------------------------------------------------------------ *
@@ -138,6 +162,12 @@ export interface AIAnalyzeRequest {
    * real providers reject its absence at generate time.
    */
   modelId?: string;
+  /**
+   * Plan 019 — an optional free-text question from the user (≤
+   * MAX_QUESTION_CHARS). Providers render it as a DISTINCT user message after
+   * the snapshot; it is never interpolated into the fixed system instruction.
+   */
+  question?: string;
 }
 
 /* ------------------------------------------------------------------ *

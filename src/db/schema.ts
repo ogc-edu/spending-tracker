@@ -69,41 +69,6 @@ export const accounts = sqliteTable(
   (t) => [index('accounts_user_id_idx').on(t.userId)],
 );
 
-export const budgets = sqliteTable(
-  'budgets',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id),
-    /** NULL = overall monthly budget; set = per-category budget. */
-    categoryId: integer('category_id').references(() => categories.id),
-    /** 1–12. */
-    month: integer('month').notNull(),
-    year: integer('year').notNull(),
-    amountSen: integer('amount_sen').notNull(),
-    createdAt: integer('created_at')
-      .notNull()
-      .$defaultFn(() => Date.now()),
-    updatedAt: integer('updated_at')
-      .notNull()
-      .$defaultFn(() => Date.now()),
-  },
-  (t) => [
-    // Upsert semantics: editing a month's (category) budget replaces its row.
-    // Caveat (SQLite): NULLs are distinct in unique indexes, so an "overall"
-    // row (category_id NULL) is not deduped by this constraint — feature 007's
-    // repository enforces the single-overall-row invariant via its upsert query.
-    unique('budgets_user_category_month_year_unique').on(
-      t.userId,
-      t.categoryId,
-      t.month,
-      t.year,
-    ),
-    index('budgets_user_id_idx').on(t.userId),
-  ],
-);
-
 export const commitments = sqliteTable(
   'commitments',
   {
@@ -200,6 +165,41 @@ export const expenses = sqliteTable(
 );
 
 /**
+ * Payroll allocations (payroll-in): the standing split of the user's pay
+ * across their accounts — "RM1,500 to Savings, RM500 to Spending". Pressing
+ * "Payroll in" credits every account here by its amount in one transaction.
+ *
+ * This is CONFIGURATION, not history: one row per account (unique), and the
+ * cascade means deleting an account simply drops its slice of the split
+ * instead of blocking the delete the way an expense reference does.
+ */
+export const payrollAllocations = sqliteTable(
+  'payroll_allocations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Credited to the account on each payroll-in run. Always > 0. */
+    amountSen: integer('amount_sen').notNull(),
+    createdAt: integer('created_at')
+      .notNull()
+      .$defaultFn(() => Date.now()),
+    updatedAt: integer('updated_at')
+      .notNull()
+      .$defaultFn(() => Date.now()),
+  },
+  (t) => [
+    // One allocation per account: editing an account's slice replaces its row.
+    unique('payroll_allocations_user_account_unique').on(t.userId, t.accountId),
+    index('payroll_allocations_user_id_idx').on(t.userId),
+  ],
+);
+
+/**
  * User preferences (folded into this initial migration set — plan 010/016).
  * NEVER secrets: AI keys live in SecureStore (plan 013); only provider/model
  * selections persist here.
@@ -208,12 +208,12 @@ export const settings = sqliteTable('settings', {
   userId: integer('user_id')
     .primaryKey()
     .references(() => users.id),
-  /** Formula buffer for safe-to-spend (PRD §8.4); default RM 300. */
-  safetyBufferSen: integer('safety_buffer_sen').notNull().default(30000),
   /** 'gemini' | 'deepseek' | NULL = none configured (no fallback). */
   aiActiveProvider: text('ai_active_provider'),
   aiModelGemini: text('ai_model_gemini'),
   aiModelDeepseek: text('ai_model_deepseek'),
+  /** Epoch ms of the last payroll-in run; NULL = never run. */
+  payrollLastRunAt: integer('payroll_last_run_at'),
   updatedAt: integer('updated_at')
     .notNull()
     .$defaultFn(() => Date.now()),
@@ -225,8 +225,6 @@ export type Category = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
-export type Budget = typeof budgets.$inferSelect;
-export type NewBudget = typeof budgets.$inferInsert;
 export type Commitment = typeof commitments.$inferSelect;
 export type NewCommitment = typeof commitments.$inferInsert;
 export type CommitmentPayment = typeof commitmentPayments.$inferSelect;
@@ -235,3 +233,5 @@ export type Expense = typeof expenses.$inferSelect;
 export type NewExpense = typeof expenses.$inferInsert;
 export type Settings = typeof settings.$inferSelect;
 export type NewSettings = typeof settings.$inferInsert;
+export type PayrollAllocation = typeof payrollAllocations.$inferSelect;
+export type NewPayrollAllocation = typeof payrollAllocations.$inferInsert;

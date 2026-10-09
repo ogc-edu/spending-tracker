@@ -95,3 +95,44 @@ describe('AccountService orchestration', () => {
     expect(await service.list()).toHaveLength(0);
   });
 });
+
+describe('AccountService.setBalance', () => {
+  it('writes the new balance for the current user', async () => {
+    const { service } = makeService();
+    const account = await service.create({ name: 'Wallet', type: 'cash', initialBalanceSen: 10_000 });
+
+    const updated = await service.setBalance(account.id, 4_250);
+    expect(updated.balanceSen).toBe(4_250);
+    expect((await service.list())[0]?.balanceSen).toBe(4_250);
+    expect(await service.sumBalances()).toBe(4_250);
+  });
+
+  it('accepts 0 but rejects negatives and non-integers (sen only)', async () => {
+    const { service } = makeService();
+    const account = await service.create({ name: 'Wallet', type: 'cash', initialBalanceSen: 10_000 });
+
+    await expect(service.setBalance(account.id, 0)).resolves.toMatchObject({ balanceSen: 0 });
+    await expect(service.setBalance(account.id, -1)).rejects.toThrow('invalid balance');
+    await expect(service.setBalance(account.id, 12.5)).rejects.toThrow('invalid balance');
+    expect((await service.list())[0]?.balanceSen).toBe(0); // nothing written by the rejects
+  });
+
+  it('rejects when not signed in', async () => {
+    const { service } = makeService({ signedIn: false });
+    await expect(service.setBalance(1, 100)).rejects.toThrow('not signed in');
+  });
+
+  it('cannot touch another user\'s account', async () => {
+    const owner = makeService();
+    const account = await owner.service.create({ name: 'Wallet', type: 'cash', initialBalanceSen: 10_000 });
+
+    // Same DB, a different signed-in user id.
+    owner.test.db.insert(users).values({ email: 'other@example.com', passwordHash: 'hash' }).run();
+    const others = owner.test.db.select().from(users).all() as User[];
+    const intruder = others.find((u) => u.email === 'other@example.com') as User;
+    const intruderService = new AccountService(owner.repo, { currentUser: async () => intruder });
+
+    await expect(intruderService.setBalance(account.id, 1)).rejects.toThrow('Account not found');
+    expect((await owner.service.list())[0]?.balanceSen).toBe(10_000);
+  });
+});

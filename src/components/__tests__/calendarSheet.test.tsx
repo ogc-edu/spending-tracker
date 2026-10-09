@@ -119,6 +119,12 @@ describe('CalendarSheet', () => {
 
   it('keeps ≥44pt touch targets on month arrows and day cells', async () => {
     const tree = await render(<CalendarSheet visible {...baseProps} />);
+    // Plan 018: testIDs can sit on a component element (Button) AND its inner
+    // Pressable — resolve the deepest match that carries the style.
+    const styled = (testID: string): ReactTestInstance => {
+      const matches = tree.root.findAllByProps({ testID }).filter((el) => el.props.style != null);
+      return matches[matches.length - 1]!;
+    };
     const smallest = (node: ReactTestInstance): number => {
       const style = flattenedStyle(node);
       const numbers = [style.minHeight, style.minWidth, style.height, style.width].filter(
@@ -127,7 +133,7 @@ describe('CalendarSheet', () => {
       return numbers.length > 0 ? Math.min(...numbers) : 0;
     };
     for (const testID of ['calendar-prev-month', 'calendar-next-month', 'calendar-sheet-close', 'calendar-cancel']) {
-      expect(smallest(tree.root.findByProps({ testID }))).toBeGreaterThanOrEqual(44);
+      expect(smallest(styled(testID))).toBeGreaterThanOrEqual(44);
     }
     expect(smallest(tree.root.findByProps({ testID: 'calendar-day-2026-09-01' }))).toBeGreaterThanOrEqual(44);
   });

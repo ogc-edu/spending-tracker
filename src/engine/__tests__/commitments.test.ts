@@ -10,9 +10,11 @@ import { describe, expect, it } from '@jest/globals';
 import {
   commitmentSchedule,
   commitmentSlotAt,
+  compareByNextDue,
   remainingAfterPaid,
   upcomingCommitments,
   type CommitmentLike,
+  type NextDueOrder,
 } from '@/engine/commitments';
 
 /** Default: fixed monthly RM2,500 total, RM400 payment, anchored 2026-01-01. */
@@ -324,5 +326,63 @@ describe('upcomingCommitments — due before windowEnd (PRD COM-5)', () => {
     const result = upcomingCommitments([done], paid, WINDOW_END);
     expect(result.items).toEqual([]);
     expect(result.totalSen).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Default list order — soonest obligation first.
+ * ------------------------------------------------------------------ */
+
+describe('compareByNextDue', () => {
+  const order = (rows: NextDueOrder[]): string[] =>
+    [...rows].sort(compareByNextDue).map((row) => row.name);
+
+  it('sorts by next due date, soonest first', () => {
+    expect(
+      order([
+        { nextDue: '2026-10-15', name: 'Netflix', id: 1 },
+        { nextDue: '2026-09-20', name: 'Rent', id: 2 },
+        { nextDue: '2026-09-28', name: 'Car loan', id: 3 },
+      ]),
+    ).toEqual(['Rent', 'Car loan', 'Netflix']);
+  });
+
+  it('puts overdue at the very top (past dates sort first, no Date math)', () => {
+    expect(
+      order([
+        { nextDue: '2026-09-20', name: 'Rent', id: 1 },
+        { nextDue: '2026-08-01', name: 'Missed bill', id: 2 }, // overdue
+        { nextDue: '2026-09-12', name: 'Phone', id: 3 },
+      ]),
+    ).toEqual(['Missed bill', 'Phone', 'Rent']);
+  });
+
+  it('sinks commitments with nothing outstanding to the bottom', () => {
+    expect(
+      order([
+        { nextDue: null, name: 'Settled loan', id: 1 },
+        { nextDue: '2026-12-31', name: 'Far away', id: 2 },
+        { nextDue: null, name: 'Cancelled thing', id: 3 },
+      ]),
+    ).toEqual(['Far away', 'Cancelled thing', 'Settled loan']);
+  });
+
+  it('breaks ties by name then id — total and stable, never locale-dependent', () => {
+    expect(
+      order([
+        { nextDue: '2026-09-20', name: 'beta', id: 5 },
+        { nextDue: '2026-09-20', name: 'Alpha', id: 9 },
+        { nextDue: '2026-09-20', name: 'alpha', id: 2 },
+      ]),
+    ).toEqual(['alpha', 'Alpha', 'beta']);
+  });
+
+  it('crosses the year boundary correctly', () => {
+    expect(
+      order([
+        { nextDue: '2027-01-03', name: 'January', id: 1 },
+        { nextDue: '2026-12-28', name: 'December', id: 2 },
+      ]),
+    ).toEqual(['December', 'January']);
   });
 });

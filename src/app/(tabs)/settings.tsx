@@ -7,32 +7,37 @@
  * masked key suffix) and the Active AI Provider selector (configured only;
  * no automatic fallback).
  *
- * Balances are NOT editable here (D1 — they change only through expenses).
+ * Plan 020: the Payroll section is hidden (PayrollService, its table and
+ * PayrollAllocationSheet stay so it can return) and the safety-buffer editor
+ * is gone along with safe-to-spend.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
 import type { Account, Category } from '@/db/schema';
 import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
-import { SettingsService } from '@/services/SettingsService';
 import { AiConfigService, type ConfigurableAIProvider } from '@/services/AiConfigService';
 import type { AccountInput } from '@/repositories/types';
 import type { AIProviderName } from '@/ai/types';
 import { AccountForm } from '@/components/AccountForm';
+import { AccountBalanceSheet } from '@/components/AccountBalanceSheet';
 import { AccountRow } from '@/components/AccountRow';
 import { CategoryAddSheet } from '@/components/CategoryAddSheet';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Card } from '@/components/ui/Card';
 import { ProviderRow, maskKeySuffix } from '@/components/ai/ProviderRow';
 import { ActiveProviderSelector } from '@/components/ai/ActiveProviderSelector';
 import { aiStatusLabel } from '@/components/ai/providerMeta';
-import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 import { useToast } from '@/components/ToastProvider';
-import { formatSen, parseMoneyToSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { colors, spacing, typography } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -42,6 +47,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { user, logout, authService } = useAuth();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
 
   // Services built once auth is available; repositories() needs the initialized DB.
   const services = useMemo(() => {
@@ -49,7 +55,6 @@ export default function SettingsScreen() {
     return {
       accounts: new AccountService(repos.accounts, authService),
       categories: new CategoryService(repos.categories),
-      settings: new SettingsService(repos.settings, authService),
       ai: new AiConfigService(repos.settings, authService),
     };
   }, [authService]);
@@ -57,6 +62,9 @@ export default function SettingsScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  /** The account whose balance sheet is open (null = closed). */
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
 
@@ -71,14 +79,6 @@ export default function SettingsScreen() {
   // Plan 013: masked key suffix per provider (null = not configured) + active choice.
   const [aiSuffixes, setAiSuffixes] = useState<Partial<Record<ConfigurableAIProvider, string | null>>>({});
   const [aiActive, setAiActive] = useState<AIProviderName | null>(null);
-
-  // Plan 016 (SET-1 completion): the safety-buffer editor. bufferSen is the
-  // persisted value (default 30000 = RM300 until overridden); bufferInput is
-  // the in-progress edit; bufferError is the inline validation message.
-  const [bufferSen, setBufferSen] = useState<number | null>(null);
-  const [bufferInput, setBufferInput] = useState('');
-  const [bufferError, setBufferError] = useState<string | null>(null);
-  const [bufferBusy, setBufferBusy] = useState(false);
 
   const loadAccounts = useCallback(async () => {
     try {
@@ -154,45 +154,6 @@ export default function SettingsScreen() {
     }
   }, [services.ai]);
 
-  const loadBuffer = useCallback(async () => {
-    try {
-      setBufferSen(await services.settings.getBuffer());
-    } catch {
-      // Keep the previous state; non-fatal (read failure).
-    }
-  }, [services.settings]);
-
-  /**
-   * SET-1 save: the money string parses via parseMoneyToSen (negative and
-   * junk rejected inline); 0 is a legitimate "no buffer" choice (plan §Edge
-   * cases); the service re-validates at its boundary. Write failures toast.
-   */
-  const saveBuffer = async () => {
-    const trimmed = bufferInput.trim();
-    if (trimmed === '') {
-      setBufferError('Enter an amount');
-      return;
-    }
-    let sen: number;
-    try {
-      sen = parseMoneyToSen(trimmed);
-    } catch {
-      setBufferError('Enter a valid amount (up to 2 decimal places)');
-      return;
-    }
-    setBufferError(null);
-    setBufferBusy(true);
-    try {
-      const saved = await services.settings.setBuffer(sen);
-      setBufferSen(saved.safetyBufferSen);
-      setBufferInput('');
-    } catch (error: unknown) {
-      toast.show(`Could not save safety buffer: ${errMsg(error)}`);
-    } finally {
-      setBufferBusy(false);
-    }
-  };
-
   /** The active selector lists CONFIGURED providers only (no automatic fallback). */
   const configuredProviders: ConfigurableAIProvider[] = (['gemini', 'deepseek'] as const).filter(
     (p) => aiSuffixes[p] !== null,
@@ -226,12 +187,6 @@ export default function SettingsScreen() {
     }, [loadAi]),
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadBuffer();
-    }, [loadBuffer]),
-  );
-
   const handleAdd = async (input: AccountInput) => {
     setSubmitting(true);
     try {
@@ -242,6 +197,19 @@ export default function SettingsScreen() {
       toast.show(`Could not add account: ${errMsg(error)}`);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  /** Correct an account's recorded balance (no expense, no history change). */
+  const handleAdjustBalance = async (balanceSen: number) => {
+    if (!editingAccount) return;
+    try {
+      await services.accounts.setBalance(editingAccount.id, balanceSen);
+      setEditingAccount(null);
+      await loadAccounts();
+    } catch (error: unknown) {
+      toast.show(`Could not update balance: ${errMsg(error)}`);
+      throw error; // keeps the sheet open with the message inline
     }
   };
 
@@ -268,141 +236,126 @@ export default function SettingsScreen() {
   };
 
   return (
-    <KeyboardScreen>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} testID="settings-screen">
-        <Text style={styles.title}>Settings</Text>
+    <KeyboardAwareScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: Math.max(spacing.xxl, insets.bottom + spacing.xxl) }]}
+      testID="settings-screen"
+    >
+      <Text style={styles.title}>Settings</Text>
 
       {/* Account 003: signed-in user + logout. */}
       {user ? (
-        <View style={styles.card}>
-          <Text style={styles.label}>Signed in as</Text>
-          <Text style={styles.email} testID="settings-email">
-            {user.email}
-          </Text>
-        </View>
+        <Card className="flex-row items-center gap-3.5 mx-6 mb-6 p-4 border border-border shadow-none">
+          <Avatar alt="User profile" className="size-11 bg-primary/10 border border-primary/20 items-center justify-center">
+            <AvatarFallback className="bg-primary/10">
+              <Text className="text-primary font-bold text-base">
+                {user.email.slice(0, 1).toUpperCase()}
+              </Text>
+            </AvatarFallback>
+          </Avatar>
+          <View className="flex-1">
+            <Text style={styles.label}>Signed in as</Text>
+            <Text style={styles.email} testID="settings-email">
+              {user.email}
+            </Text>
+          </View>
+        </Card>
       ) : null}
 
-      {/* Plan 004: Accounts section. */}
-      <Text style={styles.sectionTitle}>Accounts</Text>
+      {/* Plan 008: Connected Accounts Stack */}
+      <View testID="accounts-stack" className="mb-2">
+        <SectionHeader title="Connected Accounts" />
 
-      {accountsError ? (
-        <Text style={styles.errorText} testID="accounts-error">
-          {accountsError}
-        </Text>
-      ) : null}
-
-      {accounts.length === 0 && !accountsError ? (
-        <Text style={styles.empty}>No accounts yet — add one to start tracking money.</Text>
-      ) : (
-        accounts.map((account) => (
-          <AccountRow key={account.id} account={account} onDelete={() => handleDelete(account)} />
-        ))
-      )}
-
-      {showForm ? (
-        <AccountForm onSubmit={handleAdd} submitting={submitting} onCancel={() => setShowForm(false)} />
-      ) : (
-        <Pressable
-          onPress={() => setShowForm(true)}
-          style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
-          accessibilityRole="button"
-          testID="add-account-button"
-        >
-          <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
-          <Text style={styles.addButtonLabel}>Add account</Text>
-        </Pressable>
-      )}
-
-      {accounts.some((a) => a.type === 'credit_card') ? (
-        <Text style={styles.note}>Credit-card accounts show the amount owed and count negatively.</Text>
-      ) : null}
-
-      {/* Plan 016 (SET-1): safety-buffer editor — the promised SET-1 surface. */}
-      <Text style={styles.sectionTitle}>Safety buffer</Text>
-      <Text style={styles.note}>
-        Reserved from your available money before safe-to-spend is calculated. RM0 means no buffer.
-      </Text>
-      <View style={styles.card}>
-        <Text style={styles.label}>Current buffer</Text>
-        <Text
-          style={styles.bufferCurrent}
-          numberOfLines={1}
-          accessibilityLabel={`Safety buffer, ${spokenMoneyLabel(bufferSen ?? 0)}`}
-          testID="settings-buffer-current"
-        >
-          {bufferSen === null ? '…' : formatSen(bufferSen)}
-        </Text>
-        <View style={styles.bufferRow}>
-          <TextInput
-            style={styles.bufferInput}
-            keyboardType="decimal-pad"
-            placeholder="e.g. 300"
-            placeholderTextColor={colors.muted}
-            accessibilityLabel="Safety buffer amount in ringgit"
-            value={bufferInput}
-            onChangeText={(text) => {
-              setBufferInput(text);
-              setBufferError(null);
-            }}
-            editable={!bufferBusy}
-            testID="settings-buffer-input"
-          />
-          <Pressable
-            onPress={() => void saveBuffer()}
-            disabled={bufferBusy}
-            style={({ pressed }) => [styles.bufferSave, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Save safety buffer"
-            testID="settings-buffer-save"
-          >
-            <Text style={styles.bufferSaveLabel}>Save</Text>
-          </Pressable>
-        </View>
-        {bufferError ? (
-          <Text style={styles.fieldError} testID="settings-buffer-error">
-            {bufferError}
+        {accountsError ? (
+          <Text style={styles.errorText} testID="accounts-error">
+            {accountsError}
           </Text>
         ) : null}
-        <Text style={styles.note}>0 is allowed — it simply means no money is held back.</Text>
+
+        {accounts.length === 0 && !accountsError ? (
+          <Text style={styles.empty} className="px-4">No accounts yet — add one to start tracking money.</Text>
+        ) : (
+          <View testID="settings-accounts-list" className="px-4 mb-2">
+            {accounts.map((account) => (
+              <AccountRow
+                key={account.id}
+                account={account}
+                onPress={() => setEditingAccount(account)}
+                onDelete={() => handleDelete(account)}
+              />
+            ))}
+          </View>
+        )}
+
+        {showForm ? (
+          <View className="px-4">
+            <AccountForm onSubmit={handleAdd} submitting={submitting} onCancel={() => setShowForm(false)} />
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => setShowForm(true)}
+            style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
+            accessibilityRole="button"
+            testID="add-account-button"
+          >
+            <Ionicons name="add-circle-outline" size={18} color={colors.accent} />
+            <Text style={styles.addButtonLabel}>Add account</Text>
+          </Pressable>
+        )}
+
+        {accounts.some((a) => a.type === 'credit_card') ? (
+          <Text style={styles.note} className="px-4">Credit-card accounts show the amount owed and count negatively.</Text>
+        ) : null}
       </View>
+
+      <AccountBalanceSheet
+        // Remount per account so the sheet prefills with that row's figure.
+        key={editingAccount ? `balance-${editingAccount.id}` : 'balance-closed'}
+        account={editingAccount}
+        onSave={handleAdjustBalance}
+        onCancel={() => setEditingAccount(null)}
+      />
 
       {/* Plan 016 follow-up: Categories manager — long-press a chip to select
         (multi-select), Delete appears on the header row; the "+" chip
         (Other's slot) opens the add sheet. Delete is list-only: existing
-        expenses/budgets keep their category label (never a cascade). */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Categories</Text>
-        {selecting ? (
-          <>
-            <Pressable
-              onPress={() => setConfirmDeleteCats(true)}
-              disabled={selectedCats.size === 0 || categoryBusy}
-              style={({ pressed }) => [
-                styles.headerDelete,
-                selectedCats.size === 0 && styles.headerDeleteDisabled,
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-              testID="settings-categories-delete"
-            >
-              <Ionicons name="trash-outline" size={15} color={colors.surface} />
-              <Text style={styles.headerDeleteLabel}>Delete ({selectedCats.size})</Text>
-            </Pressable>
-            <Pressable
-              onPress={exitSelect}
-              style={({ pressed }) => [styles.headerDone, pressed && styles.pressed]}
-              accessibilityRole="button"
-              testID="settings-categories-exit"
-            >
-              <Text style={styles.headerDoneLabel}>Done</Text>
-            </Pressable>
-          </>
-        ) : null}
-      </View>
-      <Text style={styles.note}>
-        Long-press to select categories, then Delete — tap more to multi-select. Deleting removes them from the
-        pickers only; expenses and budgets using them keep their label.
-      </Text>
+        expenses keep their category label (never a cascade). */}
+      <SectionHeader
+        title="Categories"
+        note={
+          selecting
+            ? 'Tap more chips to multi-select, then Delete.'
+            : 'Long-press to select categories, then Delete — tap more to multi-select. Deleting removes them from the pickers only; expenses using them keep their label.'
+        }
+        trailing={
+          selecting ? (
+            <>
+              <Pressable
+                onPress={() => setConfirmDeleteCats(true)}
+                disabled={selectedCats.size === 0 || categoryBusy}
+                style={({ pressed }) => [
+                  styles.headerDelete,
+                  selectedCats.size === 0 && styles.headerDeleteDisabled,
+                  pressed && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                testID="settings-categories-delete"
+              >
+                <Ionicons name="trash-outline" size={15} color={colors.surface} />
+                <Text style={styles.headerDeleteLabel}>Delete ({selectedCats.size})</Text>
+              </Pressable>
+              <Pressable
+                onPress={exitSelect}
+                style={({ pressed }) => [styles.headerDone, pressed && styles.pressed]}
+                accessibilityRole="button"
+                testID="settings-categories-exit"
+              >
+                <Text style={styles.headerDoneLabel}>Done</Text>
+              </Pressable>
+            </>
+          ) : undefined
+        }
+      />
       <View style={styles.chipWrap}>
         {visibleCategories.map((category) => {
           const selected = selecting && selectedCats.has(category.id);
@@ -450,66 +403,71 @@ export default function SettingsScreen() {
       <ConfirmSheet
         visible={confirmDeleteCats}
         title={`Delete ${selectedCats.size} categor${selectedCats.size === 1 ? 'y' : 'ies'}?`}
-        message="They are removed from the pickers only — expenses and budgets that already use them are left unchanged."
+        message="They are removed from the pickers only — expenses that already use them are left unchanged."
         confirmLabel="Delete"
         busy={categoryBusy}
         onConfirm={() => void doDeleteSelected()}
         onCancel={() => setConfirmDeleteCats(false)}
       />
 
-      {/* Plan 013: AI Providers (BYOK — Gemini + DeepSeek). */}
-      <Text style={styles.sectionTitle}>AI Provider</Text>
-      <Text style={styles.note}>
-        Bring your own API key to analyze your finances with AI. Keys are stored securely on this
-        device and sent only to the provider.
-      </Text>
-      {/* Plan 016 (SET-2): the AI status line — key presence per provider (013's config). */}
-      <Text
-        style={[styles.aiStatus, aiSuffixes.gemini !== null && styles.aiStatusConfigured]}
-        testID="settings-ai-status-gemini"
-      >
-        {aiStatusLabel('gemini', aiSuffixes.gemini !== null)}
-      </Text>
-      <Text
-        style={[styles.aiStatus, aiSuffixes.deepseek !== null && styles.aiStatusConfigured]}
-        testID="settings-ai-status-deepseek"
-      >
-        {aiStatusLabel('deepseek', aiSuffixes.deepseek !== null)}
-      </Text>
-      <ProviderRow
-        provider="gemini"
-        configured={aiSuffixes.gemini !== null}
-        suffix={aiSuffixes.gemini ?? null}
-        onPress={() => router.push('/settings/ai/gemini' as never)}
-      />
-      <ProviderRow
-        provider="deepseek"
-        configured={aiSuffixes.deepseek !== null}
-        suffix={aiSuffixes.deepseek ?? null}
-        onPress={() => router.push('/settings/ai/deepseek' as never)}
-      />
-      <Text style={styles.activeLabel}>Active AI provider</Text>
-      <ActiveProviderSelector
-        configured={configuredProviders}
-        active={aiActive}
-        onSelect={handleSelectActive}
-      />
-      <Text style={styles.note}>
-        Analysis actions use the active provider only — there is no automatic fallback.
-      </Text>
+      {/* Plan 008: AI Provider Config — testID="ai-config-section" wrapper */}
+      <View testID="ai-config-section">
+        {/* Plan 013: AI Providers (BYOK — Gemini + DeepSeek). */}
+        <SectionHeader
+          title="AI Provider"
+          note="Bring your own API key to analyze your finances with AI. Keys are stored securely on this device and sent only to the provider."
+        />
+        {/* Plan 016 (SET-2): the AI status pills — key presence per provider (013's config). */}
+        <View style={styles.aiStatusRow}>
+          <Text
+            style={[styles.aiStatus, aiSuffixes.gemini !== null && styles.aiStatusConfigured]}
+            testID="settings-ai-status-gemini"
+          >
+            {aiStatusLabel('gemini', aiSuffixes.gemini !== null)}
+          </Text>
+          <Text
+            style={[styles.aiStatus, aiSuffixes.deepseek !== null && styles.aiStatusConfigured]}
+            testID="settings-ai-status-deepseek"
+          >
+            {aiStatusLabel('deepseek', aiSuffixes.deepseek !== null)}
+          </Text>
+        </View>
+        <ProviderRow
+          provider="gemini"
+          configured={aiSuffixes.gemini !== null}
+          suffix={aiSuffixes.gemini ?? null}
+          onPress={() => router.push('/settings/ai/gemini' as never)}
+        />
+        <ProviderRow
+          provider="deepseek"
+          configured={aiSuffixes.deepseek !== null}
+          suffix={aiSuffixes.deepseek ?? null}
+          onPress={() => router.push('/settings/ai/deepseek' as never)}
+        />
+        <Text style={styles.activeLabel}>Active AI provider</Text>
+        <ActiveProviderSelector
+          configured={configuredProviders}
+          active={aiActive}
+          onSelect={handleSelectActive}
+        />
+        <Text style={styles.note}>
+          Analysis actions use the active provider only — there is no automatic fallback.
+        </Text>
+      </View>
 
       <Pressable
         onPress={logout}
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+        android_ripple={{ color: 'rgba(0,0,0,0.06)', borderless: false }}
         accessibilityRole="button"
         testID="settings-logout"
       >
+        <Ionicons name="log-out-outline" size={18} color={colors.danger} />
         <Text style={styles.buttonLabel}>Log out</Text>
       </Pressable>
 
       <Text style={styles.footNote}>AI analysis through your own provider keys.</Text>
-      </ScrollView>
-    </KeyboardScreen>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -524,22 +482,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.xl,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
   label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xs, fontWeight: '600' },
   email: { fontSize: typography.body, fontWeight: '700', color: colors.text },
-  sectionTitle: {
-    fontSize: typography.emphasis,
-    fontWeight: '800',
-    color: colors.text,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-    letterSpacing: -0.2,
-  },
   empty: { fontSize: typography.body, color: colors.muted, marginBottom: spacing.md },
   errorText: { fontSize: typography.body, color: colors.danger, marginBottom: spacing.md },
   addButton: {
@@ -577,7 +522,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   headerDelete: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -605,40 +549,37 @@ const styles = StyleSheet.create({
   addChip: { borderStyle: 'dashed', borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.background },
   addChipLabel: { color: colors.accent },
   button: {
-    backgroundColor: colors.danger,
-    borderRadius: 12,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.lg,
-  },
-  buttonLabel: { color: '#fff', fontSize: typography.emphasis, fontWeight: '700' },
-  pressed: { opacity: 0.8 },
-  footNote: { marginTop: spacing.lg, fontSize: typography.caption, color: colors.muted, textAlign: 'center' },
-  bufferCurrent: { fontSize: typography.moneySmall, fontWeight: '800', color: colors.text, marginBottom: spacing.sm, fontVariant: moneyFontVariant },
-  bufferRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', marginBottom: spacing.sm },
-  bufferInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    minHeight: 44, // touch target (plan 016 a11y)
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    fontSize: typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
-  },
-  bufferSave: {
-    backgroundColor: colors.accent,
-    borderRadius: 10,
-    minHeight: 44,
-    minWidth: 72,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: colors.dangerSoft,
+    borderRadius: 12,
+    minHeight: 48,
+    paddingVertical: spacing.md,
+    marginTop: spacing.lg,
   },
-  bufferSaveLabel: { color: colors.surface, fontSize: typography.body, fontWeight: '700' },
-  fieldError: { fontSize: typography.caption, color: colors.danger, marginBottom: spacing.sm },
-  aiStatus: { fontSize: typography.caption, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs },
-  aiStatusConfigured: { color: colors.accent },
+  buttonLabel: { color: colors.danger, fontSize: typography.emphasis, fontWeight: '700' },
+  pressed: { opacity: 0.8 },
+  footNote: { marginTop: spacing.lg, fontSize: typography.caption, color: colors.muted, textAlign: 'center' },
+  aiStatusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
+  aiStatus: {
+    fontSize: typography.caption,
+    color: colors.muted,
+    fontWeight: '600',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    overflow: 'hidden',
+  },
+  aiStatusConfigured: {
+    color: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentSoft,
+  },
 });

@@ -2,11 +2,20 @@
 
 | | |
 |---|---|
-| **Status** | Approved — decisions confirmed (2026-09-01, rev. 3: AI BYOK) |
+| **Status** | Approved — decisions confirmed (2026-09-01, rev. 3: AI BYOK); rev. 4 scope reset 2026-10-10 (plan 020) |
 | **Version** | 1.0 |
 | **Date** | 2026-09-01 |
 | **Platform** | Android + iOS (React Native + Expo); web out of MVP (A16) |
-| **MVP scope** | Local-first personal expense tracker with budgets, commitments, cash-flow awareness, and contextual AI analysis |
+| **MVP scope** | Local-first personal expense tracker with commitments, cash-flow awareness, and contextual AI analysis |
+
+> **Rev. 4 — scope reset (2026-10-10, [plan 020](plans/020-scope-reset-credit-bills.md)).** The user
+> removed **budgets** (§7.3, goal 2), the **safety buffer** (SET-1), **safe-to-spend** and the
+> **daily allowance** (goal 4, DASH-1/3, §8.4, D2 retired), and the dead Transfer/Scan dashboard
+> buttons; the **Payroll** UI is hidden. The Dashboard now shows *spent this month* and *due by end
+> of this month* (unpaid commitment slots before next month start, overdue included). Plan 020
+> also specifies credit-account **bills** (SPayLater / credit cards) and a period-based Analytics
+> chart — not yet built. Sections below that describe removed features are kept for history and
+> marked *(removed — plan 020)*.
 
 ---
 
@@ -57,14 +66,14 @@ The app solves this by combining manual expense tracking, budgets, and future co
 4. **Create a commitment** — Commitments → new → name, type, total/amount, frequency (monthly or one-time), dates → app derives the payment schedule → mark payments paid as they happen (each paid payment records an expense in **Debt / Repayment**).
 5. **Understand obligations** — Commitments → "Analyze my debt" → app computes upcoming-payment totals, AI explains them.
 6. **Understand spending** — Analytics → month view → "Analyze my spending" → app computes the numbers, AI interprets them.
-7. **Understand allowance** — Cash Flow view → "Explain my allowance" → app shows the formula components, AI optionally narrates.
+7. **Understand allowance** — Cash Flow view → **"Ask about your money"** box (type any question, or tap a common prompt like "Explain my allowance") → app shows the formula components, AI answers using the computed numbers.
 
 ## 6. Confirmed Decisions (2026-09-01)
 
 | # | Decision | Choice |
 |---|---|---|
 | D1 | Account balance semantics | **Auto-adjust**: recording/editing/deleting an expense updates the linked account's balance. Available money = sum of all balances; credit-card accounts store the amount owed and count negatively. No manual balance editing after creation. |
-| D2 | Cash-flow formula | **Conservative**: Safe = Available − Upcoming commitments − Remaining monthly budget − Safety buffer. Remaining budget uses the *overall* monthly budget only (category budgets do not enter the formula). |
+| D2 | Cash-flow formula *(retired — plan 020)* | **Conservative**: Safe = Available − Upcoming commitments − Remaining monthly budget − Safety buffer. Remaining budget uses the *overall* monthly budget only (category budgets do not enter the formula). |
 | D3 | Paid commitment payments | **Auto-create linked expense**: marking a payment paid creates an Expense (category **Debt / Repayment**) linked to that payment. Paid payments are excluded from upcoming totals; the expense counts exactly once in spending. |
 | D4 | Commitment frequencies | **Monthly + one-time** only. Weekly/yearly are future. Installments define a payment count or end date; recurring monthly commitments (rent, subscriptions) have no end date. |
 | D5 | Project & docs location | `~/Documents/projects/spending-tracker/`, docs in `docs/` per auth-system convention (PRD / ARCHITECTURE / IMPLEMENTATION_PLAN / plans/NNN-*). |
@@ -87,10 +96,10 @@ The app solves this by combining manual expense tracking, budgets, and future co
 
 | ID | Requirement |
 |---|---|
-| DASH-1 | Show, for the current calendar month: available money, total spent, monthly budget, remaining budget, upcoming commitments (unpaid, due before next month start), safe-to-spend, daily allowance. |
+| DASH-1 | *(rev. 4)* Show, for the current calendar month: total spent and the total due by end of month (unpaid commitments due before next month start, overdue included), with the items making it up. |
 | DASH-2 | Show spending grouped by category for the current month (sorted by amount). |
-| DASH-3 | Allow expanding the cash-flow section into a component breakdown of the safe-to-spend formula (Available − Commitments − Remaining budget − Buffer). |
-| DASH-4 | Optional: "Explain my allowance" contextual AI action on the cash-flow section. |
+| DASH-3 | *(removed — plan 020)* ~~Expandable safe-to-spend formula breakdown.~~ |
+| DASH-4 | Optional: an **"Ask about your money"** contextual AI box on the cash-flow section — free-text question (capped) plus one-tap common prompts (e.g. "What do I need to pay by the end of this month?", "Explain my next month commitment"), answered from the computed snapshot only. |
 | DASH-5 | Every dashboard value is computed deterministically by the financial engine (see §8). |
 
 ### 7.2 Expenses
@@ -106,7 +115,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | EXP-7 | Default categories (database entities, not hardcoded UI strings): Food, Groceries, Transport, Entertainment, Shopping, Bills, Health, Education, Travel, Gifts, Debt / Repayment, Other. |
 | EXP-8 | Fast entry: defaults (today's date, last-used category/account) to minimize taps. |
 
-### 7.3 Budgets
+### 7.3 Budgets *(removed — plan 020)*
 
 | ID | Requirement |
 |---|---|
@@ -142,7 +151,7 @@ The app solves this by combining manual expense tracking, budgets, and future co
 | ID | Requirement |
 |---|---|
 | AI-1 | AI is accessed exclusively through an application-level `AIService` abstraction → the **active provider** (`GeminiProvider` or `DeepSeekProvider`) → provider API. UI never talks to a provider directly. |
-| AI-2 | AI actions available where context exists: Commitments → analyze debt; Analytics → analyze spending; Cash Flow → explain allowance. |
+| AI-2 | AI actions available where context exists: Commitments → analyze debt; Analytics → analyze spending; Cash Flow → ask about allowance/money (plan 019: a capped free-text question sent as a distinct field, never interpolated into the fixed prompt). |
 | AI-3 | AI receives only already-calculated structured financial data; it must not invent transactions, amounts, or trends. Its output is presentation, never authoritative financial data. |
 | AI-4 | When the network/API is unavailable, AI actions show a clear error and nothing else is blocked. |
 | AI-5 | Provider architecture: `GeminiProvider` and `DeepSeekProvider` implement the same capability interface (test connection, model discovery, generate); adding/switching providers never touches the financial engine or analysis UI. |
@@ -180,13 +189,13 @@ The app solves this by combining manual expense tracking, budgets, and future co
 
 | ID | Requirement |
 |---|---|
-| SET-1 | Edit the safety-buffer amount (default RM300). |
+| SET-1 | *(removed — plan 020)* ~~Edit the safety-buffer amount.~~ |
 | SET-2 | AI provider configuration: per-provider keys (SecureStore, add/replace/remove), Test Connection, model selection, active provider (plan 013). |
 | SET-3 | No other settings in MVP (currency, language, categories are fixed/out of scope). |
 
 ### 7.10 Navigation
 
-- Tabs: Dashboard, Expenses, Budgets, Commitments, Analytics, Settings. Cash Flow is embedded in the Dashboard (expandable breakdown) and does not get its own tab in the MVP.
+- Tabs *(rev. 4)*: Dashboard, Expenses, Commitments, Analytics. Settings opens from the Dashboard header.
 
 ## 8. Financial Rules & Cash Flow
 
@@ -204,7 +213,7 @@ The expense set and the unpaid-commitment set are **disjoint**:
 
 So a given ringgit is counted exactly once in the cash-flow formula. A consequence: **the engine never reconciles a standalone manually-typed expense against an unpaid commitment** (there is no matching link); users who pay commitments through the Commitments flow get the auto-created expense, which is the supported path.
 
-### 8.4 Cash-flow formula (decision D2 — conservative)
+### 8.4 Cash-flow formula (decision D2 — conservative) *(removed — plan 020; the "Upcoming commitments" definition still applies as Home's "due by end of month")*
 
 ```
 Available            = Σ account balances (credit-card owed amounts count negative)
@@ -222,7 +231,7 @@ Properties of this formula (documented so implementers and users are not surpris
 2. **Daily allowance rises** slightly each day as the denominator shrinks.
 3. **Safe can be negative** → UI must show an explicit deficit state ("no safe-to-spend; cover commitments + buffer before discretionary spending"), never a misleading positive number.
 
-### 8.5 Worked example (spec numbers, September 2026)
+### 8.5 Worked example (spec numbers, September 2026) *(removed — plan 020)*
 
 | Component | Spec example | Our formula (D2) |
 |---|---|---|
