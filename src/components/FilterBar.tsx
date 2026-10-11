@@ -1,32 +1,21 @@
-/**
- * FilterBar (Plan 004 — Single-axis horizontal filter dock)
- *
- * Integrated search bar + horizontal filter carousels:
- * - Search bar (`testID="expense-search-input"`) with 300 ms debounce.
- * - Date presets: Today, This Week, This Month, Last Month, All, Custom Date.
- * - Category chips with icon glyphs + payment account selector.
- * - Minimum 44px touch targets via TouchTarget / Chip.
- * - Container retains `testID="expense-filter-bar"`.
- */
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Account, Category } from '@/db/schema';
 import type { PeriodPreset } from '@/utils/dates';
-import { CategoryFilter } from '@/components/CategoryFilter';
-import { PeriodPicker } from '@/components/PeriodPicker';
+import { formatSen } from '@/utils/money';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
+import { AccountSwatch } from '@/components/ui/AccountSwatch';
+import { CategoryTile } from '@/components/ui/CategoryTile';
+import { FilterPill } from '@/components/ui/FilterPill';
+import { SearchField } from '@/components/ui/SearchField';
 import { Sheet } from '@/components/ui/Sheet';
-import { TouchTarget } from '@/components/ui/TouchTarget';
-import { colors, spacing, typography } from '@/theme';
-import { cn } from '@/lib/utils';
+import { CalendarSheet } from '@/components/CalendarSheet';
 
-/** Search debounce (300 ms). */
 const SEARCH_DEBOUNCE_MS = 300;
 
 export interface FilterBarProps {
-  /** Store value — the TextInput snapshot initializes from it once. */
   search: string;
-  /** Called ONLY after the 300 ms debounce (and immediately on clear). */
   onSearchChange(text: string): void;
   categories: Category[];
   categoryId: number | null;
@@ -41,6 +30,32 @@ export interface FilterBarProps {
   onSelectAccount?(accountId: number | null): void;
 }
 
+const PERIOD_LABELS: Record<PeriodPreset, string> = {
+  thisMonth: 'This month',
+  thisWeek: 'This week',
+  today: 'Today',
+  lastMonth: 'Last month',
+  all: 'All time',
+  custom: 'Custom range',
+};
+
+function formatAccountKind(type: string): string {
+  switch (type) {
+    case 'bank':
+      return 'Bank';
+    case 'cash':
+      return 'Wallet';
+    case 'credit_card':
+      return 'Credit';
+    case 'paylater':
+      return 'Pay later';
+    case 'ewallet':
+      return 'eWallet';
+    default:
+      return type;
+  }
+}
+
 export function FilterBar({
   search,
   onSearchChange,
@@ -52,14 +67,25 @@ export function FilterBar({
   customTo,
   onSelectPeriod,
   onApplyCustom,
-  accounts,
+  accounts = [],
   selectedAccountId,
   onSelectAccount,
 }: FilterBarProps) {
-  // Instant typing state; the STORE only updates after the debounce.
+  const { colors } = useTheme();
   const [searchInput, setSearchInput] = useState(search);
+  const [prevSearch, setPrevSearch] = useState(search);
+  const [periodSheetVisible, setPeriodSheetVisible] = useState(false);
+  const [categorySheetVisible, setCategorySheetVisible] = useState(false);
   const [accountSheetVisible, setAccountSheetVisible] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync prop changes into local input if prop is cleared/reset from outside
+  if (search !== prevSearch) {
+    setPrevSearch(search);
+    setSearchInput(search);
+  }
 
   const handleSearchChange = (text: string) => {
     setSearchInput(text);
@@ -69,13 +95,6 @@ export function FilterBar({
     }, SEARCH_DEBOUNCE_MS);
   };
 
-  const clearSearch = () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    setSearchInput('');
-    onSearchChange('');
-  };
-
-  // Clear a pending debounce on unmount (no setState — lint-safe).
   useEffect(
     () => () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -83,148 +102,380 @@ export function FilterBar({
     [],
   );
 
+  // Period pill label
+  let periodPillLabel = PERIOD_LABELS[period] ?? 'Period';
+  if (period === 'custom' && customFrom && customTo) {
+    periodPillLabel = `${customFrom} – ${customTo}`;
+  }
+
+  // Category pill label
+  const selectedCategory = categories.find((c) => c.id === categoryId);
+  const categoryPillLabel = selectedCategory ? selectedCategory.name : 'All categories';
+
+  // Account pill label
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const accountPillLabel = selectedAccount ? selectedAccount.name : 'All accounts';
+
   return (
-    <View className="pt-2 bg-background border-b border-border/40" style={styles.bar} testID="expense-filter-bar">
-      {/* Search Bar (44px min height touch target) */}
-      <View
-        className="flex-row items-center gap-2 border border-border/60 rounded-xl bg-card min-h-[44px] py-1 px-3 mx-4 mb-2 shadow-sm"
-        style={styles.searchBox}
-      >
-        <Ionicons name="search-outline" size={16} color={colors.muted} />
-        <TextInput
-          className="flex-1 text-base text-foreground p-0 min-h-[40px]"
-          style={styles.searchInput}
+    <View style={styles.container} testID="expense-filter-bar">
+      {/* Search notes field */}
+      <View style={styles.searchWrap}>
+        <SearchField
           value={searchInput}
           onChangeText={handleSearchChange}
-          placeholder="Search payee or notes..."
-          placeholderTextColor={colors.muted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
+          placeholder="Search notes"
+          accessibilityLabel="Search expenses"
           testID="expense-search-input"
         />
-        {searchInput.length > 0 ? (
-          <TouchTarget
-            minHeight={36}
-            onPress={clearSearch}
-            accessibilityRole="button"
-            accessibilityLabel="Clear search"
-            hitSlop={8}
-          >
-            <Ionicons name="close-circle" size={18} color={colors.muted} />
-          </TouchTarget>
-        ) : null}
       </View>
 
-      {/* Date Presets Row (Today, This Week, This Month, Last Month, All, Custom) */}
-      <PeriodPicker
-        period={period}
-        customFrom={customFrom}
-        customTo={customTo}
-        onSelect={onSelectPeriod}
-        onApplyCustom={onApplyCustom}
-      />
+      {/* FilterPills row */}
+      <View style={styles.pillsRow}>
+        <FilterPill
+          label={periodPillLabel}
+          selected={period !== 'all'}
+          onPress={() => setPeriodSheetVisible(true)}
+          testID="filter-pill-period"
+        />
+        <FilterPill
+          label={categoryPillLabel}
+          selected={categoryId != null}
+          onPress={() => setCategorySheetVisible(true)}
+          testID="filter-pill-category"
+        />
+        <FilterPill
+          label={accountPillLabel}
+          selected={selectedAccountId != null}
+          onPress={() => setAccountSheetVisible(true)}
+          testID="filter-pill-account"
+        />
+      </View>
 
-      {/* Category Chips with Glyphs + Account Selector Chip */}
-      <CategoryFilter
-        categories={categories}
-        selectedId={categoryId}
-        onSelect={onSelectCategory}
-        accounts={accounts}
-        selectedAccountId={selectedAccountId}
-        onOpenAccountSheet={() => setAccountSheetVisible(true)}
-      />
-
-      {/* Payment Account Selector Modal Sheet */}
-      {accounts && accounts.length > 0 ? (
-        <Sheet
-          visible={accountSheetVisible}
-          onClose={() => setAccountSheetVisible(false)}
-          title="Filter by Account"
-          showClose
-          closeLabel="Close account filter"
-          cardTestID="account-filter-sheet"
-        >
-          <View className="py-2 gap-2">
-            <Pressable
-              onPress={() => {
-                onSelectAccount?.(null);
-                setAccountSheetVisible(false);
-              }}
-              className={cn(
-                'flex-row items-center justify-between px-4 py-3 rounded-xl border min-h-[48px]',
-                selectedAccountId == null
-                  ? 'bg-primary/10 border-primary'
-                  : 'bg-card border-border active:bg-muted/40'
-              )}
-              accessibilityRole="button"
-            >
-              <View className="flex-row items-center gap-3">
-                <Ionicons name="wallet-outline" size={20} color={colors.accent} />
-                <Text className="text-base font-semibold text-foreground">All Accounts</Text>
-              </View>
-              {selectedAccountId == null ? (
-                <Ionicons name="checkmark" size={18} color={colors.accent} />
-              ) : null}
-            </Pressable>
-
-            {accounts.map((acc) => {
-              const isSelected = selectedAccountId === acc.id;
-              return (
-                <Pressable
-                  key={acc.id}
-                  onPress={() => {
-                    onSelectAccount?.(isSelected ? null : acc.id);
-                    setAccountSheetVisible(false);
-                  }}
-                  className={cn(
-                    'flex-row items-center justify-between px-4 py-3 rounded-xl border min-h-[48px]',
-                    isSelected
-                      ? 'bg-primary/10 border-primary'
-                      : 'bg-card border-border active:bg-muted/40'
-                  )}
-                  accessibilityRole="button"
-                  testID={`account-filter-item-${acc.id}`}
+      {/* Period Picker Sheet */}
+      <Sheet
+        visible={periodSheetVisible}
+        onClose={() => setPeriodSheetVisible(false)}
+        title="Period"
+        showClose
+        closeLabel="Close period filter"
+        cardTestID="period-filter-sheet"
+      >
+        <View style={styles.sheetContent}>
+          {(['thisMonth', 'thisWeek', 'today', 'lastMonth', 'all'] as const).map((p) => {
+            const isSelected = period === p;
+            return (
+              <Pressable
+                key={p}
+                onPress={() => {
+                  onSelectPeriod(p);
+                  setPeriodSheetVisible(false);
+                }}
+                style={[
+                  styles.optionRow,
+                  {
+                    backgroundColor: isSelected ? colors.selectedBg : colors.fill,
+                    borderColor: isSelected ? colors.accent : colors.separator,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+              >
+                <Text
+                  style={[
+                    styles.optionLabel,
+                    {
+                      color: colors.text,
+                      fontFamily: isSelected ? geistWeights.semiBold : geistWeights.medium,
+                      fontWeight: isSelected ? '600' : '500',
+                    },
+                  ]}
                 >
-                  <View className="flex-row items-center gap-3">
-                    <Ionicons
-                      name={acc.type === 'credit_card' ? 'card-outline' : 'business-outline'}
-                      size={20}
-                      color={colors.muted}
-                    />
-                    <View>
-                      <Text className="text-base font-semibold text-foreground">{acc.name}</Text>
-                      <Text className="text-xs text-muted-foreground uppercase">{acc.type.replace('_', ' ')}</Text>
-                    </View>
+                  {PERIOD_LABELS[p]}
+                </Text>
+                {isSelected ? (
+                  <Ionicons name="checkmark" size={18} color={colors.accent} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+
+          {/* Custom Date Range Option */}
+          <Pressable
+            onPress={() => {
+              setPeriodSheetVisible(false);
+              setCalendarVisible(true);
+            }}
+            style={[
+              styles.optionRow,
+              {
+                backgroundColor: period === 'custom' ? colors.selectedBg : colors.fill,
+                borderColor: period === 'custom' ? colors.accent : colors.separator,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: period === 'custom' }}
+          >
+            <Text
+              style={[
+                styles.optionLabel,
+                {
+                  color: colors.text,
+                  fontFamily: period === 'custom' ? geistWeights.semiBold : geistWeights.medium,
+                  fontWeight: period === 'custom' ? '600' : '500',
+                },
+              ]}
+            >
+              {period === 'custom' && customFrom && customTo
+                ? `Custom: ${customFrom} – ${customTo}`
+                : 'Custom range…'}
+            </Text>
+            {period === 'custom' ? (
+              <Ionicons name="checkmark" size={18} color={colors.accent} />
+            ) : null}
+          </Pressable>
+        </View>
+      </Sheet>
+
+      {/* Category Picker Sheet */}
+      <Sheet
+        visible={categorySheetVisible}
+        onClose={() => setCategorySheetVisible(false)}
+        title="Category"
+        showClose
+        closeLabel="Close category filter"
+        cardTestID="category-filter-sheet"
+      >
+        <View style={styles.sheetContent}>
+          <Pressable
+            onPress={() => {
+              onSelectCategory(null);
+              setCategorySheetVisible(false);
+            }}
+            style={[
+              styles.optionRow,
+              {
+                backgroundColor: categoryId == null ? colors.selectedBg : colors.fill,
+                borderColor: categoryId == null ? colors.accent : colors.separator,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: categoryId == null }}
+            testID="category-filter-all"
+          >
+            <View style={styles.rowLead}>
+              <Ionicons name="grid-outline" size={20} color={colors.accent} />
+              <Text
+                style={[
+                  styles.optionLabel,
+                  {
+                    color: colors.text,
+                    fontFamily: categoryId == null ? geistWeights.semiBold : geistWeights.medium,
+                    fontWeight: categoryId == null ? '600' : '500',
+                  },
+                ]}
+              >
+                All categories
+              </Text>
+            </View>
+            {categoryId == null ? (
+              <Ionicons name="checkmark" size={18} color={colors.accent} />
+            ) : null}
+          </Pressable>
+
+          {categories.map((cat) => {
+            const isSelected = categoryId === cat.id;
+            return (
+              <Pressable
+                key={cat.id}
+                onPress={() => {
+                  onSelectCategory(isSelected ? null : cat.id);
+                  setCategorySheetVisible(false);
+                }}
+                style={[
+                  styles.optionRow,
+                  {
+                    backgroundColor: isSelected ? colors.selectedBg : colors.fill,
+                    borderColor: isSelected ? colors.accent : colors.separator,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                testID={`category-filter-${cat.id}`}
+              >
+                <View style={styles.rowLead}>
+                  <CategoryTile categoryIndex={cat.id} name={cat.name} />
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      {
+                        color: colors.text,
+                        fontFamily: isSelected ? geistWeights.semiBold : geistWeights.medium,
+                        fontWeight: isSelected ? '600' : '500',
+                      },
+                    ]}
+                  >
+                    {cat.name}
+                  </Text>
+                </View>
+                {isSelected ? (
+                  <Ionicons name="checkmark" size={18} color={colors.accent} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Sheet>
+
+      {/* Account Picker Sheet */}
+      <Sheet
+        visible={accountSheetVisible}
+        onClose={() => setAccountSheetVisible(false)}
+        title="Account"
+        showClose
+        closeLabel="Close account filter"
+        cardTestID="account-filter-sheet"
+      >
+        <View style={styles.sheetContent}>
+          <Pressable
+            onPress={() => {
+              onSelectAccount?.(null);
+              setAccountSheetVisible(false);
+            }}
+            style={[
+              styles.optionRow,
+              {
+                backgroundColor: selectedAccountId == null ? colors.selectedBg : colors.fill,
+                borderColor: selectedAccountId == null ? colors.accent : colors.separator,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: selectedAccountId == null }}
+          >
+            <View style={styles.rowLead}>
+              <Ionicons name="wallet-outline" size={20} color={colors.accent} />
+              <Text
+                style={[
+                  styles.optionLabel,
+                  {
+                    color: colors.text,
+                    fontFamily: selectedAccountId == null ? geistWeights.semiBold : geistWeights.medium,
+                    fontWeight: selectedAccountId == null ? '600' : '500',
+                  },
+                ]}
+              >
+                All accounts
+              </Text>
+            </View>
+            {selectedAccountId == null ? (
+              <Ionicons name="checkmark" size={18} color={colors.accent} />
+            ) : null}
+          </Pressable>
+
+          {accounts.map((acc) => {
+            const isSelected = selectedAccountId === acc.id;
+            return (
+              <Pressable
+                key={acc.id}
+                onPress={() => {
+                  onSelectAccount?.(isSelected ? null : acc.id);
+                  setAccountSheetVisible(false);
+                }}
+                style={[
+                  styles.optionRow,
+                  {
+                    backgroundColor: isSelected ? colors.selectedBg : colors.fill,
+                    borderColor: isSelected ? colors.accent : colors.separator,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                testID={`account-filter-item-${acc.id}`}
+              >
+                <View style={styles.rowLead}>
+                  <AccountSwatch accountType={acc.type as never} />
+                  <View>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.optionLabel,
+                        {
+                          color: colors.text,
+                          fontFamily: isSelected ? geistWeights.semiBold : geistWeights.medium,
+                          fontWeight: isSelected ? '600' : '500',
+                        },
+                      ]}
+                    >
+                      {acc.name}
+                    </Text>
+                    <Text style={[styles.optionMeta, { color: colors.textSecondary }]}>
+                      {formatAccountKind(acc.type)} · {formatSen(acc.balanceSen)}
+                    </Text>
                   </View>
-                  {isSelected ? (
-                    <Ionicons name="checkmark" size={18} color={colors.accent} />
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </Sheet>
-      ) : null}
+                </View>
+                {isSelected ? (
+                  <Ionicons name="checkmark" size={18} color={colors.accent} />
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Sheet>
+
+      {/* CalendarSheet for custom range picker */}
+      <CalendarSheet
+        visible={calendarVisible}
+        title="Custom date range"
+        value={customFrom || undefined}
+        onSelect={(iso) => {
+          onApplyCustom(iso, iso);
+          setCalendarVisible(false);
+        }}
+        onCancel={() => setCalendarVisible(false)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: { paddingTop: spacing.xs },
-  searchBox: {
+  container: {
+    gap: 10,
+  },
+  searchWrap: {
+    paddingHorizontal: 0,
+  },
+  pillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  sheetContent: {
+    paddingVertical: 8,
+    gap: 8,
+    maxHeight: 380,
+  },
+  optionRow: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1.5,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    minHeight: 44,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.xs,
+    justifyContent: 'space-between',
   },
-  searchInput: { flex: 1, fontSize: typography.body, color: colors.text, padding: 0, minHeight: 40 },
+  rowLead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  optionLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  optionMeta: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontVariant: tabularNumsVariant,
+  },
 });

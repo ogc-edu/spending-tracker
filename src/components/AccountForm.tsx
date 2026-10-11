@@ -1,25 +1,18 @@
-/**
- * AccountForm (plan 004 UI) — "Add account" form. React Hook Form + Zod
- * (matching the register screen pattern). Fields: name, type (segmented pickup),
- * initial balance (decimal input, sen conversion via parseMoneyToSen).
- *
- * The Zod schema here is the single source of validation truth for the form —
- * it rejects >2 decimals, negatives, empty names, and unknown account types
- * (exactly the plan's edge cases). Exported so tests can `safeParse` it.
- */
-import { Controller, useForm } from 'react-hook-form';
+import React from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
-import { ACCOUNT_TYPES, type AccountInput } from '@/repositories/types';
+import type { Account } from '@/db/schema';
+import { ACCOUNT_TYPES, type AccountInput, type AccountType } from '@/repositories/types';
 import { parseMoneyToSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
-import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS } from './accountMeta';
+import { ACCOUNT_TYPE_LABELS } from './accountMeta';
 import { Chip } from '@/components/ui/Chip';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/input';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { TextLinkButton } from '@/components/ui/TextLinkButton';
+import { Stepper } from '@/components/ui/Stepper';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 
-/** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
 const MONEY_RE = /^\d+(\.\d{1,2})?$/;
 
 export const accountFormSchema = z.object({
@@ -28,62 +21,127 @@ export const accountFormSchema = z.object({
   initialBalance: z
     .string()
     .regex(MONEY_RE, 'Enter a valid amount (up to 2 decimal places)'),
+  statementDay: z.number().int().min(1).max(31).optional().nullable(),
+  dueDay: z.number().int().min(1).max(31).optional().nullable(),
 });
 
 export type AccountFormValues = z.infer<typeof accountFormSchema>;
 
+export interface AccountFormProps {
+  initialAccount?: Account | null;
+  onSubmit: (input: AccountInput) => Promise<void>;
+  submitting: boolean;
+  onCancel: () => void;
+  onDelete?: () => void;
+}
+
 export function AccountForm({
+  initialAccount,
   onSubmit,
   submitting,
   onCancel,
-}: {
-  onSubmit(input: AccountInput): Promise<void>;
-  submitting: boolean;
-  onCancel(): void;
-}) {
+  onDelete,
+}: AccountFormProps) {
+  const { colors } = useTheme();
+
+  const isEditing = Boolean(initialAccount);
+  const initialType: AccountType = (initialAccount?.type as AccountType) ?? 'cash';
+  const initialBalanceStr = initialAccount
+    ? (initialAccount.balanceSen / 100).toFixed(2).replace(/\.00$/, '')
+    : '0';
+
   const {
     control,
     handleSubmit,
+    setValue,
   } = useForm<AccountFormValues>({
-    resolver: zodResolver(accountFormSchema),
-    defaultValues: { name: '', type: 'cash', initialBalance: '0' },
+    resolver: zodResolver(accountFormSchema) as never,
+    defaultValues: {
+      name: initialAccount?.name ?? '',
+      type: initialType,
+      initialBalance: initialBalanceStr,
+      statementDay: initialAccount?.statementDay ?? (initialType === 'paylater' ? 20 : 25),
+      dueDay: initialAccount?.dueDay ?? (initialType === 'paylater' ? 31 : 15),
+    },
   });
 
+  const selectedType = useWatch({ control, name: 'type' });
+  const isCredit = selectedType === 'credit_card' || selectedType === 'paylater';
+
   const onValid = (values: AccountFormValues) => {
-    // Money regex guarantees parse success (identical grammar to MONEY_RE).
     const initialBalanceSen = parseMoneyToSen(values.initialBalance);
-    void onSubmit({ name: values.name, type: values.type, initialBalanceSen });
+    const statementDay = isCredit
+      ? (values.statementDay ?? (values.type === 'paylater' ? 20 : 25))
+      : null;
+    const dueDay = isCredit
+      ? (values.dueDay ?? (values.type === 'paylater' ? 31 : 15))
+      : null;
+
+    void onSubmit({
+      name: values.name,
+      type: values.type,
+      initialBalanceSen,
+      openingOwedSen: isCredit ? initialBalanceSen : 0,
+      statementDay,
+      dueDay,
+    });
   };
 
   return (
-    <View style={styles.container} testID="account-form">
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.separator,
+        },
+      ]}
+      testID="account-form"
+    >
+      <Text style={[styles.heading, { color: colors.text }]}>
+        {isEditing ? 'Edit account' : 'Add account'}
+      </Text>
+
+      {/* Name Field */}
       <Controller
         control={control}
         name="name"
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
           <View style={styles.field}>
-            <Text style={styles.label}>Name</Text>
-            <Input
-              className="min-h-[44px] h-11 rounded-xl bg-background border border-border px-3.5 text-base"
-              placeholder="e.g. Maybank, Wallet"
-              placeholderTextColor={colors.muted}
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Name</Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.fill,
+                  borderColor: error ? colors.danger : colors.separator,
+                  color: colors.text,
+                },
+              ]}
+              placeholder="e.g. Maybank, Wallet, SPayLater"
+              placeholderTextColor={colors.textTertiary}
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
               editable={!submitting}
               testID="account-form-name"
             />
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? (
+              <Text style={[styles.fieldError, { color: colors.danger }]}>
+                {error.message}
+              </Text>
+            ) : null}
           </View>
         )}
       />
 
+      {/* Type Selector */}
       <Controller
         control={control}
         name="type"
         render={({ field: { value, onChange } }) => (
           <View style={styles.field}>
-            <Text style={styles.label}>Type</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Type</Text>
             <View style={styles.chipWrap}>
               {ACCOUNT_TYPES.map((type) => {
                 const selected = value === type;
@@ -91,10 +149,17 @@ export function AccountForm({
                   <Chip
                     key={type}
                     label={ACCOUNT_TYPE_LABELS[type]}
-                    icon={ACCOUNT_TYPE_ICONS[type] as never}
-                    iconColor={colors.muted}
                     selected={selected}
-                    onPress={() => onChange(type)}
+                    onPress={() => {
+                      onChange(type);
+                      if (type === 'paylater') {
+                        setValue('statementDay', 20);
+                        setValue('dueDay', 31);
+                      } else if (type === 'credit_card') {
+                        setValue('statementDay', 25);
+                        setValue('dueDay', 15);
+                      }
+                    }}
                     testID={`account-form-type-${type}`}
                   />
                 );
@@ -104,45 +169,126 @@ export function AccountForm({
         )}
       />
 
+      {/* Balance or Owed Now */}
       <Controller
         control={control}
         name="initialBalance"
         render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
           <View style={styles.field}>
-            <Text style={styles.label}>Initial balance (RM)</Text>
-            <Input
-              className="min-h-[44px] h-11 rounded-xl bg-background border border-border px-3.5 text-base"
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
+              {isCredit ? 'Owed now (RM)' : 'Initial balance (RM)'}
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.fill,
+                  borderColor: error ? colors.danger : colors.separator,
+                  color: colors.text,
+                },
+              ]}
               keyboardType="decimal-pad"
               placeholder="0.00"
-              placeholderTextColor={colors.muted}
+              placeholderTextColor={colors.textTertiary}
               value={value}
               onChangeText={onChange}
               onBlur={onBlur}
               editable={!submitting}
               testID="account-form-balance"
             />
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? (
+              <Text style={[styles.fieldError, { color: colors.danger }]}>
+                {error.message}
+              </Text>
+            ) : null}
           </View>
         )}
       />
 
+      {/* Billing Cycle Steppers for Credit Accounts */}
+      {isCredit ? (
+        <View style={styles.cycleSection}>
+          <Text style={[styles.subheading, { color: colors.text }]}>Billing cycle</Text>
+
+          <Controller
+            control={control}
+            name="statementDay"
+            render={({ field: { value, onChange } }) => (
+              <View style={styles.stepperRow}>
+                <View style={styles.stepperLabelCol}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>
+                    Statement day
+                  </Text>
+                  <Text style={[styles.hint, { color: colors.textTertiary }]}>
+                    Day of month bill closes
+                  </Text>
+                </View>
+                <Stepper
+                  value={value ?? 20}
+                  onChange={(v) => onChange(Math.round(v))}
+                  min={1}
+                  max={31}
+                  step={1}
+                  formatValue={(v) => String(Math.round(v))}
+                  testID="account-form-statement-day"
+                />
+              </View>
+            )}
+          />
+
+          <Controller
+            control={control}
+            name="dueDay"
+            render={({ field: { value, onChange } }) => (
+              <View style={styles.stepperRow}>
+                <View style={styles.stepperLabelCol}>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>
+                    Due day
+                  </Text>
+                  <Text style={[styles.hint, { color: colors.textTertiary }]}>
+                    31 = end of month
+                  </Text>
+                </View>
+                <Stepper
+                  value={value ?? 31}
+                  onChange={(v) => onChange(Math.round(v))}
+                  min={1}
+                  max={31}
+                  step={1}
+                  formatValue={(v) => (Math.round(v) === 31 ? '31 (end)' : String(Math.round(v)))}
+                  testID="account-form-due-day"
+                />
+              </View>
+            )}
+          />
+        </View>
+      ) : null}
+
+      {/* Actions */}
       <View style={styles.actions}>
-        <Button
-          label="Add account"
-          variant="primary"
-          flex
-          busy={submitting}
+        <PrimaryButton
+          label={isEditing ? 'Save changes' : 'Add account'}
+          loading={submitting}
           onPress={handleSubmit(onValid)}
           testID="account-form-submit"
         />
-        <Button
-          label="Cancel"
-          variant="secondary"
-          flex
-          disabled={submitting}
-          onPress={onCancel}
-          testID="account-form-cancel"
-        />
+        <View style={styles.buttonRow}>
+          <TextLinkButton
+            label="Cancel"
+            disabled={submitting}
+            onPress={onCancel}
+            testID="account-form-cancel"
+          />
+          {isEditing && onDelete ? (
+            <TextLinkButton
+              label="Delete account"
+              textStyle={{ color: colors.danger }}
+              disabled={submitting}
+              onPress={onDelete}
+              testID="account-form-delete"
+            />
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -150,27 +296,83 @@ export function AccountForm({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
+    padding: 16,
+    gap: 14,
+    marginBottom: 16,
   },
-  field: { marginBottom: spacing.md },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  heading: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  subheading: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    marginBottom: 4,
+  },
+  field: {
+    gap: 6,
+  },
+  label: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+  },
+  hint: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontFamily: geistWeights.regular,
+  },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    fontSize: typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    fontFamily: geistWeights.medium,
+    fontVariant: tabularNumsVariant,
+    minHeight: 44,
   },
-  inputError: { borderColor: colors.danger },
-  fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
-  actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
+  fieldError: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.medium,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  cycleSection: {
+    borderTopWidth: 1,
+    borderTopColor: 'transparent',
+    gap: 10,
+    paddingTop: 4,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  stepperLabelCol: {
+    flex: 1,
+    gap: 2,
+  },
+  actions: {
+    gap: 12,
+    marginTop: 6,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
 });

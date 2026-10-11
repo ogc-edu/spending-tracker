@@ -24,14 +24,43 @@ import type { CashFlowSnapshot } from '@/services/CashFlowService';
 import type { AIErrorReason } from '@/ai/types';
 import DashboardScreen from '@/app/(tabs)/index';
 
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+jest.mock('react-native-reanimated', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const RN = require('react-native');
+  return {
+    __esModule: true,
+    default: {
+      View: RN.View,
+      createAnimatedComponent: (comp: unknown) => comp,
+    },
+    useSharedValue: (init: unknown) => ({ value: init }),
+    useAnimatedStyle: (fn: () => unknown) => fn(),
+    withTiming: (val: unknown) => val,
+    Easing: {
+      out: (fn: unknown) => fn,
+      ease: (t: unknown) => t,
+    },
+  };
+});
+
 /* ------------------------------------------------------------------ *
  * Module mocks — inert doubles for the screen's non-AI dependencies.
  * ------------------------------------------------------------------ */
 
 jest.mock('@/db', () => ({
   repositories: () => ({
-    accounts: {},
-    expenses: {},
+    accounts: {
+      list: jest.fn(async () => []),
+    },
+    expenses: {
+      listForMonth: jest.fn(async () => []),
+      query: jest.fn(async () => []),
+    },
     commitments: {},
     settings: {},
     categories: {},
@@ -168,6 +197,8 @@ async function renderDashboard(fixture: CashFlowSnapshot): Promise<ReactTestRend
   });
   await act(async () => {}); // run the focus-load effect (mount)
   await act(async () => {}); // flush load's promise continuations + re-render
+  await press(tree, 'home-ai-button');
+  await act(async () => {});
   return tree;
 }
 
@@ -405,8 +436,8 @@ describe('Dashboard — Ask about your money (plan 019)', () => {
  * summary → ask AI, with the Add-expense FAB and no Transfer/Scan dock.
  * ------------------------------------------------------------------ */
 
-describe('Dashboard layout (plan 020)', () => {
-  it('renders month summary → upcoming → category → ask ai, in that order', async () => {
+describe('Home layout (Wave 2 redesign)', () => {
+  it('renders ScreenTitleBlock, SummaryStrip and WalletStack', async () => {
     const tree = await renderDashboard(
       buildFixture({
         categorySummary: [
@@ -416,32 +447,41 @@ describe('Dashboard layout (plan 020)', () => {
       }),
     );
 
-    const cardIds = ['month-summary-card', 'upcoming-card', 'category-summary', 'ask-ai-card'];
-    const rendered = tree.root
-      .findAll((node) => typeof node.type === 'string' && cardIds.includes(node.props.testID))
-      .map((node) => node.props.testID as string);
-
-    expect(rendered).toEqual(cardIds);
+    expect(hasTestID(tree.root, 'home-title-block')).toBe(true);
+    expect(hasTestID(tree.root, 'home-summary-strip')).toBe(true);
+    expect(hasTestID(tree.root, 'home-wallet-stack')).toBe(true);
   });
 
-  it('shows spent this month and due by end of month from the snapshot', async () => {
+  it('shows spent this month and due by end of month in the summary strip', async () => {
     const tree = await renderDashboard(buildFixture({ spentSen: 116_050, upcomingSen: 80_000 }));
-
-    expect(textOf(tree.root, 'summary-spent')).toBe('RM1,160.50');
-    expect(textOf(tree.root, 'summary-due')).toBe('RM800.00');
+    const summary = byTestID(tree.root, 'home-summary-strip');
+    const texts: string[] = [];
+    const collect = (node: ReactTestInstance): void => {
+      for (const child of node.children) {
+        if (typeof child === 'string') texts.push(child);
+        else collect(child);
+      }
+    };
+    collect(summary);
+    const combined = texts.join(' ');
+    expect(combined).toContain('RM1,160.50');
+    expect(combined).toContain('RM800.00');
   });
 
-  it('removes the budget, allowance and safe-to-spend surfaces', async () => {
+  it('removes the old bento, category summary and FAB surfaces from Home', async () => {
     const tree = await renderDashboard(buildFixture());
-    for (const gone of ['hero-card', 'safe-to-spend', 'formula-card', 'budget-bar']) {
+    for (const gone of [
+      'hero-card',
+      'safe-to-spend',
+      'formula-card',
+      'budget-bar',
+      'category-summary',
+      'month-summary-card',
+      'add-expense-fab',
+      'dashboard-action-transfer',
+      'dashboard-action-scan',
+    ]) {
       expect(hasTestID(tree.root, gone)).toBe(false);
     }
-  });
-
-  it('has the Add-expense FAB and no Transfer / Scan buttons', async () => {
-    const tree = await renderDashboard(buildFixture());
-    expect(hasTestID(tree.root, 'add-expense-fab')).toBe(true);
-    expect(hasTestID(tree.root, 'dashboard-action-transfer')).toBe(false);
-    expect(hasTestID(tree.root, 'dashboard-action-scan')).toBe(false);
   });
 });

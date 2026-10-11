@@ -21,10 +21,21 @@ describe('accountFormSchema', () => {
     expect(r.success).toBe(true);
   });
 
-  it('accepts all four account types', () => {
-    for (const type of ['cash', 'bank', 'ewallet', 'credit_card']) {
+  it('accepts all five account types', () => {
+    for (const type of ['cash', 'bank', 'ewallet', 'credit_card', 'paylater']) {
       expect(accountFormSchema.safeParse({ name: 'X', type, initialBalance: '1' }).success).toBe(true);
     }
+  });
+
+  it('accepts valid statementDay and dueDay for credit accounts', () => {
+    const r = accountFormSchema.safeParse({
+      name: 'SPayLater',
+      type: 'paylater',
+      initialBalance: '498.50',
+      statementDay: 20,
+      dueDay: 31,
+    });
+    expect(r.success).toBe(true);
   });
 
   it('rejects >2 decimal places', () => {

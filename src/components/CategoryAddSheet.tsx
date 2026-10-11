@@ -1,17 +1,7 @@
-/**
- * CategoryAddSheet (plan 016 follow-up) — the "add category" bottom sheet
- * opened from the expense form's "+" chip (which replaced the built-in
- * "Other" chip position). A name input + a curated icon grid + Save:
- * pure typing is the input here (short, single field), and the save path is
- * The sheet lifts itself above the soft keyboard (useKeyboardInset), so the
- * name field stays visible while it is being typed. The save path is
- * validated (empty name / duplicate surfaced inline; the service is the
- * source of truth — errors bubble to `error`).
- */
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 import { CATEGORY_ICON_CHOICES } from './categoryMeta';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
@@ -25,6 +15,7 @@ export interface CategoryAddSheetProps {
 }
 
 export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheetProps) {
+  const { colors } = useTheme();
   const [name, setName] = useState('');
   const [icon, setIcon] = useState<string>(CATEGORY_ICON_CHOICES[0] ?? 'grid-outline');
   const [error, setError] = useState<string | null>(null);
@@ -70,49 +61,66 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
       closeLabel="Close"
       cardTestID="category-add-sheet"
     >
+      <Text style={[styles.label, { color: colors.text }]} nativeID="category-add-label-name">
+        Name
+      </Text>
+      <Input
+        style={[
+          styles.input,
+          {
+            color: colors.text,
+            backgroundColor: colors.fill,
+            borderColor: error ? colors.danger : colors.separator,
+          },
+        ]}
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Pets"
+        placeholderTextColor={colors.textTertiary}
+        maxLength={24}
+        autoFocus
+        editable={!saving}
+        accessibilityLabel="New category name"
+        accessibilityLabelledBy="category-add-label-name"
+        testID="category-add-name"
+      />
+      {error ? (
+        <Text style={[styles.fieldError, { color: colors.danger }]} testID="category-add-error">
+          {error}
+        </Text>
+      ) : null}
 
-          <Text className="text-sm font-semibold text-foreground mb-1.5 mt-3" style={styles.label} nativeID="category-add-label-name">
-            Name
-          </Text>
-          <Input
-            className={error ? 'border-destructive' : undefined}
-            style={[styles.input, error && styles.inputError]}
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Pets"
-            maxLength={24}
-            autoFocus
-            editable={!saving}
-            accessibilityLabel="New category name"
-            accessibilityLabelledBy="category-add-label-name"
-            testID="category-add-name"
-          />
-          {error ? (
-            <Text className="mt-1 text-xs text-destructive" style={styles.fieldError} testID="category-add-error">
-              {error}
-            </Text>
-          ) : null}
+      <Text style={[styles.label, { color: colors.text }]}>Icon</Text>
+      <View style={styles.iconGrid}>
+        {CATEGORY_ICON_CHOICES.map((choice) => {
+          const selected = icon === choice;
+          return (
+            <Pressable
+              key={choice}
+              onPress={() => setIcon(choice)}
+              style={[
+                styles.iconCell,
+                {
+                  backgroundColor: selected ? colors.accent : colors.fill,
+                  borderColor: selected ? colors.accent : colors.separator,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`${choice} icon${selected ? ', selected' : ''}`}
+              testID={`category-add-icon-${choice}`}
+            >
+              <Ionicons
+                name={choice as never}
+                size={20}
+                color={selected ? colors.onAccent : colors.textTertiary}
+              />
+            </Pressable>
+          );
+        })}
+      </View>
 
-          <Text className="text-sm font-semibold text-foreground mb-2 mt-3" style={styles.label}>Icon</Text>
-          <View style={styles.iconGrid}>
-            {CATEGORY_ICON_CHOICES.map((choice) => {
-              const selected = icon === choice;
-              return (
-                <Pressable
-                  key={choice}
-                  onPress={() => setIcon(choice)}
-                  style={[styles.iconCell, selected && styles.iconSelected]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={`${choice} icon${selected ? ', selected' : ''}`}
-                  testID={`category-add-icon-${choice}`}
-                >
-                  <Ionicons name={choice as never} size={20} color={selected ? colors.surface : colors.muted} />
-                </Pressable>
-              );
-            })}
-          </View>
-
+      <View style={styles.buttonRow}>
         <Button
           label="Save category"
           variant="primary"
@@ -128,35 +136,52 @@ export function CategoryAddSheet({ visible, onSave, onCancel }: CategoryAddSheet
           onPress={onClose}
           testID="category-add-cancel"
         />
+      </View>
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs, marginTop: spacing.md },
+  label: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    marginBottom: 6,
+    marginTop: 12,
+  },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: 10,
     minHeight: 48,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    fontSize: typography.body,
-    color: colors.text,
-    backgroundColor: colors.background,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 14,
+    fontFamily: geistWeights.regular,
   },
-  inputError: { borderColor: colors.danger },
-  fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  fieldError: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.regular,
+  },
+  iconGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
   iconCell: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
-  iconSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  buttonRow: {
+    gap: 8,
+    marginTop: 8,
+    paddingBottom: 8,
+  },
 });

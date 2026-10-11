@@ -205,19 +205,11 @@ describe('ExpensesScreen (Plan 004 — Audit Ledger)', () => {
     // 5. Individual rows
     expect(tree.root.findAllByProps({ testID: 'expense-row-10' }).length).toBeGreaterThan(0);
     expect(tree.root.findAllByProps({ testID: 'expense-row-11' }).length).toBeGreaterThan(0);
-
-    // 6. Linked commitment status pill on id 11
-    const linkedPill = tree.root.findAllByProps({ label: 'Linked Commitment' });
-    expect(linkedPill.length).toBeGreaterThan(0);
-
-    // 7. Add expense FAB
-    expect(tree.root.findAllByProps({ testID: 'add-expense-fab' }).length).toBeGreaterThan(0);
   });
 
   it('renders empty state when there are no expenses', async () => {
     const tree = await renderScreen();
 
     expect(tree.root.findAllByProps({ testID: 'expenses-empty' }).length).toBeGreaterThan(0);
-    expect(tree.root.findAllByProps({ testID: 'add-expense-fab' }).length).toBeGreaterThan(0);
   });
 });

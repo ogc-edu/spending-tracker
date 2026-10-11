@@ -1,27 +1,20 @@
-/**
- * Expenses stack (plan 005 + 006 screens) — push screens over the tabs with
- * their own headers + back buttons. Routes: /expenses/new (create),
- * /expenses/[id] (plan 006 detail + delete), /expenses/[id]/edit (edit /
- * E7 read-only linked view), reachable only while signed in (the (tabs)
- * gate covers the tab that links to them).
- */
+import React from 'react';
 import { Stack } from 'expo-router';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 export default function ExpensesLayout() {
+  const { colors } = useTheme();
+
   return (
     <Stack
       screenOptions={{
-        headerShown: true,
-        headerTintColor: colors.text,
-        headerTitleStyle: { color: colors.text },
-        headerStyle: { backgroundColor: colors.background },
-        contentStyle: { backgroundColor: colors.background },
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Stack.Screen name="new" options={{ title: 'Add expense' }} />
-      <Stack.Screen name="[id]/index" options={{ title: 'Expense' }} />
-      <Stack.Screen name="[id]/edit" options={{ title: 'Edit expense' }} />
+      <Stack.Screen name="new" options={{ title: 'Add expense', headerShown: false }} />
+      <Stack.Screen name="[id]/index" options={{ title: 'Expense', headerShown: false }} />
+      <Stack.Screen name="[id]/edit" options={{ title: 'Edit expense', headerShown: false }} />
     </Stack>
   );
 }

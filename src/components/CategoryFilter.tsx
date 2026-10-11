@@ -1,16 +1,9 @@
-/**
- * CategoryFilter (plan 006, F1; plan 017 — shared Chip) — horizontal
- * single-select chip row: "All" + the 12 seeded categories. Tapping the
- * ACTIVE chip clears it back to All (one tap clears); tapping another chip
- * replaces the selection. NO multi-select (F1 decision; multi-select is
- * future). Presentational — selection lives in uiStore via the screen's
- * callbacks. Chips are ≥44 pt touch targets via the shared Chip.
- */
+import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import type { Account, Category } from '@/db/schema';
 import { categoryColor } from '@/components/categoryMeta';
 import { Chip } from '@/components/ui/Chip';
-import { spacing } from '@/theme';
+import { useTheme } from '@/theme';
 
 export interface CategoryFilterProps {
   categories: Category[];
@@ -30,6 +23,8 @@ export function CategoryFilter({
   selectedAccountId,
   onOpenAccountSheet,
 }: CategoryFilterProps) {
+  const { colors } = useTheme();
+
   const handlePress = (categoryId: number | null) => {
     // Tap active chip → clear to All; tap another → replace (single-select).
     onSelect(categoryId === selectedId ? null : categoryId);
@@ -63,7 +58,7 @@ export function CategoryFilter({
       ))}
       {accounts && accounts.length > 0 && onOpenAccountSheet ? (
         <>
-          <View className="w-px h-6 bg-border mx-1 self-center" />
+          <View style={[styles.divider, { backgroundColor: colors.separator }]} />
           <Chip
             label={selectedAccount ? selectedAccount.name : 'Account'}
             icon="wallet-outline"
@@ -78,5 +73,16 @@ export function CategoryFilter({
 }
 
 const styles = StyleSheet.create({
-  chipRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.xl, paddingBottom: spacing.sm },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  divider: {
+    width: 1,
+    height: 24,
+    marginHorizontal: 4,
+    alignSelf: 'center',
+  },
 });

@@ -38,7 +38,7 @@ describe('ExpenseList date grouping (plan 018)', () => {
     expect(sections[1]!.data.map((e) => e.id)).toEqual([3]);
   });
 
-  it('labels today and yesterday specially', () => {
+  it('labels today and formats day header per Wave 2B design', () => {
     // Pin "today" by feeding the list a date built from its own todayLocal().
     const { todayLocal } = jest.requireActual('@/utils/dates') as { todayLocal(): string };
     const today = todayLocal();
@@ -46,9 +46,8 @@ describe('ExpenseList date grouping (plan 018)', () => {
     const pad = (n: number): string => String(n).padStart(2, '0');
     const yesterday = `${y}-${pad(m)}-${pad(d - 1 > 0 ? d - 1 : 1)}`; // safe within a month
     const sections = groupByDate([expense(1, today), expense(2, yesterday), expense(3, '2020-05-04')]);
-    expect(sections[0]!.title).toBe('Today');
-    expect(sections[1]!.title).toBe('Yesterday');
-    expect(sections[2]!.title).toBe('04 May');
+    expect(sections[0]!.title).toContain('TODAY ·');
+    expect(sections[2]!.title).toBe('MON 4 MAY');
   });
 
   it('renders rows with their stable per-row testIDs through the SectionList', async () => {

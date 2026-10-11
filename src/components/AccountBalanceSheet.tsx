@@ -1,38 +1,28 @@
-/**
- * AccountBalanceSheet — the "adjust balance" bottom sheet opened by tapping an
- * account row in Settings. One field: the new balance, entered through the same
- * POS-style MoneyInput as the expense amount (sen digits fill in from the
- * right), prefilled with the account's current figure.
- *
- * The sheet lifts itself above the soft keyboard (useKeyboardInset), so the
- * amount stays visible while it is being typed.
- *
- * This RESTATES the recorded balance; it is not a transaction. No expense is
- * written and no other row moves, so the account's history is untouched — the
- * copy says so, because "adjust" could reasonably be read either way. For a
- * credit card the figure is the amount OWED (higher = more debt), which is how
- * the row and the cash-flow engine already read it.
- */
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { Account } from '@/db/schema';
 import { formatSen, formatSenInput, parseMoneyToSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 import { MoneyInput } from './MoneyInput';
 import { Sheet } from '@/components/ui/Sheet';
-import { Button } from '@/components/ui/Button';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { TextLinkButton } from '@/components/ui/TextLinkButton';
 
 export interface AccountBalanceSheetProps {
   /** The account being edited; null closes the sheet. */
   account: Account | null;
   /** Called with the new balance in sen — the owner persists and closes. */
-  onSave(balanceSen: number): Promise<void> | void;
-  onCancel(): void;
+  onSave: (balanceSen: number) => Promise<void> | void;
+  onCancel: () => void;
 }
 
-export function AccountBalanceSheet({ account, onSave, onCancel }: AccountBalanceSheetProps) {
-  // Prefilled with the current figure; the owner remounts the sheet per
-  // account (`key`), so this initializer re-reads on every open.
+export function AccountBalanceSheet({
+  account,
+  onSave,
+  onCancel,
+}: AccountBalanceSheetProps) {
+  const { colors } = useTheme();
+
   const [amount, setAmount] = useState(() =>
     account ? formatSenInput(account.balanceSen) : '0.00',
   );
@@ -41,7 +31,7 @@ export function AccountBalanceSheet({ account, onSave, onCancel }: AccountBalanc
 
   if (!account) return null;
 
-  const owed = account.type === 'credit_card';
+  const isOwed = account.type === 'credit_card' || account.type === 'paylater';
 
   const close = (): void => {
     setError(null);
@@ -71,20 +61,26 @@ export function AccountBalanceSheet({ account, onSave, onCancel }: AccountBalanc
     <Sheet
       visible={account !== null}
       onClose={close}
-      title={owed ? 'Adjust amount owed' : 'Adjust balance'}
+      title={isOwed ? 'Adjust amount owed' : 'Adjust balance'}
       titleTestID="account-balance-title"
-      closeLabel="Close"
       cardTestID="account-balance-sheet"
     >
-      {/* Remounted per account by the owner's `key`, so the prefill re-reads. */}
-      <View>
-        <Text className="text-xs text-muted-foreground mt-0.5" style={styles.subtitle} testID="account-balance-subtitle">
+      <View style={styles.container}>
+        <Text
+          numberOfLines={1}
+          style={[styles.subtitle, { color: colors.textSecondary }]}
+          testID="account-balance-subtitle"
+        >
           {account.name} · now {formatSen(account.balanceSen)}
         </Text>
 
-        <Text className="text-sm font-semibold text-foreground mb-1.5 mt-4" style={styles.label} nativeID="account-balance-label">
-          {owed ? 'New amount owed' : 'New balance'}
+        <Text
+          style={[styles.label, { color: colors.text }]}
+          nativeID="account-balance-label"
+        >
+          {isOwed ? 'New amount owed' : 'New balance'}
         </Text>
+
         <MoneyInput
           value={amount}
           onChangeValue={(next) => {
@@ -94,49 +90,75 @@ export function AccountBalanceSheet({ account, onSave, onCancel }: AccountBalanc
           hasError={error !== null}
           editable={!saving}
           autoFocus
-          accessibilityLabel={owed ? 'New amount owed in ringgit' : 'New balance in ringgit'}
+          accessibilityLabel={isOwed ? 'New amount owed in ringgit' : 'New balance in ringgit'}
           accessibilityLabelledBy="account-balance-label"
           testID="account-balance-input"
         />
+
         {error ? (
-          <Text className="mt-1 text-xs text-destructive" style={styles.fieldError} testID="account-balance-error">
+          <Text
+            style={[styles.fieldError, { color: colors.danger }]}
+            testID="account-balance-error"
+          >
             {error}
           </Text>
         ) : null}
 
-        <Text className="text-xs text-muted-foreground mt-3 mb-4 leading-relaxed" style={styles.note}>
+        <Text style={[styles.note, { color: colors.textTertiary }]}>
           This corrects the recorded figure only — your expenses and their history stay as they are.
         </Text>
 
-        <Button
-          label="Save"
-          variant="primary"
-          busy={saving}
-          disabled={saving}
-          onPress={() => void save()}
-          testID="account-balance-save"
-        />
-        <Button
-          label="Cancel"
-          variant="secondary"
-          disabled={saving}
-          onPress={close}
-          testID="account-balance-cancel"
-        />
+        <View style={styles.actions}>
+          <PrimaryButton
+            label="Save"
+            loading={saving}
+            disabled={saving}
+            onPress={() => void save()}
+            testID="account-balance-save"
+          />
+          <TextLinkButton
+            label="Cancel"
+            disabled={saving}
+            onPress={close}
+            testID="account-balance-cancel"
+          />
+        </View>
       </View>
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  subtitle: { fontSize: typography.caption, color: colors.muted, marginTop: 2 },
-  label: {
-    fontSize: typography.body,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
-    marginTop: spacing.lg,
+  container: {
+    gap: 8,
   },
-  fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
-  note: { fontSize: typography.caption, color: colors.muted, marginTop: spacing.md, lineHeight: 18 },
+  subtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.medium,
+  },
+  label: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    marginTop: 8,
+  },
+  fieldError: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.medium,
+    marginTop: 4,
+  },
+  note: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: geistWeights.regular,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  actions: {
+    gap: 10,
+    marginTop: 4,
+  },
 });

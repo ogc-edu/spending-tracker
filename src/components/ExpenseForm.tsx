@@ -1,38 +1,43 @@
-/**
- * ExpenseForm (plan 005 UI) — add/edit expense form. React Hook Form + Zod
- * (the register/account-form pattern). Fields: amount (POS-style
- * sen-first MoneyInput, auto-focused for fast entry), category (chips grid from the seeded set),
- * account (chips with the current balance + a projected balance after save),
- * date (CalendarSheet picker, stored YYYY-MM-DD, defaults to today), description (optional, ≤200).
- *
- * The Zod schema here is the validation source of truth for the FORM (rejects
- * 0/negative/>2-decimal amounts, empty pickers, bad dates) — the service
- * re-validates the parsed sen input at its own boundary. Exported so tests
- * can `safeParse` it; `expenseToFormValues` is the edit-screen row→form
- * mapping (incl. the E7 read-only flag for linked expenses).
- */
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { z } from 'zod';
 import type { Account, Category, Expense } from '@/db/schema';
-import { DATE_RE, formatDDMMYYYY, isValidDateStr, todayLocal, toLocalDateString } from '@/utils/dates';
-import { formatSen, formatSenInput, parseMoneyToSen } from '@/utils/money';
-import { balanceEffectFor } from '@/services/ExpenseService';
-import type { ExpenseInput } from '@/repositories/types';
-import { colors, spacing, typography } from '@/theme';
+import { billCycleForDate, monthShift, splitInstallment, type InstallmentPart } from '@/engine/creditBills';
+import { DATE_RE, isValidDateStr, todayLocal, toLocalDateString } from '@/utils/dates';
+import {
+  formatSen,
+  formatSenInput,
+  parseMoneyToSen,
+  senFromInputText,
+  senFromMoneyString,
+} from '@/utils/money';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 import { categoryColor } from './categoryMeta';
 import { CategoryAddSheet } from './CategoryAddSheet';
 import { CalendarSheet } from './CalendarSheet';
 import { ConfirmSheet } from './ConfirmSheet';
-import { useKeyboardAwareFocus } from './KeyboardAwareScrollView';
-import { MoneyInput } from './MoneyInput';
 import { Chip } from '@/components/ui/Chip';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/input';
+import { FormGroup } from '@/components/ui/FormGroup';
+import { OptionTile } from '@/components/ui/OptionTile';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { Stepper } from '@/components/ui/Stepper';
+import { Switch } from '@/components/ui/Switch';
+import { useKeyboardAwareFocus } from '@/components/KeyboardAwareScrollView';
 import { haptics } from '@/utils/haptics';
+import type { ExpenseInput } from '@/repositories/types';
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function yesterdayLocal(): string {
   const d = new Date();
@@ -40,7 +45,42 @@ function yesterdayLocal(): string {
   return toLocalDateString(d);
 }
 
-/** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen; rejects "12.", ".", "-5", "1,900". */
+function formatDisplayDate(dateStr: string): string {
+  if (!DATE_RE.test(dateStr)) return dateStr;
+  const today = todayLocal();
+  const yesterday = yesterdayLocal();
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dateObj = new Date(y, m - 1, d);
+  const weekday = WEEKDAYS[dateObj.getDay()] ?? '';
+  const monthName = SHORT_MONTHS[m - 1] ?? '';
+
+  if (dateStr === today) {
+    return `Today, ${d} ${monthName}`;
+  }
+  if (dateStr === yesterday) {
+    return `Yesterday, ${d} ${monthName}`;
+  }
+  return `${weekday}, ${d} ${monthName}`;
+}
+
+function formatAccountKind(type: string): string {
+  switch (type) {
+    case 'bank':
+      return 'Bank';
+    case 'cash':
+      return 'Wallet';
+    case 'credit_card':
+      return 'Credit';
+    case 'paylater':
+      return 'Pay later';
+    case 'ewallet':
+      return 'eWallet';
+    default:
+      return type;
+  }
+}
+
+/** Matches parseMoneyToSen's MONEY_RE: whole ringgit, <=2 decimal sen. */
 const MONEY_RE = /^\d+(\.[0-9]{1,2})?$/;
 
 export const expenseFormSchema = z.object({
@@ -68,16 +108,32 @@ export const expenseFormSchema = z.object({
 
 export type ExpenseFormValues = z.infer<typeof expenseFormSchema>;
 
+export function expenseToFormValues(expense: Expense): {
+  values: ExpenseFormValues & { installment?: { months: number; monthlyRateBp: number } };
+  readOnly: boolean;
+} {
+  return {
+    values: {
+      amount: formatSenInput(expense.amountSen),
+      categoryId: expense.categoryId,
+      accountId: expense.accountId ?? 0,
+      date: expense.date,
+      description: expense.description ?? '',
+    },
+    readOnly: expense.commitmentPaymentId !== null,
+  };
+}
+
 export interface ExpenseFormProps {
   categories: Category[];
   accounts: Account[];
-  /** Partial prefill (new: today + last-used; edit: the row's values). */
-  defaults?: Partial<ExpenseFormValues>;
+  defaults?: Partial<ExpenseFormValues> & {
+    installment?: { months: number; monthlyRateBp: number };
+  };
   submitLabel?: string;
   onSubmit(input: ExpenseInput): Promise<void>;
   submitting: boolean;
   onCancel(): void;
-  /** Category management (plan 016 follow-up): the "+" chip and long-press delete. */
   onCreateCategory(name: string, icon: string): Promise<Category>;
   onDeleteCategory(id: number): Promise<void>;
 }
@@ -86,122 +142,259 @@ export function ExpenseForm({
   categories,
   accounts,
   defaults,
-  submitLabel = 'Save',
+  submitLabel = 'Save expense',
   onSubmit,
   submitting,
-  onCancel,
   onCreateCategory,
   onDeleteCategory,
 }: ExpenseFormProps) {
+  const { colors } = useTheme();
+  const onKeyboardFocus = useKeyboardAwareFocus();
+
+  const initialCategoryId =
+    defaults?.categoryId ?? (categories.length > 0 ? categories[0]?.id : undefined);
+  const initialAccountId =
+    defaults?.accountId ?? (accounts.length > 0 ? accounts[0]?.id : undefined);
+
   const {
     control,
     handleSubmit,
     setValue,
   } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
-    defaultValues: { amount: '0.00', description: '', date: todayLocal(), ...defaults },
+    defaultValues: {
+      amount: defaults?.amount ?? '0.00',
+      description: defaults?.description ?? '',
+      date: defaults?.date ?? todayLocal(),
+      categoryId: initialCategoryId,
+      accountId: initialAccountId,
+    },
   });
 
-  // Category management state (plan 016 follow-up): armed = long-press
-  // revealed the delete badge; confirmDelete = the ConfirmSheet target.
+  const watched = useWatch<ExpenseFormValues>({ control });
+  const selectedAccount = accounts.find((a) => a.id === watched.accountId);
+  const isCredit =
+    selectedAccount?.type === 'credit_card' || selectedAccount?.type === 'paylater';
+
+  // Credit installment split state
+  const [splitEnabled, setSplitEnabled] = useState<boolean>(
+    defaults?.installment != null,
+  );
+  const [splitMonths, setSplitMonths] = useState<number>(
+    defaults?.installment?.months ?? 3,
+  );
+  const [ratePercent, setRatePercent] = useState<number>(
+    defaults?.installment?.monthlyRateBp ? defaults.installment.monthlyRateBp / 100 : 0,
+  );
+
+  // Category management state
   const [armedDelete, setArmedDelete] = useState<Category | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Category | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  /** Calendar visibility for the date field (pick, don't type). */
   const [dateOpen, setDateOpen] = useState(false);
 
-  // Every text input reports its focus so the screen's scroller can lift it
-  // above the keyboard (no-op when the form isn't inside one).
-  const onInputFocus = useKeyboardAwareFocus();
+  // Amount input state & caret animation
+  const inputRef = useRef<TextInput>(null);
+  const [focused, setFocused] = useState(false);
+  const [caretOpacity] = useState(() => new Animated.Value(1));
 
-  // The built-in catch-all 'Other' is hidden from the picker — its slot is
-  // the "+" Add chip. (Deleting a category never touches existing rows.)
-  const visibleCategories = categories.filter((c) => c.name.toLowerCase() !== 'other');
+  useEffect(() => {
+    if (!focused || process.env.NODE_ENV === 'test') return;
+    const blink = Animated.loop(
+      Animated.sequence([
+        Animated.timing(caretOpacity, { toValue: 0, duration: 0, delay: 500, useNativeDriver: true }),
+        Animated.timing(caretOpacity, { toValue: 1, duration: 0, delay: 500, useNativeDriver: true }),
+      ]),
+    );
+    blink.start();
+    return () => {
+      blink.stop();
+      caretOpacity.setValue(1);
+    };
+  }, [caretOpacity, focused]);
 
-  // Live values for the projected-balance preview (SQLite is a source of truth;
-  // this is pure UI state, recomputed on key).
-  const watched = useWatch<ExpenseFormValues>({ control });
-  const selectedAccount: Account | undefined =
-    watched.accountId != null && watched.accountId > 0
-      ? accounts.find((a) => a.id === watched.accountId)
-      : undefined;
+  const rawAmountStr = watched.amount ?? '0.00';
+  const sen = senFromMoneyString(rawAmountStr);
+  const absSen = Math.abs(sen);
+  const ringgitStr = Math.floor(absSen / 100).toLocaleString('en-US');
+  const centsStr = String(absSen % 100).padStart(2, '0');
+  const amountDisplay = `${ringgitStr}.${centsStr}`;
 
-  // Projected balance after save (plan 005: the form shows it live).
-  let projectedText: string | null = null;
-  if (selectedAccount) {
-    let amountSen = 0;
+  // Installment calculations
+  let splitResult = {
+    parts: [] as InstallmentPart[],
+    totalPayableSen: 0,
+    totalInterestSen: 0,
+    monthlyPaymentSen: 0,
+    lastPaymentSen: 0,
+  };
+  let principalSen = 0;
+  try {
+    principalSen = parseMoneyToSen(rawAmountStr);
+  } catch {
+    principalSen = 0;
+  }
+  if (principalSen > 0 && splitMonths > 0) {
     try {
-      amountSen = parseMoneyToSen(watched.amount ?? '');
+      splitResult = splitInstallment(
+        principalSen,
+        splitMonths,
+        Math.round(ratePercent * 100),
+      );
     } catch {
-      amountSen = 0;
+      // Keep defaults
     }
-    const delta = balanceEffectFor(selectedAccount, amountSen);
-    const projected = selectedAccount.balanceSen + delta;
-    const label = selectedAccount.type === 'credit_card' ? 'Owed' : 'Balance';
-    projectedText = `${label}: ${formatSen(selectedAccount.balanceSen)} → ${formatSen(projected)}`;
+  }
+  const hasRemainder =
+    splitResult.parts.length > 0 &&
+    splitResult.lastPaymentSen !== splitResult.monthlyPaymentSen;
+
+  let landingFootnote = 'Lands in next bills · last part absorbs rounding';
+  try {
+    const statementDay = selectedAccount?.statementDay ?? 20;
+    const startCycle = billCycleForDate(watched.date || todayLocal(), statementDay);
+    const endCycle = monthShift(startCycle.year, startCycle.month, splitMonths - 1);
+    const startName = SHORT_MONTHS[startCycle.month - 1];
+    const endName = SHORT_MONTHS[endCycle.month - 1];
+    landingFootnote = `Lands in the ${startName} – ${endName} bills · last part absorbs rounding`;
+  } catch {
+    landingFootnote = 'Lands in next bills · last part absorbs rounding';
   }
 
+  const visibleCategories = categories.filter((c) => c.name.toLowerCase() !== 'other');
+
   const onValid = (values: ExpenseFormValues) => {
-    // Money regex guarantees parse success (identical grammar to MONEY_RE).
     const amountSen = parseMoneyToSen(values.amount);
+    const monthlyRateBp = Math.round(ratePercent * 100);
+    const installment =
+      isCredit && splitEnabled
+        ? { months: splitMonths, monthlyRateBp }
+        : undefined;
+
     void onSubmit({
       amountSen,
       categoryId: values.categoryId,
       accountId: values.accountId,
       date: values.date,
       description: values.description,
+      installment,
     });
   };
 
   return (
-    <View testID="expense-form">
+    <View style={styles.container} testID="expense-form">
+      {/* 1. AMOUNT SECTION */}
       <Controller
         control={control}
         name="amount"
-        render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-          <View style={styles.field}>
-            <Text style={styles.label} nativeID="expense-form-label-amount">Amount</Text>
-            {/* POS-style entry: digits fill in from the sen place (2,0,0 → RM2.00). */}
-            <MoneyInput
-              value={value}
-              variant="hero"
-              onChangeValue={onChange}
-              onBlur={onBlur}
-              onFocus={onInputFocus}
+        render={({ field: { value, onChange }, fieldState: { error } }) => (
+          <View style={styles.amountSection} testID="money-input">
+            <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>
+              Amount
+            </Text>
+            <Pressable
+              onPress={() => inputRef.current?.focus()}
+              style={styles.amountHeroRow}
+              accessibilityRole="button"
+              accessibilityLabel={`Amount in ringgit, RM${amountDisplay}`}
+            >
+              <Text
+                style={[
+                  styles.amountPrefix,
+                  {
+                    color: colors.textTertiary,
+                  },
+                ]}
+              >
+                RM
+              </Text>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+                style={[
+                  styles.amountHeroText,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+                testID="amount-display"
+              >
+                {amountDisplay}
+              </Text>
+              {focused ? (
+                <Animated.View
+                  style={[
+                    styles.caret,
+                    {
+                      backgroundColor: colors.accent,
+                      opacity: caretOpacity,
+                    },
+                  ]}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                  testID="amount-caret"
+                />
+              ) : null}
+            </Pressable>
+
+            {/* Hidden TextInput for POS typing */}
+            <TextInput
+              ref={inputRef}
+              style={styles.hiddenInput}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              value={String(sen)}
+              caretHidden
               autoFocus
               editable={!submitting}
-              hasError={error !== undefined}
+              selection={{ start: String(sen).length, end: String(sen).length }}
+              onChangeText={(text) => {
+                haptics.keypadPress();
+                onChange(formatSenInput(senFromInputText(sen, text)));
+              }}
+              onFocus={() => {
+                setFocused(true);
+                onKeyboardFocus();
+              }}
+              onBlur={() => setFocused(false)}
               accessibilityLabel="Amount in ringgit"
-              accessibilityLabelledBy="expense-form-label-amount"
               testID="expense-form-amount"
-              containerTestID="money-input"
             />
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+
+            {error ? (
+              <Text style={[styles.fieldError, { color: colors.danger }]}>
+                {error.message}
+              </Text>
+            ) : null}
           </View>
         )}
       />
 
+      {/* 2. CATEGORY SECTION */}
       <Controller
         control={control}
         name="categoryId"
         render={({ field: { value, onChange }, fieldState: { error } }) => (
-          <View style={styles.field}>
-            <Text style={styles.label}>Category</Text>
-            <View style={styles.chipWrap} testID="category-matrix">
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Category
+            </Text>
+            <View style={styles.categoryWrap} testID="category-matrix">
               {visibleCategories.map((category) => {
-                const selected = value === category.id;
+                const isSelected = value === category.id;
                 const armed = armedDelete?.id === category.id;
                 return (
-                  <View key={category.id} style={[styles.chipSlot, armed && styles.chipArmed]}>
+                  <View key={category.id} style={styles.chipWrapper}>
                     <Chip
                       label={category.name}
                       icon={category.icon as never}
                       iconColor={categoryColor(category.id)}
-                      selected={selected}
+                      selected={isSelected}
                       onPress={() => {
                         if (armed) {
-                          setArmedDelete(null); // tap again = disarm, never select
+                          setArmedDelete(null);
                           return;
                         }
                         haptics.categorySelect();
@@ -214,7 +407,12 @@ export function ExpenseForm({
                     {armed ? (
                       <Pressable
                         onPress={() => setConfirmDelete(category)}
-                        style={styles.minusBadge}
+                        style={[
+                          styles.deleteBadge,
+                          {
+                            backgroundColor: colors.danger,
+                          },
+                        ]}
                         accessibilityRole="button"
                         accessibilityLabel={`Delete ${category.name}`}
                         testID={`expense-form-category-delete-${category.id}`}
@@ -225,167 +423,341 @@ export function ExpenseForm({
                   </View>
                 );
               })}
-              {/* The "+" chip replaces the built-in "Other" chip slot. */}
+
+              {/* Add category (+) chip */}
               <Chip
-                label="Add"
-                icon="add"
-                iconColor={colors.accent}
+                label="+"
+                selected={false}
                 onPress={() => setAddOpen(true)}
                 testID="expense-form-category-add"
               />
             </View>
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? (
+              <Text style={[styles.fieldError, { color: colors.danger }]}>
+                {error.message}
+              </Text>
+            ) : null}
           </View>
         )}
       />
 
+      {/* 3. PAID WITH (ACCOUNTS) SECTION */}
       <Controller
         control={control}
         name="accountId"
         render={({ field: { value, onChange }, fieldState: { error } }) => (
-          <View style={styles.field}>
-            <Text style={styles.label}>Account</Text>
-            <View style={styles.chipWrap}>
-              {accounts.map((account) => {
-                const selected = value === account.id;
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Paid with
+            </Text>
+            <View style={styles.accountsGrid}>
+              {accounts.map((acc) => {
+                const isSelected = value === acc.id;
                 return (
-                  <View key={account.id} testID={`account-pill-${account.id}`}>
-                    <Chip
-                      label={account.name}
-                      selected={selected}
-                      onPress={() => onChange(account.id)}
-                      testID={`expense-form-account-${account.id}`}
+                  <View key={acc.id} style={styles.accountCell}>
+                    <OptionTile
+                      name={acc.name}
+                      kind={formatAccountKind(acc.type)}
+                      accountType={acc.type as never}
+                      selected={isSelected}
+                      onPress={() => {
+                        haptics.categorySelect();
+                        onChange(acc.id);
+                      }}
+                      testID={`account-pill-${acc.id}`}
                     />
                   </View>
                 );
               })}
             </View>
-            {projectedText ? <Text style={styles.projected}>{projectedText}</Text> : null}
-            {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? (
+              <Text style={[styles.fieldError, { color: colors.danger }]}>
+                {error.message}
+              </Text>
+            ) : null}
           </View>
         )}
       />
 
-      {/* Date is PICKED, never typed (the CommitmentForm pattern): the row opens
-          the CalendarSheet, so no keyboard can cover it and the stored value is
-          always a valid YYYY-MM-DD. */}
-      <Controller
-        control={control}
-        name="date"
-        render={({ field: { value }, fieldState: { error } }) => (
-          <View className="mb-4" style={styles.field}>
-            <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>Date</Text>
-            <View className="flex-row items-center gap-2 mb-2">
-              <Chip
-                label="Today"
-                selected={value === todayLocal()}
-                onPress={() => setValue('date', todayLocal(), { shouldValidate: true })}
-                className="min-h-[36px] py-1"
-              />
-              <Chip
-                label="Yesterday"
-                selected={value === yesterdayLocal()}
-                onPress={() => setValue('date', yesterdayLocal(), { shouldValidate: true })}
-                className="min-h-[36px] py-1"
+      {/* 4. CREDIT SPLIT BLOCK (Only when account is credit_card or paylater) */}
+      {isCredit ? (
+        <View style={styles.section}>
+          <FormGroup style={styles.splitGroup}>
+            {/* Top row with Switch */}
+            <View style={styles.splitHeaderRow}>
+              <View style={styles.splitHeaderText}>
+                <Text
+                  style={[
+                    styles.splitTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  Split into months
+                </Text>
+                <Text
+                  style={[
+                    styles.splitSubtitle,
+                    {
+                      color: colors.textTertiary,
+                    },
+                  ]}
+                >
+                  Each part lands in a later bill
+                </Text>
+              </View>
+              <Switch
+                value={splitEnabled}
+                onValueChange={(val) => {
+                  haptics.categorySelect();
+                  setSplitEnabled(val);
+                }}
+                accessibilityLabel="Split into months"
+                testID="split-switch"
               />
             </View>
-            <Pressable
-              onPress={() => setDateOpen(true)}
-              disabled={submitting}
-              className={`flex-row items-center gap-2 border rounded-lg px-4 py-3 bg-card min-h-[48px] ${
-                error ? 'border-destructive' : 'border-border'
-              }`}
-              style={({ pressed }) => [styles.dateField, error && styles.inputError, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={`Date, ${value ? `${formatDDMMYYYY(value)}, picked` : 'not picked'}`}
-              accessibilityHint="Opens a calendar"
-              testID="expense-form-date"
-            >
-              <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-              <Text className={`flex-1 text-base font-semibold ${value ? 'text-foreground' : 'text-muted font-normal'}`} style={[styles.dateValue, !value && styles.datePlaceholder]}>
-                {value ? formatDDMMYYYY(value) : 'Select a date'}
-              </Text>
-              <Ionicons name="chevron-down" size={16} color={colors.muted} />
-            </Pressable>
-            {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
-          </View>
-        )}
-      />
 
-      <Controller
-        control={control}
-        name="description"
-        render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-          <View className="mb-4" style={styles.field}>
-            <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>Description (optional)</Text>
-            <Input
-              className={`min-h-[64px] ${error ? 'border-destructive' : ''}`}
-              style={[styles.input, styles.multiline, error && styles.inputError]}
-              placeholder="e.g. lunch with team"
-              accessibilityLabel="Description, optional"
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              onFocus={onInputFocus}
-              multiline
-              maxLength={200}
-              editable={!submitting}
-              testID="expense-form-description"
-            />
-            {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
-          </View>
-        )}
-      />
+            {splitEnabled ? (
+              <View style={styles.splitBody}>
+                {/* Month options: 3 / 6 / 12 mo */}
+                <View style={styles.monthOptionsRow}>
+                  {[3, 6, 12].map((m) => {
+                    const isSelected = splitMonths === m;
+                    return (
+                      <Pressable
+                        key={m}
+                        onPress={() => {
+                          haptics.categorySelect();
+                          setSplitMonths(m);
+                        }}
+                        style={[
+                          styles.monthOptionBtn,
+                          {
+                            backgroundColor: isSelected ? colors.accent : colors.fillStrong,
+                          },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        testID={`split-months-${m}`}
+                      >
+                        <Text
+                          style={[
+                            styles.monthOptionText,
+                            {
+                              color: isSelected ? colors.onAccent : colors.text,
+                            },
+                          ]}
+                        >
+                          {m} mo
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
 
-      <View style={styles.actions}>
-        <Button
+                {/* Interest per month Stepper */}
+                <View style={styles.stepperRow}>
+                  <View style={styles.stepperText}>
+                    <Text
+                      style={[
+                        styles.stepperTitle,
+                        {
+                          color: colors.text,
+                        },
+                      ]}
+                    >
+                      Interest per month
+                    </Text>
+                    <Text
+                      style={[
+                        styles.stepperSubtitle,
+                        {
+                          color: colors.textTertiary,
+                        },
+                      ]}
+                    >
+                      On the price, added to each part
+                    </Text>
+                  </View>
+                  <Stepper
+                    value={ratePercent}
+                    onChange={(val) => {
+                      haptics.categorySelect();
+                      setRatePercent(val);
+                    }}
+                    min={0}
+                    max={5.0}
+                    step={0.5}
+                    testID="interest-stepper"
+                  />
+                </View>
+
+                {/* Summary Card */}
+                <View
+                  style={[
+                    styles.summaryCard,
+                    {
+                      borderTopColor: colors.separatorStrong,
+                    },
+                  ]}
+                >
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+                      Per month
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.summaryPerMonthValue,
+                        {
+                          color: colors.emphasis,
+                        },
+                      ]}
+                    >
+                      {formatSen(splitResult.monthlyPaymentSen)}
+                      {hasRemainder ? ` (last ${formatSen(splitResult.lastPaymentSen)})` : ''}
+                    </Text>
+                  </View>
+
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+                      Total payable
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.summaryTotalValue,
+                        {
+                          color: colors.text,
+                        },
+                      ]}
+                    >
+                      {formatSen(splitResult.totalPayableSen)}
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.summaryFootnote, { color: colors.textTertiary }]}>
+                    {landingFootnote}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </FormGroup>
+        </View>
+      ) : null}
+
+      {/* 5. DATE & NOTE FORM GROUP */}
+      <View style={styles.section}>
+        <FormGroup style={styles.factsGroup}>
+          {/* Date Row */}
+          <Controller
+            control={control}
+            name="date"
+            render={({ field: { value, onChange } }) => (
+              <Pressable
+                onPress={() => setDateOpen(true)}
+                disabled={submitting}
+                style={[
+                  styles.formRow,
+                  {
+                    borderBottomColor: colors.separator,
+                    borderBottomWidth: 1,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Date, ${formatDisplayDate(value)}, picked`}
+                testID="expense-form-date"
+              >
+                <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+                  Date
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.rowValue,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  {formatDisplayDate(value)}
+                </Text>
+              </Pressable>
+            )}
+          />
+
+          {/* Note Row */}
+          <Controller
+            control={control}
+            name="description"
+            render={({ field: { value, onChange } }) => (
+              <View style={styles.formRow}>
+                <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>
+                  Note
+                </Text>
+                <TextInput
+                  value={value}
+                  onChangeText={onChange}
+                  placeholder="Optional"
+                  placeholderTextColor={colors.textTertiary}
+                  editable={!submitting}
+                  onFocus={onKeyboardFocus}
+                  style={[
+                    styles.noteInput,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                  accessibilityLabel="Expense note"
+                  testID="expense-form-description"
+                />
+              </View>
+            )}
+          />
+        </FormGroup>
+      </View>
+
+      {/* 6. PRIMARY SAVE BUTTON */}
+      <View style={styles.submitSection}>
+        <PrimaryButton
           label={submitLabel}
-          variant="primary"
-          flex
-          busy={submitting}
           onPress={handleSubmit(onValid)}
-          testID="expense-form-submit"
-        />
-        <Button
-          label="Cancel"
-          variant="secondary"
-          flex
+          loading={submitting}
           disabled={submitting}
-          onPress={onCancel}
-          testID="expense-form-cancel"
+          testID="expense-form-submit"
         />
       </View>
 
+      {/* Calendar picker sheet */}
       <CalendarSheet
-        // Remount per open so the sheet anchors on the currently picked date.
-        key={dateOpen ? 'date-open' : 'date-closed'}
         visible={dateOpen}
         title="Select date"
-        value={watched.date ?? null}
+        value={watched.date}
         onSelect={(iso) => {
           setValue('date', iso, { shouldValidate: true });
           setDateOpen(false);
         }}
-        onCancel={() => setDateOpen(false)} // dismiss leaves the date untouched
+        onCancel={() => setDateOpen(false)}
       />
 
+      {/* Category add sheet */}
       <CategoryAddSheet
         visible={addOpen}
         onSave={async (name, icon) => {
           const created = await onCreateCategory(name, icon);
-          setValue('categoryId', created.id, { shouldValidate: true }); // auto-select the new category
+          setValue('categoryId', created.id, { shouldValidate: true });
           setAddOpen(false);
         }}
         onCancel={() => setAddOpen(false)}
       />
 
+      {/* Category delete confirm sheet */}
       <ConfirmSheet
         visible={confirmDelete !== null}
         title="Delete category"
         message={
-          confirmDelete
-            ? `"${confirmDelete.name}" is removed from the picker only — expenses that already use it are left unchanged.`
-            : ''
+          confirmDelete ? `Delete "${confirmDelete.name}"? Existing expenses will not be deleted.` : ''
         }
         confirmLabel="Delete"
         busy={deleting}
@@ -394,10 +766,12 @@ export function ExpenseForm({
           setDeleting(true);
           try {
             await onDeleteCategory(confirmDelete.id);
-            if (watched.categoryId === confirmDelete.id && visibleCategories[0] !== undefined) {
-              setValue('categoryId', visibleCategories[0].id, { shouldValidate: true });
+            if (watched.categoryId === confirmDelete.id) {
+              const remaining = categories.filter((c) => c.id !== confirmDelete.id);
+              if (remaining[0]) setValue('categoryId', remaining[0].id);
             }
             setConfirmDelete(null);
+            setArmedDelete(null);
           } finally {
             setDeleting(false);
           }
@@ -408,87 +782,226 @@ export function ExpenseForm({
   );
 }
 
-/**
- * Edit-screen mapping: expense row → form values (amount as an input string
- * for the money field). `readOnly` flags E7 linked expenses (auto-created
- * from a commitment payment) — the UI renders them without edit/delete.
- */
-export function expenseToFormValues(expense: Expense): { values: ExpenseFormValues; readOnly: boolean } {
-  return {
-    readOnly: expense.commitmentPaymentId !== null,
-    values: {
-      amount: formatSenInput(expense.amountSen),
-      categoryId: expense.categoryId,
-      accountId: expense.accountId ?? 0,
-      date: expense.date,
-      description: expense.description,
-    },
-  };
-}
-
 const styles = StyleSheet.create({
-  field: { marginBottom: spacing.lg },
-  label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    minHeight: 44, // touch target (plan 016 a11y)
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    fontSize: typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
+  container: {
+    gap: 18,
   },
-  multiline: { minHeight: 64, textAlignVertical: 'top' },
-  inputError: { borderColor: colors.danger },
-  dateField: {
-    flexDirection: 'row',
+  amountSection: {
     alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    minHeight: 48, // touch target (plan 016 a11y)
+    paddingVertical: 8,
   },
-  dateValue: { flex: 1, fontSize: typography.body, color: colors.text, fontWeight: '600' },
-  datePlaceholder: { color: colors.muted, fontWeight: '400' },
-  pressed: { opacity: 0.7 },
-  fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chipSlot: { position: 'relative', borderRadius: 999 },
-  chipArmed: { borderColor: colors.danger, borderWidth: 1.5, padding: 1 },
-  minusBadge: {
+  amountLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+  },
+  amountHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  amountPrefix: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    fontVariant: tabularNumsVariant,
+  },
+  amountHeroText: {
+    fontSize: 44,
+    lineHeight: 52,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    letterSpacing: -0.88,
+    fontVariant: tabularNumsVariant,
+  },
+  caret: {
+    width: 2,
+    height: 38,
+    marginLeft: 2,
+  },
+  hiddenInput: {
     position: 'absolute',
-    top: -8,
-    left: -8,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.danger,
+    opacity: 0,
+    width: 1,
+    height: 1,
+  },
+  fieldError: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  section: {
+    gap: 8,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+  },
+  categoryWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chipWrapper: {
+    position: 'relative',
+  },
+  deleteBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.surface,
+    zIndex: 10,
   },
-  addChip: { borderStyle: 'dashed', backgroundColor: colors.background },
-  addChipLabel: { color: colors.accent },
-  chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '600' },
-  chipLabelSelected: { color: colors.surface },
-  projected: {
-    marginTop: spacing.sm,
-    fontSize: typography.caption,
-    color: colors.accent,
+  accountsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  accountCell: {
+    width: '48%',
+    flexGrow: 1,
+  },
+  splitGroup: {
+    padding: 14,
+    gap: 12,
+    borderRadius: 14,
+  },
+  splitHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 48,
+  },
+  splitHeaderText: {
+    flex: 1,
+    gap: 2,
+  },
+  splitTitle: {
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: '600',
-    backgroundColor: colors.accentSoft,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 999,
+    fontFamily: geistWeights.semiBold,
+  },
+  splitSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  splitBody: {
+    gap: 12,
+  },
+  monthOptionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  monthOptionBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthOptionText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+  },
+  stepperText: {
+    flex: 1,
+    gap: 2,
+  },
+  stepperTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+  },
+  stepperSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  summaryCard: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    gap: 6,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  summaryPerMonthValue: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    fontVariant: tabularNumsVariant,
+  },
+  summaryTotalValue: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    fontVariant: tabularNumsVariant,
+  },
+  summaryFootnote: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  factsGroup: {
+    borderRadius: 14,
     overflow: 'hidden',
   },
-  actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
+  formRow: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rowLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  rowValue: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+  },
+  noteInput: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: geistWeights.regular,
+    padding: 0,
+    marginLeft: 12,
+  },
+  submitSection: {
+    marginTop: 8,
+    paddingBottom: 16,
+  },
 });
