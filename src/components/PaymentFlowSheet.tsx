@@ -1,12 +1,4 @@
-/**
- * PaymentFlowSheet (plan 008 UI) — the "Mark paid" flow: a bottom sheet that
- * confirms the slot (amount + due date) with an account picker. The account
- * is OPTIONAL (A15): picking one adjusts that account's balance (assets −,
- * credit +); "No account" records the payment without touching balances.
- * The parent prefills the selection (last-used account from uiStore, else the
- * first account) so marking paid costs one tap.
- */
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Account } from '@/db/schema';
@@ -15,9 +7,8 @@ import type { AccountType } from '@/repositories/types';
 import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS } from './accountMeta';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 import { Sheet } from '@/components/ui/Sheet';
-import { Button } from '@/components/ui/Button';
 import { haptics } from '@/utils/haptics';
 
 export interface PaymentFlowSheetProps {
@@ -40,113 +31,261 @@ export function PaymentFlowSheet({
   onConfirm,
   onCancel,
 }: PaymentFlowSheetProps) {
+  const { colors } = useTheme();
   const [selectedId, setSelectedId] = useState<number | null>(initialAccountId);
   const [prevVisible, setPrevVisible] = useState(visible);
 
-  // Re-seed the selection when the sheet opens for a slot (defaults may
-  // change between openings). Adjusting state during render is the React
-  // sanctioned pattern for "state derived from a prop transition" — the
-  // effect-based alternative is flagged by react-hooks.
   if (visible !== prevVisible) {
     setPrevVisible(visible);
     if (visible) setSelectedId(initialAccountId);
   }
 
   return (
-    <Sheet visible={visible} onClose={onCancel} title="Mark payment paid" cardTestID="payment-flow-sheet">
-        
-          <Text style={styles.amount}>{formatSen(slot.amountSen)}</Text>
-          <Text style={styles.due}>Due {formatDayLabel(slot.dueDate)}</Text>
-          <Text style={styles.label}>Pay from account (optional)</Text>
-          <Text style={styles.hint}>No account = no balance change. Credit cards count as owed.</Text>
-          <View style={styles.chipWrap}>
-            {accounts.map((account) => {
-              const selected = selectedId === account.id;
-              return (
-                <Pressable
-                  key={account.id}
-                  onPress={() => setSelectedId(account.id)}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  testID={`payment-flow-account-${account.id}`}
+    <Sheet
+      visible={visible}
+      onClose={onCancel}
+      title="Mark payment paid"
+      cardTestID="payment-flow-sheet"
+    >
+      <View style={styles.content}>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          style={[styles.amount, { color: colors.text }]}
+        >
+          {formatSen(slot.amountSen)}
+        </Text>
+        <Text style={[styles.due, { color: colors.textSecondary }]}>
+          Due {formatDayLabel(slot.dueDate)}
+        </Text>
+
+        <Text style={[styles.label, { color: colors.text }]}>
+          Pay from account (optional)
+        </Text>
+        <Text style={[styles.hint, { color: colors.textTertiary }]}>
+          No account = no balance change. Credit cards count as owed.
+        </Text>
+
+        <View style={styles.chipWrap}>
+          {accounts.map((account) => {
+            const selected = selectedId === account.id;
+            return (
+              <Pressable
+                key={account.id}
+                onPress={() => setSelectedId(account.id)}
+                style={({ pressed }) => [
+                  styles.chip,
+                  {
+                    backgroundColor: selected ? colors.selectedBg : colors.fillStrong,
+                    borderColor: selected ? colors.accent : colors.fillStrong,
+                  },
+                  pressed && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                testID={`payment-flow-account-${account.id}`}
+              >
+                <Ionicons
+                  name={ACCOUNT_TYPE_ICONS[account.type as AccountType] as never}
+                  size={15}
+                  color={selected ? colors.accent : colors.textSecondary}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.chipLabel,
+                    { color: colors.text },
+                  ]}
                 >
-                  <Ionicons
-                    name={ACCOUNT_TYPE_ICONS[account.type as AccountType] as never}
-                    size={15}
-                    color={selected ? colors.surface : colors.muted}
-                  />
-                  <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{account.name}</Text>
-                  <Text style={[styles.chipType, selected && styles.chipTypeSelected]}>
-                    {ACCOUNT_TYPE_LABELS[account.type as AccountType]}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              onPress={() => setSelectedId(null)}
-              style={[styles.chip, selectedId === null && styles.chipSelected]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: selectedId === null }}
-              testID="payment-flow-account-none"
+                  {account.name}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.chipType,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  {ACCOUNT_TYPE_LABELS[account.type as AccountType]}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          <Pressable
+            onPress={() => setSelectedId(null)}
+            style={({ pressed }) => [
+              styles.chip,
+              {
+                backgroundColor: selectedId === null ? colors.selectedBg : colors.fillStrong,
+                borderColor: selectedId === null ? colors.accent : colors.fillStrong,
+              },
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: selectedId === null }}
+            testID="payment-flow-account-none"
+          >
+            <Ionicons
+              name="close-circle-outline"
+              size={15}
+              color={selectedId === null ? colors.accent : colors.textSecondary}
+            />
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.chipLabel,
+                { color: colors.text },
+              ]}
             >
-              <Ionicons
-                name="close-circle-outline"
-                size={15}
-                color={selectedId === null ? colors.surface : colors.muted}
-              />
-              <Text style={[styles.chipLabel, selectedId === null && styles.chipLabelSelected]}>No account</Text>
-            </Pressable>
-          </View>
+              No account
+            </Text>
+          </Pressable>
+        </View>
 
         <View style={styles.actions}>
-          <Button
-            label="Mark paid"
-            variant="primary"
-            icon="checkmark"
-            flex
+          <Pressable
+            onPress={onCancel}
             disabled={busy}
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              { backgroundColor: colors.fillStrong },
+              busy && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            testID="payment-flow-cancel"
+          >
+            <Text style={[styles.cancelBtnText, { color: colors.text }]}>Cancel</Text>
+          </Pressable>
+
+          <Pressable
             onPress={() => {
               haptics.paymentSuccess();
               onConfirm(selectedId);
             }}
-            testID="payment-flow-confirm"
-          />
-          <Button
-            label="Cancel"
-            variant="secondary"
-            flex
             disabled={busy}
-            onPress={onCancel}
-            testID="payment-flow-cancel"
-          />
+            style={({ pressed }) => [
+              styles.confirmBtn,
+              { backgroundColor: colors.accent },
+              busy && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Mark paid"
+            testID="payment-flow-confirm"
+          >
+            <View style={styles.confirmInner}>
+              <Ionicons name="checkmark" size={16} color={colors.onAccent} />
+              <Text style={[styles.confirmBtnText, { color: colors.onAccent }]}>
+                Mark paid
+              </Text>
+            </View>
+          </Pressable>
         </View>
+      </View>
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant },
-  due: { fontSize: typography.body, color: colors.muted, marginBottom: spacing.lg },
-  label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
-  hint: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
+  content: {
+    gap: 8,
+  },
+  amount: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    fontVariant: tabularNumsVariant,
+  },
+  due: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '400',
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  hint: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '400',
+    marginBottom: 6,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.lg,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     minHeight: 44,
   },
-  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipLabel: { fontSize: typography.caption, color: colors.text, fontWeight: '700' },
-  chipLabelSelected: { color: colors.surface },
-  chipType: { fontSize: typography.caption, color: colors.muted },
-  chipTypeSelected: { color: colors.surface },
-  actions: { flexDirection: 'row', gap: spacing.md },
+  chipLabel: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  chipType: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '400',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  confirmBtn: {
+    flex: 2,
+    height: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  confirmBtnText: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+  },
+  disabled: {
+    opacity: 0.4,
+  },
+  pressed: {
+    opacity: 0.75,
+  },
 });

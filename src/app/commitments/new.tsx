@@ -15,7 +15,7 @@ import { CommitmentForm } from '@/components/CommitmentForm';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { useToast } from '@/components/ToastProvider';
 import type { CommitmentInput } from '@/repositories/types';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -25,6 +25,7 @@ export default function NewCommitmentScreen() {
   const router = useRouter();
   const { authService } = useAuth();
   const toast = useToast();
+  const { colors } = useTheme();
   const [submitting, setSubmitting] = useState(false);
 
   const service = useMemo(() => {
@@ -48,8 +49,7 @@ export default function NewCommitmentScreen() {
   return (
     <KeyboardScreen>
       <ScrollView
-        className="flex-1 bg-background"
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.bg }]}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         testID="new-commitment-screen"
@@ -62,11 +62,12 @@ export default function NewCommitmentScreen() {
         />
         <Pressable
           onPress={() => router.back()}
-          className="items-center py-4 min-h-[44px] justify-center active:opacity-60"
           style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
           accessibilityRole="button"
         >
-          <Text className="text-muted-foreground text-base font-semibold" style={styles.cancelLinkLabel}>Cancel</Text>
+          <Text style={[styles.cancelLinkLabel, { color: colors.textSecondary }]}>
+            Cancel
+          </Text>
         </Pressable>
       </ScrollView>
     </KeyboardScreen>
@@ -74,16 +75,26 @@ export default function NewCommitmentScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  center: {
+  container: {
     flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
   },
-  cancelLink: { alignItems: 'center', paddingVertical: spacing.lg },
-  cancelLinkLabel: { color: colors.muted, fontSize: typography.body, fontWeight: '600' },
-  pressed: { opacity: 0.6 },
+  content: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  cancelLink: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  cancelLinkLabel: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  pressed: {
+    opacity: 0.6,
+  },
 });

@@ -23,7 +23,7 @@ import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { useToast } from '@/components/ToastProvider';
 import { formatSenInput } from '@/utils/money';
 import type { CommitmentInput } from '@/repositories/types';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -50,6 +50,7 @@ export default function EditCommitmentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authService } = useAuth();
   const toast = useToast();
+  const { colors } = useTheme();
   const commitmentId = Number(id);
 
   const service = useMemo(() => {
@@ -100,23 +101,24 @@ export default function EditCommitmentScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
   if (loadError || !commitment) {
     return (
-      <View className="flex-1 bg-background items-center justify-center p-6" style={styles.center}>
-        <Text className="text-lg font-bold text-foreground mb-4" style={styles.emptyTitle}>{loadError ?? 'Commitment not found'}</Text>
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>
+          {loadError ?? 'Commitment not found'}
+        </Text>
         <Pressable
           onPress={() => router.back()}
-          className="min-h-[44px] justify-center px-4"
           style={styles.backLink}
           accessibilityRole="button"
         >
-          <Text className="text-primary text-base font-semibold" style={styles.backLinkLabel}>Back</Text>
+          <Text style={[styles.backLinkLabel, { color: colors.link }]}>Back</Text>
         </Pressable>
       </View>
     );
@@ -125,8 +127,7 @@ export default function EditCommitmentScreen() {
   return (
     <KeyboardScreen>
       <ScrollView
-        className="flex-1 bg-background"
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.bg }]}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         testID="edit-commitment-screen"
@@ -144,16 +145,35 @@ export default function EditCommitmentScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 32,
+  },
   center: {
     flex: 1,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    padding: 16,
   },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.lg },
-  backLink: { padding: spacing.sm },
-  backLinkLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '600' },
+  emptyTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    marginBottom: 16,
+  },
+  backLink: {
+    padding: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  backLinkLabel: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
 });

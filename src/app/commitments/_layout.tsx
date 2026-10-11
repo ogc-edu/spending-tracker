@@ -9,17 +9,28 @@
  * back to its file path, which is how the edit screen came to show "[id]/edit".
  */
 import { Stack } from 'expo-router';
-import { colors } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 
 export default function CommitmentsLayout() {
+  const { colors } = useTheme();
+
   return (
     <Stack
       screenOptions={{
         headerShown: true,
         headerTintColor: colors.text,
-        headerTitleStyle: { color: colors.text },
-        headerStyle: { backgroundColor: colors.background },
-        contentStyle: { backgroundColor: colors.background },
+        headerTitleStyle: {
+          color: colors.text,
+          fontFamily: geistWeights.semiBold,
+          fontSize: 17,
+        },
+        headerStyle: {
+          backgroundColor: colors.bg,
+        },
+        headerShadowVisible: false,
+        contentStyle: {
+          backgroundColor: colors.bg,
+        },
       }}
     >
       <Stack.Screen name="new" options={{ title: 'Add commitment' }} />
