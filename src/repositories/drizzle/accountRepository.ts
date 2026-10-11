@@ -25,6 +25,9 @@ export class DrizzleAccountRepository implements AccountRepository {
     name: string;
     type: AccountType;
     initialBalanceSen: number;
+    statementDay?: number | null;
+    dueDay?: number | null;
+    openingOwedSen?: number;
   }): Promise<Account> {
     const rows = (await (this.db
       .insert(accounts)
@@ -33,6 +36,9 @@ export class DrizzleAccountRepository implements AccountRepository {
         name: input.name,
         type: input.type,
         balanceSen: input.initialBalanceSen,
+        statementDay: input.statementDay ?? null,
+        dueDay: input.dueDay ?? null,
+        openingOwedSen: input.openingOwedSen ?? 0,
       })
       .returning() as unknown as Promise<Account[]>)) as Account[];
     if (rows.length > 0 && rows[0]) return rows[0];
@@ -56,21 +62,40 @@ export class DrizzleAccountRepository implements AccountRepository {
   }
 
   /**
-   * Available money = SUM(balance_sen) with credit-card owed amounts negated
-   * (PRD §8.4 / plan 004 spec): `SUM(CASE WHEN type='credit_card' THEN
+   * Available money = SUM(balance_sen) with credit-card / paylater owed amounts negated
+   * (PRD §8.4 / plan 004 / 020 spec): `SUM(CASE WHEN type IN ('credit_card', 'paylater') THEN
    * -balance_sen ELSE balance_sen END)`. One deterministic query, COALESCE'd to
    * 0 when the user has no accounts.
    */
   async sumBalances(userId: number): Promise<number> {
     const rows = (await this.db
       .select({
-        total: sql<number>`COALESCE(SUM(CASE WHEN ${accounts.type} = 'credit_card' THEN -${accounts.balanceSen} ELSE ${accounts.balanceSen} END), 0)`.mapWith(
+        total: sql<number>`COALESCE(SUM(CASE WHEN ${accounts.type} IN ('credit_card', 'paylater') THEN -${accounts.balanceSen} ELSE ${accounts.balanceSen} END), 0)`.mapWith(
           Number,
         ),
       })
       .from(accounts)
       .where(eq(accounts.userId, userId))) as unknown as { total: number }[];
     return rows[0]?.total ?? 0;
+  }
+
+  async updateBillingCycle(
+    userId: number,
+    id: number,
+    cycle: { statementDay: number | null; dueDay: number | null },
+  ): Promise<Account> {
+    const rows = (await (this.db
+      .update(accounts)
+      .set({
+        statementDay: cycle.statementDay,
+        dueDay: cycle.dueDay,
+        updatedAt: Date.now(),
+      })
+      .where(and(eq(accounts.userId, userId), eq(accounts.id, id)))
+      .returning() as unknown as Promise<Account[]>)) as Account[];
+    const row = rows[0];
+    if (!row) throw new Error('Account not found');
+    return row;
   }
 
   async countExpenses(userId: number, accountId: number): Promise<number> {

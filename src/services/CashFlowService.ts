@@ -23,21 +23,28 @@ import { expenseTotalsByCategory, monthlyTotals } from '@/engine/totals';
 import type {
   AccountRepository,
   CommitmentRepository,
+  CreditBillRepository,
   ExpenseRepository,
 } from '@/repositories/types';
-import { nextMonthStartDate } from '@/utils/dates';
+import { monthEndDate, nextMonthStartDate, toLocalDateString } from '@/utils/dates';
 import type { CurrentUserSource } from './AccountService';
+import { CreditBillService } from './CreditBillService';
 
 /** One upcoming slot, shaped for the dashboard list (name from the DB row). */
 export interface UpcomingSnapshotItem {
   commitmentId: number;
-  /** Commitment display name (COM-1 label). */
+  /** Commitment display name (COM-1 label) or credit bill name. */
   name: string;
   /** `YYYY-MM-DD` — the derived due date (ARCH §7). */
   dueDate: string;
   amountSen: number;
   /** 'monthly' | 'one_time' — plan 017: drives the row's leading glyph. */
   frequency: 'monthly' | 'one_time';
+  /** Plan 020: optional metadata for credit bills */
+  kind?: 'commitment' | 'credit_bill';
+  billAccountId?: number;
+  billYear?: number;
+  billMonth?: number;
 }
 
 /** One row of the category summary (DASH-2) — id + total; names resolved by the UI. */
@@ -59,15 +66,14 @@ export interface CashFlowSnapshot {
   spentSen: number;
   /**
    * Σ unpaid payment amounts due before next month start (008, PRD COM-5) —
-   * Home's "due by end of this month"; overdue slots included.
+   * Home's "due by end of this month"; overdue slots and credit bills included.
    */
   upcomingSen: number;
   /** The upcoming slots, due-date ascending — the dashboard's "next 3" list. */
   upcomingItems: UpcomingSnapshotItem[];
   /**
-   * Plan 019 — Σ unpaid commitment slots due in the NEXT calendar month
-   * (the ask box's "total commitment next month"). Derived from the same
-   * rows/engine call as `upcomingSen`; never rendered by the dashboard.
+   * Plan 019 — Σ unpaid commitment slots and bills due in the NEXT calendar month
+   * (the ask box's "total commitment next month").
    */
   nextMonthSen: number;
   /** The next calendar month's unpaid slots — ask-box context (plan 019). */
@@ -84,12 +90,26 @@ function byDueDateAsc(a: { dueDate: string }, b: { dueDate: string }): number {
 }
 
 export class CashFlowService {
+  private readonly creditBillService?: CreditBillService;
+
   constructor(
     private readonly accounts: AccountRepository,
     private readonly expenses: ExpenseRepository,
     private readonly commitments: CommitmentRepository,
     private readonly auth: CurrentUserSource,
-  ) {}
+    creditBills?: CreditBillService | CreditBillRepository,
+  ) {
+    if (creditBills instanceof CreditBillService) {
+      this.creditBillService = creditBills;
+    } else if (creditBills) {
+      this.creditBillService = new CreditBillService(
+        accounts,
+        expenses,
+        creditBills,
+        auth,
+      );
+    }
+  }
 
   /** Resolve the signed-in user; reject if none (gate enforced upstream, defended here). */
   private async requireUserId(): Promise<number> {
@@ -109,6 +129,7 @@ export class CashFlowService {
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
     const scope = { month, year };
+    const referenceDate = toLocalDateString(now);
 
     const [availableSen, accounts, spentRows, commitments, paidPayments] = await Promise.all([
       this.accounts.sumBalances(userId),
@@ -122,6 +143,7 @@ export class CashFlowService {
 
     // 008: unpaid slots due before the start of next month (overdue included).
     const windowEnd = nextMonthStartDate(year, month);
+    const thisMonthEnd = monthEndDate(year, month);
     // Repository rows ARE engine CommitmentLike (structural); the DB type's
     // `text` columns (frequency/status) are `string`, so the boundary cast to
     // the engine's narrower literal-union shape is expected (not a bug to fix).
@@ -135,13 +157,39 @@ export class CashFlowService {
     // Same rows, one window further out; filtering at `windowEnd` drops
     // overdue/this-month slots, so `nextMonth` is exactly next month.
     const [nextYear, nextMonthNumber] = windowEnd.split('-').map(Number);
+    const nextMonthEnd = monthEndDate(nextYear as number, nextMonthNumber as number);
     const nextWindow = upcomingCommitments(
       commitments as CommitmentLike[],
       paidPayments,
       nextMonthStartDate(nextYear as number, nextMonthNumber as number),
     );
-    const nextMonthItems = nextWindow.items.filter((item) => item.dueDate >= windowEnd);
-    const nextMonthSen = nextMonthItems.reduce((sum, item) => sum + item.amountSen, 0);
+    const nextMonthCommitmentItems = nextWindow.items.filter((item) => item.dueDate >= windowEnd);
+
+    // Plan 020 — Credit bills due by month end (overdue included) & next month
+    const thisMonthBillItems: UpcomingSnapshotItem[] = [];
+    const nextMonthBillItems: UpcomingSnapshotItem[] = [];
+
+    if (this.creditBillService) {
+      const allDueBills = await this.creditBillService.getBillsDueBefore(referenceDate, nextMonthEnd);
+      for (const item of allDueBills) {
+        const billItem: UpcomingSnapshotItem = {
+          commitmentId: -(item.account.id * 1000000 + item.bill.year * 100 + item.bill.month),
+          name: `${item.account.name} Bill`,
+          dueDate: item.bill.dueDate,
+          amountSen: item.bill.outstandingSen,
+          frequency: 'monthly',
+          kind: 'credit_bill',
+          billAccountId: item.account.id,
+          billYear: item.bill.year,
+          billMonth: item.bill.month,
+        };
+        if (item.bill.dueDate <= thisMonthEnd) {
+          thisMonthBillItems.push(billItem);
+        } else if (item.bill.dueDate >= windowEnd && item.bill.dueDate <= nextMonthEnd) {
+          nextMonthBillItems.push(billItem);
+        }
+      }
+    }
 
     // DASH-2: category totals sorted by amount (engine, stable ties).
     const byCategory = expenseTotalsByCategory(spentRows, scope);
@@ -154,30 +202,40 @@ export class CashFlowService {
     // name); stable map avoids deriving names off the downcast engine items.
     const nameById = new Map(commitments.map((c) => [c.id, c.name]));
 
+    const upcomingItems: UpcomingSnapshotItem[] = [
+      ...upcoming.items.map((item) => ({
+        commitmentId: item.commitment.id,
+        name: nameById.get(item.commitment.id) ?? String(item.commitment.id),
+        dueDate: item.dueDate,
+        amountSen: item.amountSen,
+        frequency: item.commitment.frequency,
+      })),
+      ...thisMonthBillItems,
+    ].sort(byDueDateAsc);
+
+    const upcomingSen = upcomingItems.reduce((sum, item) => sum + item.amountSen, 0);
+
+    const nextMonthItems: UpcomingSnapshotItem[] = [
+      ...nextMonthCommitmentItems.map((item) => ({
+        commitmentId: item.commitment.id,
+        name: nameById.get(item.commitment.id) ?? String(item.commitment.id),
+        dueDate: item.dueDate,
+        amountSen: item.amountSen,
+        frequency: item.commitment.frequency,
+      })),
+      ...nextMonthBillItems,
+    ].sort(byDueDateAsc);
+
+    const nextMonthSen = nextMonthItems.reduce((sum, item) => sum + item.amountSen, 0);
+
     return {
       month: { month, year },
       availableSen,
       spentSen,
-      upcomingSen: upcoming.totalSen,
-      upcomingItems: upcoming.items
-        .map((item) => ({
-          commitmentId: item.commitment.id,
-          name: nameById.get(item.commitment.id) ?? String(item.commitment.id),
-          dueDate: item.dueDate,
-          amountSen: item.amountSen,
-          frequency: item.commitment.frequency,
-        }))
-        .sort(byDueDateAsc),
+      upcomingSen,
+      upcomingItems,
       nextMonthSen,
-      nextMonthItems: nextMonthItems
-        .map((item) => ({
-          commitmentId: item.commitment.id,
-          name: nameById.get(item.commitment.id) ?? String(item.commitment.id),
-          dueDate: item.dueDate,
-          amountSen: item.amountSen,
-          frequency: item.commitment.frequency,
-        }))
-        .sort(byDueDateAsc),
+      nextMonthItems,
       categorySummary,
       accountCount: accounts.length,
     };

@@ -31,8 +31,33 @@ import {
   projectMonthEnd,
   topCategories,
 } from '@/engine/analytics';
-import { daysInMonth, formatMonthLabel } from '@/utils/dates';
+import { daysInMonth, formatMonthLabel, DATE_RE, isValidDateStr } from '@/utils/dates';
+import {
+  spendingSeries,
+  type SeriesGranularity,
+  type SpendingSeriesItem,
+  type SpendingSeriesOptions,
+  type SpendingSeriesResult,
+} from '@/engine/spendingSeries';
 import type { CurrentUserSource } from './AccountService';
+
+export {
+  spendingSeries,
+  type SeriesGranularity,
+  type SpendingSeriesItem,
+  type SpendingSeriesOptions,
+  type SpendingSeriesResult,
+};
+
+export const spendingSeriesOptionsSchema = z.object({
+  granularity: z.enum(['day', 'week', 'month']),
+  endDate: z
+    .string({ error: 'endDate required' })
+    .regex(DATE_RE, 'endDate must be YYYY-MM-DD')
+    .refine(isValidDateStr, 'endDate must be a real date'),
+  count: z.number().int().positive().optional(),
+  categoryId: z.number().int().positive().optional(),
+});
 
 /** Service-boundary validation for a month selection (1–12, integer year). */
 export const monthSelectionSchema = z.object({
@@ -204,4 +229,23 @@ export class AnalyticsService {
       monthLabel: formatMonthLabel(scope.year, scope.month),
     };
   }
+
+  /**
+   * Spending series by Day/Week/Month (plan 020 Phase C, ARCH §6).
+   * Validates options, queries user-scoped expenses, and delegates
+   * to the pure spendingSeries engine.
+   */
+  async spendingSeries(options: SpendingSeriesOptions): Promise<SpendingSeriesResult> {
+    const parsed = spendingSeriesOptionsSchema.safeParse(options);
+    if (!parsed.success) {
+      throw new Error(parsed.error.issues[0]?.message ?? 'invalid series options');
+    }
+    const userId = await this.requireUserId();
+    const expenses = await this.expenses.query(userId, {
+      categoryId: parsed.data.categoryId,
+      limit: 10000,
+    });
+    return spendingSeries(expenses, parsed.data);
+  }
 }
+

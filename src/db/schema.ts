@@ -55,10 +55,16 @@ export const accounts = sqliteTable(
       .notNull()
       .references(() => users.id),
     name: text('name').notNull(),
-    /** 'cash' | 'bank' | 'ewallet' | 'credit_card'. */
+    /** 'cash' | 'bank' | 'ewallet' | 'credit_card' | 'paylater'. */
     type: text('type').notNull(),
-    /** Credit-card balance_sen = amount owed (positive), counted negatively in "available". */
+    /** Credit-card / paylater balance_sen = amount owed (positive), counted negatively in "available". */
     balanceSen: integer('balance_sen').notNull().default(0),
+    /** Statement close day of month (1..31, clamped). Credit accounts only. */
+    statementDay: integer('statement_day'),
+    /** Due day of month (1..31, clamped). Credit accounts only. */
+    dueDay: integer('due_day'),
+    /** Opening amount owed when the credit account was created. */
+    openingOwedSen: integer('opening_owed_sen').notNull().default(0),
     createdAt: integer('created_at')
       .notNull()
       .$defaultFn(() => Date.now()),
@@ -164,6 +170,57 @@ export const expenses = sqliteTable(
   ],
 );
 
+export const expenseInstallments = sqliteTable(
+  'expense_installments',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    expenseId: text('expense_id')
+      .notNull()
+      .unique()
+      .references(() => expenses.id),
+    months: integer('months').notNull(),
+    monthlyRateBp: integer('monthly_rate_bp').notNull(),
+    principalSen: integer('principal_sen').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index('expense_installments_user_id_idx').on(t.userId),
+    index('expense_installments_expense_id_idx').on(t.expenseId),
+  ],
+);
+
+export const creditBillPayments = sqliteTable(
+  'credit_bill_payments',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => accounts.id),
+    billYear: integer('bill_year').notNull(),
+    billMonth: integer('bill_month').notNull(),
+    amountSen: integer('amount_sen').notNull(),
+    paidDate: text('paid_date').notNull(),
+    fromAccountId: text('from_account_id')
+      .notNull()
+      .references(() => accounts.id),
+    createdAt: text('created_at')
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => [
+    index('credit_bill_payments_user_id_idx').on(t.userId),
+    index('credit_bill_payments_account_id_idx').on(t.accountId),
+  ],
+);
+
 /**
  * Payroll allocations (payroll-in): the standing split of the user's pay
  * across their accounts — "RM1,500 to Savings, RM500 to Spending". Pressing
@@ -214,6 +271,8 @@ export const settings = sqliteTable('settings', {
   aiModelDeepseek: text('ai_model_deepseek'),
   /** Epoch ms of the last payroll-in run; NULL = never run. */
   payrollLastRunAt: integer('payroll_last_run_at'),
+  /** 'system' | 'light' | 'dark' appearance theme preference. */
+  themeMode: text('theme_mode').notNull().default('dark'),
   updatedAt: integer('updated_at')
     .notNull()
     .$defaultFn(() => Date.now()),
@@ -231,6 +290,10 @@ export type CommitmentPayment = typeof commitmentPayments.$inferSelect;
 export type NewCommitmentPayment = typeof commitmentPayments.$inferInsert;
 export type Expense = typeof expenses.$inferSelect;
 export type NewExpense = typeof expenses.$inferInsert;
+export type ExpenseInstallment = typeof expenseInstallments.$inferSelect;
+export type NewExpenseInstallment = typeof expenseInstallments.$inferInsert;
+export type CreditBillPayment = typeof creditBillPayments.$inferSelect;
+export type NewCreditBillPayment = typeof creditBillPayments.$inferInsert;
 export type Settings = typeof settings.$inferSelect;
 export type NewSettings = typeof settings.$inferInsert;
 export type PayrollAllocation = typeof payrollAllocations.$inferSelect;

@@ -23,8 +23,9 @@
  * re-validates the parsed input — never trust the form (plan §Security).
  */
 import { z } from 'zod';
-import type { Account, Category, Expense } from '@/db/schema';
+import type { Account, Category, Expense, ExpenseInstallment } from '@/db/schema';
 import { DATE_RE, isValidDateStr } from '@/utils/dates';
+import { splitInstallment } from '@/engine/creditBills';
 import {
   EXPENSE_LINKED_READ_ONLY_MESSAGE,
   type CategoryRepository,
@@ -50,6 +51,12 @@ export const expenseInputSchema = z.object({
     .max(200, 'Description must be 200 characters or fewer')
     .optional()
     .default(''),
+  installment: z
+    .object({
+      months: z.number().int().min(2, 'Months must be at least 2').max(24, 'Months must be at most 24'),
+      monthlyRateBp: z.number().int().min(0, 'Monthly rate must be non-negative'),
+    })
+    .optional(),
 });
 
 export type ValidatedExpenseInput = z.infer<typeof expenseInputSchema>;
@@ -62,6 +69,7 @@ export type ValidatedExpenseInput = z.infer<typeof expenseInputSchema>;
  */
 export const expenseFilterSchema = z
   .object({
+    accountId: z.number().int().positive().optional(),
     search: z
       .string()
       .trim()
@@ -111,12 +119,12 @@ function parseFilter(filter: ExpenseFilter): ValidatedExpenseFilter {
 
 /**
  * The balance effect of an expense on its account (plan 005 sign convention):
- * asset accounts −amount, credit card +amount (owed increases).
+ * asset accounts −amount, credit card & paylater +amount (owed increases).
  * Exported for the form's projected-balance preview — the single source of
  * the convention, shared by the service and the UI.
  */
 export function balanceEffectFor(account: Pick<Account, 'type'>, amountSen: number): number {
-  return account.type === 'credit_card' ? +amountSen : -amountSen;
+  return account.type === 'credit_card' || account.type === 'paylater' ? +amountSen : -amountSen;
 }
 
 export class ExpenseService {
@@ -145,15 +153,42 @@ export class ExpenseService {
     return this.expenses.transaction((tx) => {
       this.requireCategory(tx.getCategory(data.categoryId));
       const account = this.requireAccount(tx.getAccount(userId, data.accountId));
+
+      const isCredit = account.type === 'credit_card' || account.type === 'paylater';
+      if (data.installment && !isCredit) {
+        throw new Error('installments only allowed on credit accounts');
+      }
+
+      let finalAmountSen = data.amountSen;
+      if (data.installment) {
+        const split = splitInstallment(
+          data.amountSen,
+          data.installment.months,
+          data.installment.monthlyRateBp,
+        );
+        finalAmountSen = split.totalPayableSen;
+      }
+
       const expense = tx.insert({
         userId,
-        amountSen: data.amountSen,
+        amountSen: finalAmountSen,
         categoryId: data.categoryId,
         accountId: data.accountId,
         date: data.date,
         description: data.description,
       });
-      tx.adjustBalance(userId, account.id, balanceEffectFor(account, data.amountSen));
+
+      if (data.installment) {
+        tx.insertInstallment({
+          userId,
+          expenseId: expense.id,
+          months: data.installment.months,
+          monthlyRateBp: data.installment.monthlyRateBp,
+          principalSen: data.amountSen,
+        });
+      }
+
+      tx.adjustBalance(userId, account.id, balanceEffectFor(account, finalAmountSen));
       return expense;
     });
   }
@@ -173,15 +208,46 @@ export class ExpenseService {
       this.assertEditable(old);
       this.requireCategory(tx.getCategory(data.categoryId));
       const newAccount = this.requireAccount(tx.getAccount(userId, data.accountId));
+
+      const isCredit = newAccount.type === 'credit_card' || newAccount.type === 'paylater';
+      if (data.installment && !isCredit) {
+        throw new Error('installments only allowed on credit accounts');
+      }
+
+      let finalAmountSen = data.amountSen;
+      if (data.installment) {
+        const split = splitInstallment(
+          data.amountSen,
+          data.installment.months,
+          data.installment.monthlyRateBp,
+        );
+        finalAmountSen = split.totalPayableSen;
+      }
+
       if (old.accountId !== null) {
         const oldAccount = tx.getAccount(userId, old.accountId);
         if (oldAccount) {
           tx.adjustBalance(userId, oldAccount.id, -balanceEffectFor(oldAccount, old.amountSen));
         }
       }
-      tx.adjustBalance(userId, newAccount.id, balanceEffectFor(newAccount, data.amountSen));
+      tx.adjustBalance(userId, newAccount.id, balanceEffectFor(newAccount, finalAmountSen));
+
+      const oldInst = tx.getInstallmentByExpenseId(userId, id);
+      if (oldInst) {
+        tx.deleteInstallmentByExpenseId(userId, id);
+      }
+      if (data.installment) {
+        tx.insertInstallment({
+          userId,
+          expenseId: id,
+          months: data.installment.months,
+          monthlyRateBp: data.installment.monthlyRateBp,
+          principalSen: data.amountSen,
+        });
+      }
+
       return tx.update(userId, id, {
-        amountSen: data.amountSen,
+        amountSen: finalAmountSen,
         categoryId: data.categoryId,
         accountId: data.accountId,
         date: data.date,
@@ -203,8 +269,17 @@ export class ExpenseService {
           tx.adjustBalance(userId, account.id, -balanceEffectFor(account, old.amountSen));
         }
       }
+      const oldInst = tx.getInstallmentByExpenseId(userId, id);
+      if (oldInst) {
+        tx.deleteInstallmentByExpenseId(userId, id);
+      }
       tx.remove(userId, id);
     });
+  }
+
+  async getInstallment(expenseId: number): Promise<ExpenseInstallment | null> {
+    const userId = await this.requireUserId();
+    return this.expenses.getInstallment(userId, expenseId);
   }
 
   async byId(id: number): Promise<Expense | null> {

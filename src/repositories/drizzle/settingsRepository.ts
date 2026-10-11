@@ -69,4 +69,28 @@ export class DrizzleSettingsRepository implements SettingsRepository {
     if (!row) throw new Error('settings upsert failed — row not found after insert');
     return row;
   }
+
+  async themeMode(userId: number): Promise<'system' | 'light' | 'dark'> {
+    const rows = (await this.db
+      .select({ themeMode: settings.themeMode })
+      .from(settings)
+      .where(eq(settings.userId, userId))) as unknown as { themeMode: string }[];
+    const row = rows[0];
+    if (!row) return 'dark';
+    return (row.themeMode as 'system' | 'light' | 'dark') ?? 'dark';
+  }
+
+  async setThemeMode(userId: number, mode: 'system' | 'light' | 'dark'): Promise<Settings> {
+    const rows = (await this.db
+      .insert(settings)
+      .values({ userId, themeMode: mode })
+      .onConflictDoUpdate({
+        target: settings.userId,
+        set: { themeMode: mode, updatedAt: Date.now() },
+      })
+      .returning()) as unknown as Settings[];
+    const row = rows[0];
+    if (!row) throw new Error('settings upsert failed — row not found after insert');
+    return row;
+  }
 }

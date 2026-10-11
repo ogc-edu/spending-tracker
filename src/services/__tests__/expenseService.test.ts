@@ -455,3 +455,121 @@ describe('ExpenseService user scoping (A10)', () => {
     expect(await balanceOf(fixture, fixture.cash)).toBe(95000); // owner's balance untouched
   });
 });
+
+describe('ExpenseService installments (Wave 1B)', () => {
+  it('creates an installment expense, adjusts credit balance by total payable, and stores installment record', async () => {
+    const fixture = await makeFixture();
+    // 120000 principal (RM1200), 12 months at 100 bp (1% per month = RM12/mo = RM144 total interest)
+    // totalPayableSen = 120000 + 12 * 1200 = 134400 sen.
+    const created = await fixture.service.create(
+      input(fixture, {
+        amountSen: 120000,
+        accountId: fixture.credit.id,
+        installment: {
+          months: 12,
+          monthlyRateBp: 100,
+        },
+      }),
+    );
+
+    expect(created.amountSen).toBe(134400);
+    expect(await balanceOf(fixture, fixture.credit)).toBe(50000 + 134400);
+
+    const inst = await fixture.service.getInstallment(created.id);
+    expect(inst).not.toBeNull();
+    expect(inst?.months).toBe(12);
+    expect(inst?.monthlyRateBp).toBe(100);
+    expect(inst?.principalSen).toBe(120000);
+  });
+
+  it('rejects installment plans on cash accounts', async () => {
+    const fixture = await makeFixture();
+    await expect(
+      fixture.service.create(
+        input(fixture, {
+          amountSen: 50000,
+          accountId: fixture.cash.id,
+          installment: {
+            months: 6,
+            monthlyRateBp: 0,
+          },
+        }),
+      ),
+    ).rejects.toThrow('installments only allowed on credit accounts');
+  });
+
+  it('updates installment details and balance when edited with new installment params', async () => {
+    const fixture = await makeFixture();
+    const created = await fixture.service.create(
+      input(fixture, {
+        amountSen: 60000,
+        accountId: fixture.credit.id,
+        installment: { months: 6, monthlyRateBp: 0 },
+      }),
+    );
+    expect(created.amountSen).toBe(60000);
+    expect(await balanceOf(fixture, fixture.credit)).toBe(50000 + 60000);
+
+    // Edit to 12 months with 50 bp
+    // principal: 60000, interest: 60000 * 50 / 10000 = 300 sen/mo * 12 = 3600 sen => 63600 sen
+    const updated = await fixture.service.edit(
+      created.id,
+      input(fixture, {
+        amountSen: 60000,
+        accountId: fixture.credit.id,
+        installment: { months: 12, monthlyRateBp: 50 },
+      }),
+    );
+
+    expect(updated.amountSen).toBe(63600);
+    expect(await balanceOf(fixture, fixture.credit)).toBe(50000 + 63600);
+
+    const inst = await fixture.service.getInstallment(created.id);
+    expect(inst?.months).toBe(12);
+    expect(inst?.monthlyRateBp).toBe(50);
+  });
+
+  it('cleans up installment row and adjusts balance when edited to non-installment', async () => {
+    const fixture = await makeFixture();
+    const created = await fixture.service.create(
+      input(fixture, {
+        amountSen: 10000,
+        accountId: fixture.credit.id,
+        installment: { months: 3, monthlyRateBp: 100 },
+      }),
+    );
+    const instBefore = await fixture.service.getInstallment(created.id);
+    expect(instBefore).not.toBeNull();
+
+    // Edit to non-installment with plain amount 10000
+    const updated = await fixture.service.edit(
+      created.id,
+      input(fixture, {
+        amountSen: 10000,
+        accountId: fixture.credit.id,
+      }),
+    );
+    expect(updated.amountSen).toBe(10000);
+    expect(await balanceOf(fixture, fixture.credit)).toBe(50000 + 10000);
+
+    const instAfter = await fixture.service.getInstallment(created.id);
+    expect(instAfter).toBeNull();
+  });
+
+  it('deletes installment row and reverses balance when deleted', async () => {
+    const fixture = await makeFixture();
+    const created = await fixture.service.create(
+      input(fixture, {
+        amountSen: 30000,
+        accountId: fixture.credit.id,
+        installment: { months: 3, monthlyRateBp: 100 },
+      }),
+    );
+    expect(await fixture.service.getInstallment(created.id)).not.toBeNull();
+
+    await fixture.service.delete(created.id);
+
+    expect(await fixture.service.getInstallment(created.id)).toBeNull();
+    expect(await balanceOf(fixture, fixture.credit)).toBe(50000);
+  });
+});

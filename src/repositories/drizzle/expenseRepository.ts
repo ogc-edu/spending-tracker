@@ -17,7 +17,7 @@
  */
 import { and, desc, eq, gte, lt, lte, sql, type Column, type SQL } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
-import { accounts, categories, expenses, type Account, type Category, type Expense } from '@/db/schema';
+import { accounts, categories, expenseInstallments, expenses, type Account, type Category, type Expense, type ExpenseInstallment } from '@/db/schema';
 import { DATE_RE, monthStartDate, nextMonthStartDate } from '@/utils/dates';
 import type { ExpenseFilter, ExpenseRepository, ExpenseTotals, ExpenseTx, NewExpenseRow } from '../types';
 
@@ -80,6 +80,9 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
    */
   private predicatesFor(userId: number, filter: ExpenseFilter): SQL[] {
     const predicates: SQL[] = [eq(expenses.userId, userId)];
+    if (filter.accountId != null) {
+      predicates.push(eq(expenses.accountId, filter.accountId));
+    }
     const search = filter.search?.trim();
     if (search) {
       predicates.push(likeEscaped(expenses.description, `%${escapeLike(search)}%`));
@@ -129,6 +132,26 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
       .from(expenses)
       .where(and(...this.predicatesFor(userId, filter)))) as unknown as ExpenseTotals[];
     return rows[0] ?? { count: 0, totalSen: 0 };
+  }
+
+  async getInstallment(userId: number, expenseId: number): Promise<ExpenseInstallment | null> {
+    const rows = (await this.db
+      .select()
+      .from(expenseInstallments)
+      .where(
+        and(
+          eq(expenseInstallments.userId, String(userId)),
+          eq(expenseInstallments.expenseId, String(expenseId)),
+        ),
+      )) as unknown as ExpenseInstallment[];
+    return rows[0] ?? null;
+  }
+
+  async listInstallments(userId: number): Promise<ExpenseInstallment[]> {
+    return (await this.db
+      .select()
+      .from(expenseInstallments)
+      .where(eq(expenseInstallments.userId, String(userId)))) as unknown as ExpenseInstallment[];
   }
 
   /**
@@ -198,6 +221,47 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
             updatedAt: Date.now(),
           })
           .where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)))
+          .run();
+      },
+      insertInstallment: (input): ExpenseInstallment => {
+        const rows = tx
+          .insert(expenseInstallments)
+          .values({
+            id: input.id ?? crypto.randomUUID(),
+            userId: String(input.userId),
+            expenseId: String(input.expenseId),
+            months: input.months,
+            monthlyRateBp: input.monthlyRateBp,
+            principalSen: input.principalSen,
+            createdAt: input.createdAt ?? new Date().toISOString(),
+          })
+          .returning()
+          .all() as unknown as ExpenseInstallment[];
+        const row = rows[0];
+        if (!row) throw new Error('installment insert failed');
+        return row;
+      },
+      getInstallmentByExpenseId: (userId: number, expenseId: number): ExpenseInstallment | null => {
+        const rows = tx
+          .select()
+          .from(expenseInstallments)
+          .where(
+            and(
+              eq(expenseInstallments.userId, String(userId)),
+              eq(expenseInstallments.expenseId, String(expenseId)),
+            ),
+          )
+          .all() as unknown as ExpenseInstallment[];
+        return rows[0] ?? null;
+      },
+      deleteInstallmentByExpenseId: (userId: number, expenseId: number): void => {
+        tx.delete(expenseInstallments)
+          .where(
+            and(
+              eq(expenseInstallments.userId, String(userId)),
+              eq(expenseInstallments.expenseId, String(expenseId)),
+            ),
+          )
           .run();
       },
     };

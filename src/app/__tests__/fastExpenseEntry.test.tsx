@@ -36,8 +36,8 @@ const mockExpense: Expense = {
 };
 
 const mockAccounts: Account[] = [
-  { id: 10, userId: 1, name: 'Maybank', type: 'checking', balanceSen: 345000, createdAt: 1000, updatedAt: 1000 },
-  { id: 20, userId: 1, name: 'Cash', type: 'cash', balanceSen: 5000, createdAt: 1000, updatedAt: 1000 },
+  { id: 10, userId: 1, name: 'Maybank', type: 'checking', balanceSen: 345000, statementDay: null, dueDay: null, openingOwedSen: 0, createdAt: 1000, updatedAt: 1000 },
+  { id: 20, userId: 1, name: 'Cash', type: 'cash', balanceSen: 5000, statementDay: null, dueDay: null, openingOwedSen: 0, createdAt: 1000, updatedAt: 1000 },
 ];
 
 const mockCategories: Category[] = [
