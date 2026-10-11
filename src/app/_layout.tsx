@@ -1,11 +1,18 @@
 import '../../global.css';
 import { useCallback, useEffect, useState } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
+import {
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+  Geist_700Bold,
+} from '@expo-google-fonts/geist';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PortalHost } from '@rn-primitives/portal';
 import { initDb } from '@/db';
@@ -13,6 +20,7 @@ import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { DbErrorScreen } from '@/components/DbErrorScreen';
 import { DbLoadingScreen } from '@/components/DbLoadingScreen';
 import { ToastProvider } from '@/components/ToastProvider';
+import { ThemeProvider, useTheme } from '@/theme';
 
 // Prevent splash screen from auto-hiding until initial fonts, db, and auth are verified
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -25,20 +33,11 @@ SplashScreen.setOptions({
 // offline (dev-tools websocket failures). REVERT BEFORE COMMIT.
 LogBox.ignoreAllLogs();
 
-/**
- * Root layout — plan 002 init gate + plan 003 AuthProvider gate,
- * plan 016: ToastProvider (write-failure toasts) + SafeAreaProvider
- * (safe-area insets for the toast and keyboard-avoiding screens;
- * react-native-safe-area-context's hooks throw outside a provider).
- * Flow: initDb() (migrations + category seed + user seed) → AuthProvider
- * (validates SecureStore session) → Stack. Tabs are gated by AuthProvider
- * status; login/register redirect to (tabs) when signed in and vice-versa
- * (each screen handles its own Redirect).
- */
 type DbState = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready' };
 
 function RootStack() {
   const { status } = useAuth();
+  const { scheme, colors } = useTheme();
 
   useEffect(() => {
     if (status !== 'loading') {
@@ -46,14 +45,27 @@ function RootStack() {
     }
   }, [status]);
 
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
+    if (Platform.OS === 'android') {
+      const moduleName = 'expo-navigation-bar';
+      import(/* webpackIgnore: true */ moduleName)
+        .then((NavigationBar) => {
+          NavigationBar.setBackgroundColorAsync(colors.bg).catch(() => {});
+          NavigationBar.setButtonStyleAsync(scheme === 'dark' ? 'light' : 'dark').catch(() => {});
+        })
+        .catch(() => {});
+    }
+  }, [colors.bg, scheme]);
+
   if (status === 'loading') {
     return <DbLoadingScreen />;
   }
 
   return (
     <>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
         <Stack.Screen name="register" />
@@ -62,12 +74,21 @@ function RootStack() {
   );
 }
 
-export default function RootLayout() {
+function RootContent() {
   const [dbState, setDbState] = useState<DbState>({ status: 'loading' });
-  // Preload Ionicons so the tab bar glyphs render on first mount (New
-  // Architecture + bottom-tabs race: without this, icon codepoints show as
-  // blank boxes on cold start). Gate the tree until ready.
-  const [fontsLoaded] = useFonts({ ...Ionicons.font });
+  const [fontsLoaded, fontError] = useFonts({
+    ...Ionicons.font,
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+  });
+  const [fontFallback, setFontFallback] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setFontFallback(true), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const runInit = useCallback(() => {
     initDb().then(
@@ -94,7 +115,9 @@ export default function RootLayout() {
     }
   }, [dbState.status]);
 
-  if (!fontsLoaded || dbState.status === 'loading') {
+  const fontsReady = fontsLoaded || fontError != null || fontFallback;
+
+  if (!fontsReady || dbState.status === 'loading') {
     return <DbLoadingScreen />;
   }
 
@@ -111,5 +134,13 @@ export default function RootLayout() {
       </AuthProvider>
       <PortalHost />
     </SafeAreaProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootContent />
+    </ThemeProvider>
   );
 }

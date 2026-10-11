@@ -1,20 +1,25 @@
 /**
  * Theme & design token assertions:
- *  - WCAG AA contrast (≥4.5:1) for Obsidian Luxe and Swiss Porcelain palettes.
+ *  - WCAG AA contrast (≥4.5:1) for Obsidian Luxe, Swiss Porcelain, Dark and Light themes.
  *  - Backward-compatible contrast assertions for chrome colors.
  *  - MIN_TOUCH_TARGET ≥ 44pt (WCAG 2.5.5 / Apple HIG).
  *  - Platform-gated tabular figures and typography scale.
  */
 import { describe, expect, it } from '@jest/globals';
 import {
+  accountCards,
+  categoryPalette,
   colors,
   fontFamilies,
   MIN_TOUCH_TARGET,
   moneyFontVariant,
   obsidian,
+  onCard,
   porcelain,
   spacing,
   tabularNumsVariant,
+  themes,
+  typeScale,
   typography,
   typographyClasses,
 } from '@/theme';
@@ -70,13 +75,75 @@ describe('theme tokens', () => {
     expect(porcelain.card).toBe('#FFFFFF');
   });
 
-  it('has 12 category palette entries', () => {
-    expect(colors.categoryPalette).toHaveLength(12);
+  it('exports dual theme tokens matching design.jsonc', () => {
+    const tokenKeys = [
+      'bg',
+      'tabbar',
+      'surface',
+      'fill',
+      'fillStrong',
+      'sheet',
+      'separator',
+      'separatorStrong',
+      'chipBorder',
+      'track',
+      'handle',
+      'scrim',
+      'text',
+      'textSecondary',
+      'textTertiary',
+      'accent',
+      'onAccent',
+      'emphasis',
+      'link',
+      'selectedBg',
+      'switchOff',
+      'segmentTrack',
+      'segmentThumb',
+      'chartActive',
+      'chartMax',
+      'chartIdle',
+      'barMuted',
+      'danger',
+      'cardShadow',
+    ] as const;
+
+    for (const k of tokenKeys) {
+      expect(themes.dark[k]).toBeDefined();
+      expect(themes.light[k]).toBeDefined();
+    }
+
+    expect(themes.dark.bg).toBe('#000000');
+    expect(themes.dark.accent).toBe('#F5B83D');
+    expect(themes.light.bg).toBe('#F2F2F2');
+    expect(themes.light.accent).toBe('#111111');
   });
 
-  it('uses a 4-point spacing scale', () => {
+  it('exports accountCards and onCard palettes', () => {
+    expect(accountCards.bank.dark).toBe('#24408F');
+    expect(accountCards.cash.dark).toBe('#0E6B63');
+    expect(accountCards.ewallet.dark).toBe('#5A3E9E');
+    expect(accountCards.credit_card.dark).toBe('#3A3A3C');
+    expect(accountCards.credit_card.light).toBe('#1F1F21');
+    expect(accountCards.paylater.dark).toBe('#B8430F');
+
+    expect(onCard.text).toBe('#FFFFFF');
+    expect(onCard.payButton.bg).toBe('#FFFFFF');
+    expect(onCard.payButton.text).toBe('#7A2A07');
+  });
+
+  it('has 12 category palette entries aligned with seed', () => {
+    expect(categoryPalette).toHaveLength(12);
+    expect(categoryPalette[0].seed).toBe('Food');
+    expect(categoryPalette[0].darkFg).toBe('#F5B83D');
+    expect(categoryPalette[11].seed).toBe('Other');
+  });
+
+  it('uses a 4-point spacing scale and design spacing tokens', () => {
     expect(spacing.xs).toBe(4);
     expect(spacing.xxl).toBe(32);
+    expect(spacing.screenX).toBe(16);
+    expect(spacing.sectionGap).toBe(20);
   });
 
   it('defines typography scale and display sizes', () => {
@@ -86,6 +153,10 @@ describe('theme tokens', () => {
     expect(typeof typography.header).toBe('number');
     expect(typography.hero).toBe(48);
     expect(typography.header).toBe(11);
+    expect(typography.largeTitle).toBe(28);
+    expect(typography.amountHero).toBe(44);
+    expect(typeScale.largeTitle.fontSize).toBe(28);
+    expect(typeScale.largeTitle.lineHeight).toBe(34);
   });
 
   it('exports font families and typography class presets', () => {
@@ -94,6 +165,48 @@ describe('theme tokens', () => {
     expect(typographyClasses.heroNumber).toContain('tabular-nums');
     expect(typographyClasses.heroNumber).toContain('font-mono');
     expect(tabularNumsVariant).toEqual(['tabular-nums']);
+  });
+});
+
+describe('Wave 1A — Dark theme contrast (WCAG AA ≥ 4.5:1)', () => {
+  it.each([
+    [themes.dark.text, themes.dark.bg],
+    [themes.dark.text, themes.dark.surface],
+    [themes.dark.textSecondary, themes.dark.bg],
+    [themes.dark.textSecondary, themes.dark.surface],
+    [themes.dark.accent, themes.dark.bg],
+    [themes.dark.onAccent, themes.dark.accent],
+    [themes.dark.danger, themes.dark.bg],
+  ])('%s on %s ≥ 4.5:1', (fg, bg) => {
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('Wave 1A — Light theme contrast (WCAG AA ≥ 4.5:1)', () => {
+  it.each([
+    [themes.light.text, themes.light.bg],
+    [themes.light.text, themes.light.surface],
+    [themes.light.textSecondary, themes.light.bg],
+    [themes.light.textSecondary, themes.light.surface],
+    [themes.light.textTertiary, themes.light.bg],
+    [themes.light.onAccent, themes.light.accent],
+    [themes.light.danger, themes.light.surface],
+  ])('%s on %s ≥ 4.5:1', (fg, bg) => {
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('Wave 1A — onCard contrast (WCAG AA ≥ 4.5:1)', () => {
+  it.each([
+    [onCard.text, accountCards.bank.dark],
+    [onCard.text, accountCards.cash.dark],
+    [onCard.text, accountCards.ewallet.dark],
+    [onCard.text, accountCards.credit_card.dark],
+    [onCard.text, accountCards.credit_card.light],
+    [onCard.text, accountCards.paylater.dark],
+    [onCard.payButton.text, onCard.payButton.bg],
+  ])('%s on %s ≥ 4.5:1', (fg, bg) => {
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
 

@@ -1,79 +1,108 @@
-/**
- * IconButton — a ≥44 pt square/circular pressable carrying one icon.
- * Follows RNR aesthetic with NativeWind support and hairline borders.
- */
-import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import React from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MIN_TOUCH_TARGET, colors, spacing } from '@/theme';
-import { cn } from '@/lib/utils';
+import { useTheme } from '@/theme';
+import { Glyph, type GlyphName } from './Glyph';
 
 export type IconButtonTone = 'muted' | 'accent' | 'danger';
 
-const TONE_COLOR = { muted: colors.muted, accent: colors.accent, danger: colors.danger } as const;
-
-export function IconButton({
-  icon,
-  onPress,
-  label,
-  tone = 'muted',
-  filled = false,
-  disabled = false,
-  size = 20,
-  className,
-  style,
-  testID,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress(): void;
-  /** Accessibility label — required: icon-only buttons must be labelled. */
-  label: string;
+export interface IconButtonProps {
+  /** Glyph name for design.jsonc glyphs */
+  glyph?: GlyphName;
+  name?: GlyphName;
+  /** Backward-compatible Ionicons name */
+  icon?: keyof typeof Ionicons.glyphMap;
+  onPress?: () => void;
+  accessibilityLabel?: string;
+  label?: string;
   tone?: IconButtonTone;
-  /** Soft tinted circle behind the glyph (the tone's soft background). */
   filled?: boolean;
   disabled?: boolean;
   size?: number;
-  className?: string;
+  glyphSize?: number;
+  color?: string;
+  bg?: string;
   style?: StyleProp<ViewStyle>;
   testID?: string;
-}) {
-  const color = TONE_COLOR[tone];
-  const bg =
-    tone === 'danger' ? colors.dangerSoft : tone === 'accent' ? colors.accentSoft : colors.background;
+}
+
+export function IconButton({
+  glyph,
+  name,
+  icon,
+  onPress,
+  accessibilityLabel,
+  label,
+  tone,
+  filled,
+  disabled = false,
+  size = 44,
+  glyphSize = 20,
+  color,
+  bg,
+  style,
+  testID,
+}: IconButtonProps) {
+  const { colors } = useTheme();
+  const glyphName = glyph ?? name;
+  const a11yLabel = accessibilityLabel ?? label ?? glyphName ?? (icon as string) ?? 'Button';
+
+  let iconColor = color ?? colors.text;
+  let bgColor = bg ?? colors.fill;
+
+  if (tone === 'accent') {
+    iconColor = colors.accent;
+    if (filled) bgColor = colors.selectedBg;
+  } else if (tone === 'danger') {
+    iconColor = colors.danger;
+  }
 
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      hitSlop={spacing.xs}
-      className={cn(
-        'w-11 h-11 rounded-full items-center justify-center min-h-[44px] min-w-[44px]',
-        filled && 'border border-border/40',
-        disabled && 'opacity-50',
-        className
-      )}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      accessibilityState={{ disabled }}
+      testID={testID}
       style={({ pressed }) => [
         styles.button,
-        filled && { backgroundColor: bg },
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: bgColor,
+        },
+        disabled && styles.disabled,
         pressed && styles.pressed,
         style,
       ]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      testID={testID}
     >
-      <Ionicons name={icon} size={size} color={color} />
+      {glyphName ? (
+        <Glyph name={glyphName} size={glyphSize} color={iconColor} />
+      ) : icon ? (
+        <Ionicons name={icon} size={glyphSize} color={iconColor} />
+      ) : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    width: MIN_TOUCH_TARGET,
-    height: MIN_TOUCH_TARGET,
-    borderRadius: MIN_TOUCH_TARGET / 2,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pressed: { opacity: 0.6 },
+  pressed: {
+    opacity: 0.6,
+  },
+  disabled: {
+    opacity: 0.4,
+  },
 });
