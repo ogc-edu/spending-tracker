@@ -153,7 +153,7 @@ export function KeyboardAwareScrollView({
 
   return (
     <FocusContext.Provider value={revealFocusedInput}>
-      <View ref={containerRef} className={className} style={[styles.container, style]} collapsable={false}>
+      <View ref={containerRef} style={[styles.container, style]} collapsable={false}>
         <ScrollView
           ref={scrollRef}
           style={styles.container}

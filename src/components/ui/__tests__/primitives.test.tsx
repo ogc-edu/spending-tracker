@@ -7,9 +7,7 @@ import { ThemeProvider } from '@/theme';
 import {
   AccountSwatch,
   BarChart,
-  BentoCard,
   BreakdownRow,
-  BudgetMeter,
   CategoryTile,
   Chip,
   CreditAccountCard,
@@ -310,138 +308,7 @@ describe('Plan 002 — Reusable UI Component Primitives', () => {
     });
   });
 
-  describe('BudgetMeter', () => {
-    it('calculates percentage and applies bg-primary when spent < 80%', async () => {
-      const tree = await render(
-        <BudgetMeter spentSen={50000} totalSen={100000} testID="meter-healthy" />
-      );
-      const bar = tree.root.findByProps({ testID: 'meter-healthy-bar' });
-      expect(bar.props.className).toContain('bg-primary');
-      const flattened = StyleSheet.flatten(bar.props.style as never) as { width: string };
-      expect(flattened.width).toBe('50%');
-    });
 
-    it('shifts to bg-warning when spent is between 80% and 99%', async () => {
-      const tree = await render(
-        <BudgetMeter spentSen={85000} totalSen={100000} testID="meter-warning" />
-      );
-      const bar = tree.root.findByProps({ testID: 'meter-warning-bar' });
-      expect(bar.props.className).toContain('bg-warning');
-      const flattened = StyleSheet.flatten(bar.props.style as never) as { width: string };
-      expect(flattened.width).toBe('85%');
-    });
-
-    it('shifts to bg-destructive and clamps bar width to 100% when spent >= 100%', async () => {
-      const tree = await render(
-        <BudgetMeter spentSen={120000} totalSen={100000} testID="meter-over" />
-      );
-      const bar = tree.root.findByProps({ testID: 'meter-over-bar' });
-      expect(bar.props.className).toContain('bg-destructive');
-      const flattened = StyleSheet.flatten(bar.props.style as never) as { width: string };
-      expect(flattened.width).toBe('100%');
-    });
-
-    it('clamps negative spent to 0%', async () => {
-      const tree = await render(
-        <BudgetMeter spentSen={-1000} totalSen={100000} testID="meter-neg" />
-      );
-      const bar = tree.root.findByProps({ testID: 'meter-neg-bar' });
-      const flattened = StyleSheet.flatten(bar.props.style as never) as { width: string };
-      expect(flattened.width).toBe('0%');
-    });
-
-    it('handles totalSen = 0 gracefully', async () => {
-      const tree = await render(
-        <BudgetMeter spentSen={5000} totalSen={0} testID="meter-zero-budget" />
-      );
-      const bar = tree.root.findByProps({ testID: 'meter-zero-budget-bar' });
-      expect(bar.props.className).toContain('bg-destructive');
-      const flattened = StyleSheet.flatten(bar.props.style as never) as { width: string };
-      expect(flattened.width).toBe('100%');
-    });
-
-    it('supports custom color class or style', async () => {
-      const treeClass = await render(
-        <BudgetMeter
-          spentSen={50000}
-          totalSen={100000}
-          customColor="bg-purple-500"
-          testID="meter-custom-class"
-        />
-      );
-      const barClass = treeClass.root.findByProps({ testID: 'meter-custom-class-bar' });
-      expect(barClass.props.className).toContain('bg-purple-500');
-
-      const treeHex = await render(
-        <BudgetMeter
-          spentSen={50000}
-          totalSen={100000}
-          customColor="#8B5CF6"
-          testID="meter-custom-hex"
-        />
-      );
-      const barHex = treeHex.root.findByProps({ testID: 'meter-custom-hex-bar' });
-      const flattened = StyleSheet.flatten(barHex.props.style as never) as {
-        backgroundColor: string;
-      };
-      expect(flattened.backgroundColor).toBe('#8B5CF6');
-    });
-
-    it('supports custom heightClass', async () => {
-      const tree = await render(
-        <BudgetMeter
-          spentSen={1000}
-          totalSen={5000}
-          heightClass="h-4"
-          testID="meter-height"
-        />
-      );
-      const container = tree.root.findAllByType(View)[0];
-      expect(container.props.className).toContain('h-4');
-    });
-
-    it('exposes progressbar accessibility role and values', async () => {
-      const tree = await render(
-        <BudgetMeter spentSen={30000} totalSen={100000} testID="meter-a11y" />
-      );
-      const container = tree.root.findAllByType(View)[0];
-      expect(container.props.accessibilityRole).toBe('progressbar');
-      expect(container.props.accessibilityValue).toEqual({
-        min: 0,
-        max: 100,
-        now: 30,
-      });
-      expect(container.props.accessibilityLabel).toBe('Budget progress: 30%');
-    });
-  });
-
-  describe('BentoCard', () => {
-    it('renders container with base hairline borders and rounded-2xl', async () => {
-      const tree = await render(
-        <BentoCard testID="bento-base">
-          <Text testID="bento-child">Content</Text>
-        </BentoCard>
-      );
-      const card = tree.root.findByType(View);
-      expect(card.props.className).toContain('rounded-2xl');
-      expect(card.props.className).toContain('border-border/60');
-      expect(card.props.className).toContain('bg-card');
-      expect(tree.root.findByProps({ testID: 'bento-child' }).props.children).toBe(
-        'Content'
-      );
-    });
-
-    it('applies elevated styling when elevated is true', async () => {
-      const tree = await render(
-        <BentoCard elevated testID="bento-elevated">
-          <View />
-        </BentoCard>
-      );
-      const card = tree.root.findAllByType(View)[0];
-      expect(card.props.className).toContain('border-border/80');
-      expect(card.props.className).toContain('shadow-sm');
-    });
-  });
 
   describe('TouchTarget', () => {
     it('enforces minimum 44px hit target boundaries by default', async () => {

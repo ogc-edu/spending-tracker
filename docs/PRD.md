@@ -8,14 +8,11 @@
 | **Platform** | Android + iOS (React Native + Expo); web out of MVP (A16) |
 | **MVP scope** | Local-first personal expense tracker with commitments, cash-flow awareness, and contextual AI analysis |
 
-> **Rev. 4 — scope reset (2026-10-10, [plan 020](plans/020-scope-reset-credit-bills.md)).** The user
-> removed **budgets** (§7.3, goal 2), the **safety buffer** (SET-1), **safe-to-spend** and the
-> **daily allowance** (goal 4, DASH-1/3, §8.4, D2 retired), and the dead Transfer/Scan dashboard
-> buttons; the **Payroll** UI is hidden. The Dashboard now shows *spent this month* and *due by end
-> of this month* (unpaid commitment slots before next month start, overdue included). Plan 020
-> also specifies credit-account **bills** (SPayLater / credit cards) and a period-based Analytics
-> chart — not yet built. Sections below that describe removed features are kept for history and
-> marked *(removed — plan 020)*.
+> **Rev. 4 — scope reset & UI redesign (2026-10-11, [plan 020](plans/020-scope-reset-credit-bills.md) & [plan 021](plans/021-new-ui.md)).**
+> Budgets, safety buffer, safe-to-spend and daily allowance removed. Dashboard shows *spent this month* and *due by end of month*.
+> Credit-account billing cycles (SPayLater / credit cards) with installment plans and period-based Analytics (Day / Week / Month)
+> are fully implemented along with the Apple Wallet-style dual-theme redesign. Sections below that describe removed features
+> are kept for history and marked *(removed — plan 020)*.
 
 ---
 

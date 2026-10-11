@@ -1,0 +1,10 @@
+<!-- Android 13+ themed (monochrome) icon. Only alpha is used, so cards are separated by transparent gaps. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 108 108">
+  <defs>
+    <mask id="m1"><rect width="108" height="108" fill="#fff"/><rect x="27.5" y="37.5" width="53" height="35" rx="8" fill="#000"/></mask>
+    <mask id="m2"><rect width="108" height="108" fill="#fff"/><rect x="27.5" y="45.5" width="53" height="35" rx="8" fill="#000"/></mask>
+  </defs>
+  <rect x="30" y="32" width="48" height="30" rx="6" fill="#FFFFFF" mask="url(#m1)"/>
+  <rect x="30" y="40" width="48" height="30" rx="6" fill="#FFFFFF" mask="url(#m2)"/>
+  <rect x="30" y="48" width="48" height="30" rx="6" fill="#FFFFFF"/>
+</svg>

@@ -56,7 +56,7 @@ export function Switch({
         style={[
           styles.knob,
           {
-            backgroundColor: onCard.text, // #FFFFFF
+            backgroundColor: onCard.text,
             transform: [{ translateX: value ? 20 : 0 }],
           },
         ]}

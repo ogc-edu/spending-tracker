@@ -60,7 +60,7 @@ export function WalletCard({
   style,
   testID,
 }: WalletCardProps) {
-  const { scheme } = useTheme();
+  const { scheme, colors } = useTheme();
 
   const cardBg =
     accountCards[accountType]?.[scheme] ??
@@ -90,7 +90,7 @@ export function WalletCard({
           marginTop: index === 0 ? 0 : -18,
           zIndex: index + 1,
           backgroundColor: cardBg,
-          shadowColor: '#000000',
+          shadowColor: colors.bg,
           shadowOffset: { width: 0, height: isDark ? -6 : -4 },
           shadowOpacity: isDark ? 0.55 : 0.12,
           shadowRadius: isDark ? 14 : 12,

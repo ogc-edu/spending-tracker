@@ -103,10 +103,11 @@ Non-negotiable invariants — breaking one breaks tests and the migration story:
 
 ### Theme
 
-Use `@/theme` tokens (`colors`, `spacing`, `radius`, `shadows`, `typography`, `MIN_TOUCH_TARGET`) —
-no literal hex or magic padding in components. Token contrast (WCAG AA) and the 44pt touch target are
-asserted in `src/theme/__tests__/tokens.test.ts`, so darkening/lightening a color needs the test updated
-with recomputed ratios. Single light theme; dark mode is future work.
+Use `@/theme` tokens (`colors`, `spacing`, `radius`, `shadows`, `typography`, `MIN_TOUCH_TARGET`) via `useTheme()` —
+no literal hex or magic padding in components. Dual themes (`themes.dark` and `themes.light`) configured via
+Settings → Appearance (System / Light / Dark), persisted in SQLite `settings.theme_mode`.
+Token contrast (WCAG AA) and the 44pt touch target are asserted in `src/theme/__tests__/tokens.test.ts` for both themes.
+Geist typography (`@expo-google-fonts/geist`) with tabular figures (`moneyFontVariant`) for all currency displays.
 
 ## Notes
 

@@ -73,8 +73,6 @@ export { Money, type MoneyProps, type MoneySize } from './Money';
 // Legacy UI Component Primitives (preserved for existing screen compatibility)
 export { MoneyDisplay, type MoneyDisplayProps, type MoneyDisplaySize } from './MoneyDisplay';
 export { StatusPill, type StatusPillProps, type StatusVariant } from './StatusPill';
-export { BudgetMeter, type BudgetMeterProps } from './BudgetMeter';
-export { BentoCard, type BentoCardProps } from './BentoCard';
 export { TouchTarget, type TouchTargetProps } from './TouchTarget';
 export { Avatar, AvatarFallback, AvatarImage } from './avatar';
 export { Badge, type BadgeTone } from './Badge';
@@ -97,7 +95,6 @@ export {
   type CardProps,
   type CardTone,
 } from './Card';
-export { Fab } from './Fab';
 export { Icon } from './icon';
 export { InlineError } from './InlineError';
 export { Input } from './input';

@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   heroBadge: { height: 12, width: 120, borderRadius: 6, marginBottom: spacing.md },
   heroAmount: { height: 34, width: '65%', borderRadius: 8, marginBottom: spacing.lg },
   heroRow: { flexDirection: 'row', gap: spacing.md },
-  heroPanel: { flex: 1, height: 40, borderRadius: radius.md, backgroundColor: 'rgba(255,255,255,0.25)' },
+  heroPanel: { flex: 1, height: 40, borderRadius: radius.md, backgroundColor: colors.fillStrong },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

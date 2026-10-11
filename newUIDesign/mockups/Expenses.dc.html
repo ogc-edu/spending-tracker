@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Expenses</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./theme.css">
+</helmet>
+<div style="width: 354px; height: 792px; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: 'Geist', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden; font-variant-numeric: tabular-nums">
+
+  <div style="flex-shrink: 0; padding: 44px 16px 10px; display: flex; flex-direction: column; gap: 12px; background: var(--bg); border-bottom: 1px solid var(--separator)">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end">
+      <h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.02em">Expenses</h1>
+      <div style="text-align: right">
+        <div style="font-size: 12px; color: var(--text-secondary)">October · 12 items</div>
+        <div style="font-size: 15px; font-weight: 600">RM396.00</div>
+      </div>
+    </div>
+    <label style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; background: var(--fill); color: var(--text-tertiary)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+      <input placeholder="Search notes" aria-label="Search expenses" style="flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); font-size: 14px; outline: none">
+    </label>
+    <div style="display: flex; gap: 8px">
+      <button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 0; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 600; cursor: pointer">This month</button>
+      <button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--chip-border); background: var(--fill); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer">All categories</button>
+      <button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--chip-border); background: var(--fill); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer">All accounts</button>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px">
+    <sc-for list="{{days}}" as="d" hint-placeholder-count="3">
+      <div style="display: flex; justify-content: space-between; padding: 14px 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.02em">
+        <span>{{d.title}}</span><span>{{d.total}}</span>
+      </div>
+      <sc-for list="{{d.rows}}" as="r" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--separator)">
+          <div style="width: 34px; height: 34px; border-radius: 9px; background: {{r.tile}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; font-weight: 700; color: {{r.tint}}">{{r.initial}}</div>
+          <div style="flex: 1; min-width: 0">
+            <div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.note}}</div>
+            <div style="font-size: 12px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.meta}}</div>
+          </div>
+          <div style="font-size: 14px; font-weight: 600; white-space: nowrap">{{r.amount}}</div>
+        </div>
+      </sc-for>
+    </sc-for>
+  </div>
+
+  <nav aria-label="Main" style="flex-shrink: 0; height: 80px; box-sizing: border-box; padding: 6px 8px 16px; background: var(--tabbar); border-top: 1px solid var(--separator); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center">
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><path d="M6 3h12"></path></svg>Home</a>
+    <a href="Expenses.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text); font-size: 11px; font-weight: 600; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="3.5" cy="6" r="1"></circle><circle cx="3.5" cy="12" r="1"></circle><circle cx="3.5" cy="18" r="1"></circle></svg>Expenses</a>
+    <a href="AddExpense.dc.html" aria-label="Add expense" style="display: flex; justify-content: center">
+      <span style="width: 48px; height: 48px; border-radius: 24px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+      </span>
+    </a>
+    <a href="Commitments.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Due</a>
+    <a href="Analytics.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V12M12 20V5M19 20v-9"></path></svg>Analytics</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":354,"height":792}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const slug = (cat) => cat.toLowerCase();
+    const row = (cat, note, acct, amount) => ({ initial: cat[0], tile: 'var(--cat-' + slug(cat) + '-tile)', tint: 'var(--cat-' + slug(cat) + '-fg)', note, meta: cat + ' · ' + acct, amount });
+    const days = [
+      { title: 'TODAY · FRI 10 OCT', total: 'RM58.40', rows: [
+        row('Food', 'Lunch', 'Savings', 'RM18.50'),
+        row('Groceries', 'Weekly groceries', 'SPayLater · 3 mo', 'RM120.00'),
+        row('Transport', 'Petrol', 'Cash', 'RM39.90'),
+      ] },
+      { title: 'THU 9 OCT', total: 'RM42.00', rows: [
+        row('Transport', 'Grab to office', 'Savings', 'RM12.00'),
+        row('Food', 'Dinner with family', 'SPayLater', 'RM30.00'),
+      ] },
+      { title: 'WED 8 OCT', total: 'RM74.30', rows: [
+        row('Food', 'Kopitiam', 'Cash', 'RM9.80'),
+        row('Shopping', 'Phone case', 'SPayLater', 'RM45.00'),
+        row('Health', 'Pharmacy', 'Savings', 'RM19.50'),
+      ] },
+      { title: 'MON 6 OCT', total: 'RM181.30', rows: [
+        row('Bills', 'Electricity', 'Savings', 'RM177.30'),
+        row('Transport', 'Parking', 'Cash', 'RM4.00'),
+      ] },
+    ];
+    return { days };
+  }
+}
+</script>
+</body>
+</html>

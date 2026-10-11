@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add expense</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./theme.css">
+</helmet>
+<div style="width: 354px; height: 792px; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: 'Geist', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden; font-variant-numeric: tabular-nums">
+
+  <div style="flex-shrink: 0; padding: 40px 8px 0; display: grid; grid-template-columns: 88px minmax(0, 1fr) 88px; align-items: center">
+    <a href="Main.dc.html" style="padding: 12px 8px; font-size: 15px; font-weight: 500">Cancel</a>
+    <div style="text-align: center; font-size: 15px; font-weight: 600">New expense</div>
+    <span></span>
+  </div>
+
+  <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 18px">
+
+    <div style="text-align: center; padding: 8px 0 4px">
+      <label for="amt" style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">Amount</label>
+      <div style="display: flex; justify-content: center; align-items: baseline; gap: 4px; margin-top: 2px">
+        <span style="font-size: 22px; font-weight: 600; color: var(--text-tertiary)">RM</span>
+        <input id="amt" inputmode="decimal" value="120.00" aria-label="Amount in ringgit" style="width: 180px; background: transparent; border: 0; color: var(--text); font-size: 44px; line-height: 52px; font-weight: 700; letter-spacing: -0.02em; text-align: left; font-variant-numeric: tabular-nums; outline: none">
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">Category</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{cats}}" as="c" hint-placeholder-count="8">
+          <button onClick="{{c.pick}}" aria-pressed="{{c.on}}" style="height: 36px; padding: 0 14px; border-radius: 18px; font-size: 14px; font-weight: 500; cursor: pointer; background: {{c.bg}}; color: {{c.fg}}; border: 1px solid {{c.border}}">{{c.name}}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">Paid with</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        <sc-for list="{{accts}}" as="a" hint-placeholder-count="4">
+          <button onClick="{{a.pick}}" aria-pressed="{{a.on}}" style="min-height: 48px; padding: 6px 12px; border-radius: 12px; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; background: {{a.bg}}; border: 1.5px solid {{a.border}}; color: var(--text)">
+            <span style="width: 22px; height: 15px; border-radius: 3px; flex-shrink: 0; background: {{a.swatch}}"></span>
+            <span style="min-width: 0">
+              <span style="display: block; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span>
+              <span style="display: block; font-size: 11px; color: var(--text-secondary)">{{a.kind}}</span>
+            </span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-if value="{{isCredit}}" hint-placeholder-val="{{true}}">
+      <div style="background: var(--surface); border-radius: 14px; padding: 4px 14px 12px; display: flex; flex-direction: column; gap: 10px">
+        <label style="display: flex; align-items: center; justify-content: space-between; min-height: 48px; cursor: pointer">
+          <span>
+            <span style="display: block; font-size: 14px; font-weight: 600">Split into months</span>
+            <span style="display: block; font-size: 12px; color: var(--text-tertiary)">Each part lands in a later bill</span>
+          </span>
+          <button onClick="{{toggleSplit}}" role="switch" aria-checked="{{split}}" aria-label="Split into months" style="width: 51px; height: 31px; border: 0; border-radius: 16px; padding: 2px; cursor: pointer; display: flex; background: {{switchBg}}; justify-content: {{switchJustify}}">
+            <span style="width: 27px; height: 27px; border-radius: 14px; background: #FFFFFF"></span>
+          </button>
+        </label>
+        <sc-if value="{{split}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <div style="display: flex; gap: 8px">
+              <sc-for list="{{monthOpts}}" as="m" hint-placeholder-count="3">
+                <button onClick="{{m.pick}}" aria-pressed="{{m.on}}" style="flex: 1; height: 40px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; background: {{m.bg}}; color: {{m.fg}}; border: 1px solid {{m.border}}">{{m.label}}</button>
+              </sc-for>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between">
+              <span>
+                <span style="display: block; font-size: 14px; font-weight: 500">Interest per month</span>
+                <span style="display: block; font-size: 12px; color: var(--text-tertiary)">On the price, added to each part</span>
+              </span>
+              <span style="display: flex; align-items: center; gap: 4px">
+                <button onClick="{{rateDown}}" aria-label="Lower interest" style="width: 44px; height: 40px; border: 0; border-radius: 10px; background: var(--fill-strong); color: var(--text); font-size: 20px; cursor: pointer">−</button>
+                <span style="min-width: 56px; text-align: center; font-size: 15px; font-weight: 600">{{rateLabel}}</span>
+                <button onClick="{{rateUp}}" aria-label="Raise interest" style="width: 44px; height: 40px; border: 0; border-radius: 10px; background: var(--fill-strong); color: var(--text); font-size: 20px; cursor: pointer">+</button>
+              </span>
+            </div>
+            <div style="border-top: 1px solid var(--separator-strong); padding-top: 10px; display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: var(--text-secondary)">Per month</span><span style="font-weight: 600; color: var(--emphasis)">{{perMonth}}</span></div>
+              <div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: var(--text-secondary)">Total payable</span><span style="font-weight: 600">{{total}}</span></div>
+              <div style="font-size: 12px; color: var(--text-tertiary)">{{landing}}</div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <div style="display: flex; flex-direction: column; background: var(--surface); border-radius: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 0 14px; border-bottom: 1px solid var(--separator)">
+        <span style="font-size: 14px; color: var(--text-secondary)">Date</span>
+        <span style="font-size: 14px; font-weight: 500">Today, 10 Oct</span>
+      </div>
+      <label style="display: flex; align-items: center; min-height: 48px; padding: 0 14px; gap: 12px">
+        <span style="font-size: 14px; color: var(--text-secondary)">Note</span>
+        <input placeholder="Optional" style="flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); font-size: 14px; text-align: right; outline: none">
+      </label>
+    </div>
+  </div>
+
+  <div style="flex-shrink: 0; padding: 8px 16px 24px; background: var(--bg)">
+    <a href="Main.dc.html" style="display: flex; align-items: center; justify-content: center; height: 52px; border-radius: 14px; background: var(--accent); color: var(--on-accent); font-size: 16px; font-weight: 700">Save expense</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":354,"height":792}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { cat: 'Food', acct: 'spl', split: true, months: 3, rateBp: 0 };
+  }
+  renderVals() {
+    const s = this.state;
+    const fmt = (sen) => 'RM' + (Math.floor(sen / 100)).toLocaleString('en-MY') + '.' + String(sen % 100).padStart(2, '0');
+    const cats = ['Food', 'Groceries', 'Transport', 'Shopping', 'Bills', 'Health', 'Entertainment', 'Other'].map((name) => {
+      const on = s.cat === name;
+      return { name, on, bg: on ? 'var(--accent)' : 'var(--fill)', fg: on ? 'var(--on-accent)' : 'var(--text)', border: on ? 'var(--accent)' : 'var(--fill-strong)', pick: () => this.setState({ cat: name }) };
+    });
+    const accountList = [
+      { id: 'bank', name: 'Savings', kind: 'Bank', swatch: 'var(--card-bank)', credit: false },
+      { id: 'cash', name: 'Cash', kind: 'Wallet', swatch: 'var(--card-cash)', credit: false },
+      { id: 'spl', name: 'SPayLater', kind: 'Pay later', swatch: 'var(--card-spl)', credit: true },
+      { id: 'card', name: 'Credit card', kind: 'Credit', swatch: 'var(--card-credit)', credit: true },
+    ];
+    const accts = accountList.map((a) => {
+      const on = s.acct === a.id;
+      return { ...a, on, bg: on ? 'var(--selected-bg)' : 'var(--fill)', border: on ? 'var(--accent)' : 'var(--fill)', pick: () => this.setState({ acct: a.id }) };
+    });
+    const isCredit = accountList.find((a) => a.id === s.acct).credit;
+    const principal = 12000;
+    const n = s.months;
+    const base = Math.floor(principal / n);
+    const interest = Math.floor((principal * s.rateBp) / 10000);
+    const total = principal + interest * n;
+    const months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
+    const landing = 'Lands in the ' + months[0] + ' – ' + months[n - 1] + ' bills · last part absorbs rounding';
+    const monthOpts = [3, 6, 12].map((m) => {
+      const on = n === m;
+      return { label: m + ' mo', on, bg: on ? 'var(--accent)' : 'var(--fill-strong)', fg: on ? 'var(--on-accent)' : 'var(--text)', border: on ? 'var(--accent)' : 'var(--fill-strong)', pick: () => this.setState({ months: m }) };
+    });
+    return {
+      cats, accts, isCredit, monthOpts,
+      split: s.split,
+      switchBg: s.split ? 'var(--accent)' : 'var(--switch-off)',
+      switchJustify: s.split ? 'flex-end' : 'flex-start',
+      toggleSplit: () => this.setState({ split: !s.split }),
+      rateLabel: (s.rateBp / 100).toFixed(2) + '%',
+      rateUp: () => this.setState({ rateBp: Math.min(500, s.rateBp + 50) }),
+      rateDown: () => this.setState({ rateBp: Math.max(0, s.rateBp - 50) }),
+      perMonth: fmt(base + interest) + (principal % n ? ' (last ' + fmt(principal - base * (n - 1) + interest) + ')' : ''),
+      total: fmt(total),
+      landing,
+    };
+  }
+}
+</script>
+</body>
+</html>

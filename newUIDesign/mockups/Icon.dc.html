@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>App icon concept</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B0B0C}
+a{color:#F5B83D}a:hover{color:#FFD27A}
+</style>
+</helmet>
+<div style="width: 788px; height: 420px; box-sizing: border-box; padding: 40px; background: #0B0B0C; color: #F5F5F7; font-family: 'Geist', system-ui, sans-serif; display: flex; gap: 48px; align-items: center">
+
+  <div style="display: flex; flex-direction: column; gap: 14px; align-items: center">
+    <svg width="240" height="240" viewBox="0 0 108 108" role="img" aria-label="App icon: three stacked cards">
+      <rect width="108" height="108" rx="24" fill="#000000"></rect>
+      <rect x="30" y="32" width="48" height="30" rx="6" fill="#24408F"></rect>
+      <rect x="30" y="40" width="48" height="30" rx="6" fill="#B8430F"></rect>
+      <rect x="30" y="48" width="48" height="30" rx="6" fill="#F5B83D"></rect>
+      <rect x="36" y="69" width="14" height="3" rx="1.5" fill="#000000" opacity="0.35"></rect>
+    </svg>
+    <div style="font-size: 13px; color: #A1A1A6">Full-bleed source (no inner frame)</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 28px">
+    <div style="display: flex; gap: 28px; align-items: flex-end">
+      <div style="display: flex; flex-direction: column; gap: 8px; align-items: center">
+        <svg width="120" height="120" viewBox="0 0 108 108" role="img" aria-label="Icon in circle mask">
+          <circle cx="54" cy="54" r="54" fill="#000000"></circle>
+          <rect x="30" y="32" width="48" height="30" rx="6" fill="#24408F"></rect>
+          <rect x="30" y="40" width="48" height="30" rx="6" fill="#B8430F"></rect>
+          <rect x="30" y="48" width="48" height="30" rx="6" fill="#F5B83D"></rect>
+          <rect x="36" y="69" width="14" height="3" rx="1.5" fill="#000000" opacity="0.35"></rect>
+        </svg>
+        <div style="font-size: 12px; color: #A1A1A6">Circle mask (Oppo default)</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; align-items: center">
+        <svg width="60" height="60" viewBox="0 0 108 108" role="img" aria-label="Icon at launcher size">
+          <rect width="108" height="108" rx="26" fill="#000000"></rect>
+          <rect x="30" y="32" width="48" height="30" rx="6" fill="#24408F"></rect>
+          <rect x="30" y="40" width="48" height="30" rx="6" fill="#B8430F"></rect>
+          <rect x="30" y="48" width="48" height="30" rx="6" fill="#F5B83D"></rect>
+        </svg>
+        <div style="font-size: 12px; color: #A1A1A6">Launcher 60</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; align-items: center">
+        <div style="padding: 10px; border-radius: 12px; background: #DCD6CC">
+          <svg width="40" height="40" viewBox="0 0 108 108" role="img" aria-label="Icon on a light wallpaper">
+            <rect width="108" height="108" rx="26" fill="#000000"></rect>
+            <rect x="30" y="32" width="48" height="30" rx="6" fill="#24408F"></rect>
+            <rect x="30" y="40" width="48" height="30" rx="6" fill="#B8430F"></rect>
+            <rect x="30" y="48" width="48" height="30" rx="6" fill="#F5B83D"></rect>
+          </svg>
+        </div>
+        <div style="font-size: 12px; color: #A1A1A6">On light wallpaper</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; align-items: center">
+        <svg width="40" height="40" viewBox="0 0 108 108" role="img" aria-label="Monochrome themed icon">
+          <circle cx="54" cy="54" r="54" fill="#2C2C2E"></circle>
+          <rect x="30" y="32" width="48" height="30" rx="6" fill="#8E8E93"></rect>
+          <rect x="30" y="40" width="48" height="30" rx="6" fill="#C7C7CC"></rect>
+          <rect x="30" y="48" width="48" height="30" rx="6" fill="#F5F5F7"></rect>
+        </svg>
+        <div style="font-size: 12px; color: #A1A1A6">Themed / mono</div>
+      </div>
+    </div>
+    <div style="max-width: 400px; display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 17px; font-weight: 600">Stacked cards</div>
+      <div style="font-size: 13px; line-height: 19px; color: #A1A1A6">Your accounts as a wallet stack — bank blue, pay-later rust, amber front card. No currency symbol, no glow, no inner rounded square. Same three colours as the account cards in the app.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":788,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

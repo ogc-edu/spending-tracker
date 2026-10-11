@@ -177,4 +177,7 @@ export const colors = {
   warningSoft: '#FEF3C7',
   scrim: 'rgba(0,0,0,0.6)',
   onAccent: '#FFFFFF',
+  fill: porcelain.input,
+  fillStrong: porcelain.border,
+  separator: porcelain.borderSubtle,
 } as const;

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spending Tracker — mockups</title>
+<style>
+  body { margin: 0; padding: 24px; background: #E9E9EC; font-family: system-ui, sans-serif; color: #111; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 20px; color: #555; font-size: 13px; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  figcaption { font-size: 13px; font-weight: 600; }
+  figcaption a { color: #111; font-weight: 400; margin-left: 6px; }
+  iframe { width: 354px; height: 792px; border: 0; border-radius: 28px; background: #000; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+</style>
+</head>
+<body>
+<h1>Spending Tracker — interactive mockups (354 × 792 dp)</h1>
+<p>Each frame is clickable. Theme: <a href="?theme=dark">dark</a> · <a href="?theme=light">light</a>. Open a single screen with <code>Main.dc.html?theme=light</code>.</p>
+<div class="row" id="row"></div>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') === 'light' ? 'light' : 'dark';
+  const screens = [['Main', 'Home'], ['Expenses', 'Expenses'], ['AddExpense', 'Add expense'], ['Commitments', 'Due'], ['Analytics', 'Analytics'], ['Settings', 'Settings']];
+  const row = document.getElementById('row');
+  for (const [file, title] of screens) {
+    const f = document.createElement('figure');
+    f.innerHTML = `<figcaption>${title}<a href="${file}.dc.html?theme=${theme}" target="_blank">open</a></figcaption><iframe src="${file}.dc.html?theme=${theme}" title="${title}"></iframe>`;
+    row.appendChild(f);
+  }
+</script>
+</body>
+</html>

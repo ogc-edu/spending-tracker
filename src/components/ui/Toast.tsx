@@ -15,13 +15,12 @@ export function Toast({
   style,
   testID,
 }: ToastProps) {
-  const { scheme, colors } = useTheme();
+  const { colors } = useTheme();
 
   if (!visible) return null;
 
-  const isDark = scheme === 'dark';
   const bgColor = colors.text;
-  const textColor = isDark ? colors.onAccent : colors.onAccent; // #000 in dark, #FFF in light
+  const textColor = colors.onAccent;
 
   return (
     <View
@@ -29,6 +28,7 @@ export function Toast({
         styles.toast,
         {
           backgroundColor: bgColor,
+          shadowColor: colors.bg,
         },
         style,
       ]}
@@ -58,7 +58,6 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     alignSelf: 'center',
     maxWidth: '90%',
-    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 6,

@@ -49,7 +49,7 @@ export function ListRow({ children, onPress, disabled = false, testID }: ListRow
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-      android_ripple={{ color: 'rgba(0,0,0,0.05)', borderless: false }}
+      android_ripple={{ color: colors.separator, borderless: false }}
       accessibilityRole="button"
       testID={testID}
     >

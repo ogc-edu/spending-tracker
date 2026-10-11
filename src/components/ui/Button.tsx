@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Text, TextClassContext } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
+import { colors } from '@/theme';
 
 const buttonVariants = cva(
   cn(
@@ -106,7 +107,7 @@ function Button({
 
   const textColorClass = buttonTextVariants({ variant, size });
   const isDarkBg = variant === 'default' || variant === 'primary' || variant === 'destructive' || variant === 'danger';
-  const spinnerColor = isDarkBg ? '#ffffff' : '#0f172a';
+  const spinnerColor = isDarkBg ? colors.onAccent : colors.text;
 
   return (
     <TextClassContext.Provider value={textColorClass}>
@@ -138,7 +139,7 @@ function Button({
               <Ionicons
                 name={icon}
                 size={18}
-                color={isDarkBg ? '#ffffff' : '#0f172a'}
+                color={isDarkBg ? colors.onAccent : colors.text}
               />
             ) : null}
             <Text className={cn(textColorClass, 'text-center')}>
