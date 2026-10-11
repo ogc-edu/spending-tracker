@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -32,20 +32,20 @@ export function FilterPill({
   const textColor = selected ? colors.onAccent : colors.text;
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
+      activeOpacity={0.7}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       testID={testID}
-      style={({ pressed }) => [
+      style={[
         styles.pill,
         {
           backgroundColor: bgColor,
           borderColor,
         },
-        pressed && styles.pressed,
         disabled && styles.disabled,
         style,
       ]}
@@ -63,7 +63,7 @@ export function FilterPill({
       >
         {label}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 

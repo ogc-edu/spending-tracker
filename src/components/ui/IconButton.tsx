@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
+  TouchableOpacity,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -63,14 +63,15 @@ export function IconButton({
   }
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
+      activeOpacity={0.6}
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       accessibilityState={{ disabled }}
       testID={testID}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         {
           width: size,
@@ -79,7 +80,6 @@ export function IconButton({
           backgroundColor: bgColor,
         },
         disabled && styles.disabled,
-        pressed && styles.pressed,
         style,
       ]}
     >
@@ -88,7 +88,7 @@ export function IconButton({
       ) : icon ? (
         <Ionicons name={icon} size={glyphSize} color={iconColor} />
       ) : null}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 

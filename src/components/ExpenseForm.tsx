@@ -22,7 +22,6 @@ import {
   senFromMoneyString,
 } from '@/utils/money';
 import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
-import { categoryColor } from './categoryMeta';
 import { CategoryAddSheet } from './CategoryAddSheet';
 import { CalendarSheet } from './CalendarSheet';
 import { ConfirmSheet } from './ConfirmSheet';
@@ -389,8 +388,6 @@ export function ExpenseForm({
                   <View key={category.id} style={styles.chipWrapper}>
                     <Chip
                       label={category.name}
-                      icon={category.icon as never}
-                      iconColor={categoryColor(category.id)}
                       selected={isSelected}
                       onPress={() => {
                         if (armed) {

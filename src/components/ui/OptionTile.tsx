@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle,
@@ -39,20 +39,20 @@ export function OptionTile({
   const borderColor = selected ? colors.accent : colors.fill;
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
+      activeOpacity={0.75}
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
       testID={testID}
-      style={({ pressed }) => [
+      style={[
         styles.tile,
         {
           backgroundColor: bgColor,
           borderColor,
         },
         disabled && styles.disabled,
-        pressed && styles.pressed,
         style,
       ]}
     >
@@ -81,7 +81,7 @@ export function OptionTile({
           {kind}
         </Text>
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 

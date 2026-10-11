@@ -1,9 +1,9 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -44,19 +44,19 @@ export function PrimaryButton({
   const content = title ?? label ?? children;
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={disabled || loading}
+      activeOpacity={0.8}
       accessibilityRole="button"
       accessibilityState={{ disabled: disabled || loading }}
       testID={testID}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         {
           backgroundColor: bgColor,
         },
         disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
         style,
       ]}
     >
@@ -78,7 +78,7 @@ export function PrimaryButton({
       ) : (
         content
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 

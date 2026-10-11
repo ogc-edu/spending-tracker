@@ -3,6 +3,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle,
@@ -102,21 +103,21 @@ export function TabBar({
 
       {/* 3. Center Action Button (+) */}
       <View style={styles.actionColumn}>
-        <Pressable
+        <TouchableOpacity
           onPress={onActionPress}
+          activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityLabel="Add expense"
           testID={testID ? `${testID}-action-plus` : undefined}
-          style={({ pressed }) => [
+          style={[
             styles.actionButton,
             {
               backgroundColor: colors.accent,
             },
-            pressed && styles.pressed,
           ]}
         >
           <Glyph name="plus" size={24} color={colors.onAccent} strokeWidth={2.2} />
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       {/* 4. Due */}

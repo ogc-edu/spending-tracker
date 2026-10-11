@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -48,23 +48,23 @@ export function Chip({
       : colors.text;
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={delayLongPress}
       disabled={disabled}
+      activeOpacity={0.7}
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       testID={testID}
-      style={({ pressed }) => [
+      style={[
         styles.chip,
         {
           backgroundColor: bgColor,
           borderColor,
           borderStyle: dashed ? 'dashed' : 'solid',
         },
-        pressed && styles.pressed,
         disabled && styles.disabled,
         style,
       ]}
@@ -90,7 +90,7 @@ export function Chip({
       >
         {label}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
