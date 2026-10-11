@@ -1,6 +1,6 @@
 import '../../global.css';
 import { useCallback, useEffect, useState } from 'react';
-import { LogBox, Platform } from 'react-native';
+import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -47,16 +47,7 @@ function RootStack() {
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
-    if (Platform.OS === 'android') {
-      const moduleName = 'expo-navigation-bar';
-      import(/* webpackIgnore: true */ moduleName)
-        .then((NavigationBar) => {
-          NavigationBar.setBackgroundColorAsync(colors.bg).catch(() => {});
-          NavigationBar.setButtonStyleAsync(scheme === 'dark' ? 'light' : 'dark').catch(() => {});
-        })
-        .catch(() => {});
-    }
-  }, [colors.bg, scheme]);
+  }, [colors.bg]);
 
   if (status === 'loading') {
     return <DbLoadingScreen />;
