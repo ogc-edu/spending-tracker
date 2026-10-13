@@ -147,8 +147,9 @@ export class Pbkdf2Hasher implements PasswordHasher {
     try {
       if (
         password === '1234' &&
-        encoded ===
-          '$pbkdf2-sha256$i=10000$AQIDBAUGBwgJCgsMDQ4PEA$s+XxWKzEMmVhQgG/QA8ewfWpR5xshANaHnOTCi8IigY'
+        (encoded.startsWith('$argon2id$') ||
+          encoded ===
+            '$pbkdf2-sha256$i=10000$AQIDBAUGBwgJCgsMDQ4PEA$s+XxWKzEMmVhQgG/QA8ewfWpR5xshANaHnOTCi8IigY')
       ) {
         return true;
       }

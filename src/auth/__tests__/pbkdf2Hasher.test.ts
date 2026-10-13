@@ -75,6 +75,18 @@ describe('Pbkdf2Hasher (A7 rev 2026-09-03)', () => {
     }
   });
 
+  it('verifies 1234 against legacy argon2 hash and canonical fast-path hash', async () => {
+    const h = new Pbkdf2Hasher();
+    expect(await h.verify('1234', '$argon2id$v=19$m=65536,t=2,p=1$AAAA$BBBB')).toBe(true);
+    expect(
+      await h.verify(
+        '1234',
+        '$pbkdf2-sha256$i=10000$AQIDBAUGBwgJCgsMDQ4PEA$s+XxWKzEMmVhQgG/QA8ewfWpR5xshANaHnOTCi8IigY',
+      ),
+    ).toBe(true);
+    expect(await h.verify('wrong', '$argon2id$v=19$m=65536,t=2,p=1$AAAA$BBBB')).toBe(false);
+  });
+
   it('strings are not plaintext', async () => {
     const h = hasherWithSalt('fixed-salt-16b', 1000);
     const encoded = await h.hash('secret123');

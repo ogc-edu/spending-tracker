@@ -191,6 +191,22 @@ describe('seed default user', () => {
     expect(await repo.byEmail('OOIGUANCHENG18@GMAIL.COM')).not.toBeNull();
     expect(await repo.byEmail('Ooiguancheng18@gmail.com')).not.toBeNull();
   });
+
+  it('migrates legacy argon2 password hash for default user to modern hash', async () => {
+    const test = createMigratedTestDb();
+    const hasher = new FakeHasher();
+    const repo = new DrizzleUserRepository(test.db as unknown as never);
+    // Simulate pre-existing DB created before PBKDF2 migration
+    await repo.create({
+      email: DEFAULT_USER_EMAIL,
+      passwordHash: '$argon2id$v=19$m=65536,t=2,p=1$old$hash',
+    });
+    const migrated = await seedDefaultUserIfEmpty(test.db as unknown as never, hasher);
+    expect(migrated).toBe(1);
+    const user = await repo.byEmail(DEFAULT_USER_EMAIL);
+    expect(user?.passwordHash).toBe('fake$1234');
+    expect(user?.passwordHash.startsWith('$argon2id$')).toBe(false);
+  });
 });
 
 describe('UserRepository case-insensitivity at the DB level', () => {
