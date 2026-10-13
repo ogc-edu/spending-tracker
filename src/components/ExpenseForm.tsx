@@ -261,7 +261,30 @@ export function ExpenseForm({
     landingFootnote = 'Lands in next bills · last part absorbs rounding';
   }
 
-  const visibleCategories = categories.filter((c) => c.name.toLowerCase() !== 'other');
+  const CORE_CATEGORY_ORDER = [
+    'Food',
+    'Groceries',
+    'Transport',
+    'Shopping',
+    'Bills',
+    'Health',
+    'Entertainment',
+    'Education',
+    'Travel',
+    'Gifts',
+    'Debt / Repayment',
+  ];
+
+  const visibleCategories = [...categories]
+    .filter((c) => c.name.toLowerCase() !== 'other')
+    .sort((a, b) => {
+      const aIdx = CORE_CATEGORY_ORDER.indexOf(a.name);
+      const bIdx = CORE_CATEGORY_ORDER.indexOf(b.name);
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+      if (aIdx !== -1) return -1;
+      if (bIdx !== -1) return 1;
+      return a.id - b.id;
+    });
 
   const onValid = (values: ExpenseFormValues) => {
     const amountSen = parseMoneyToSen(values.amount);
@@ -423,7 +446,7 @@ export function ExpenseForm({
 
               {/* Add category (+) chip */}
               <Chip
-                label="+"
+                label="+ Add"
                 selected={false}
                 onPress={() => setAddOpen(true)}
                 testID="expense-form-category-add"
@@ -781,6 +804,7 @@ export function ExpenseForm({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     gap: 18,
   },
   amountSection: {
@@ -998,7 +1022,8 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   submitSection: {
-    marginTop: 8,
+    marginTop: 'auto',
+    paddingTop: 16,
     paddingBottom: 16,
   },
 });

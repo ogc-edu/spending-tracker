@@ -97,17 +97,50 @@ export default function NewExpenseScreen() {
     return (
       <View
         style={[
-          styles.center,
+          styles.screen,
           {
             backgroundColor: colors.bg,
-            paddingTop: insets.top,
+            paddingTop: Math.max(insets.top, 12),
           },
         ]}
+        testID="new-expense-screen"
       >
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>No accounts yet</Text>
-        <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-          Add an account in Settings → Accounts before recording expenses — every expense adjusts its account balance.
-        </Text>
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            style={styles.cancelLink}
+          >
+            <Text style={[styles.cancelText, { color: colors.link }]}>Cancel</Text>
+          </Pressable>
+          <Text numberOfLines={1} style={[styles.screenTitle, { color: colors.text }]}>
+            New expense
+          </Text>
+          <View style={styles.topBarRightSpacer} />
+        </View>
+
+        <View style={styles.center}>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No accounts yet</Text>
+          <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+            Add an account in Settings → Accounts before recording expenses — every expense adjusts its account balance.
+          </Text>
+          <Pressable
+            onPress={() => {
+              router.back();
+              router.push('/(tabs)/settings');
+            }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go to Settings"
+            style={[styles.settingsButton, { backgroundColor: colors.accent }]}
+          >
+            <Text style={[styles.settingsButtonText, { color: colors.onAccent }]}>
+              Go to Settings
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -233,6 +266,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
+    flexGrow: 1,
   },
   center: {
     flex: 1,
@@ -252,5 +286,19 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: geistWeights.regular,
     textAlign: 'center',
+  },
+  settingsButton: {
+    marginTop: 20,
+    height: 44,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsButtonText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
   },
 });

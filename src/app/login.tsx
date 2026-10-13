@@ -21,6 +21,8 @@ import { FormGroup, FormRow } from '@/components/ui/FormGroup';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { geistWeights, useTheme } from '@/theme';
 
+import { DEFAULT_USER_EMAIL, DEFAULT_USER_PASSWORD } from '@/db/seedUser';
+
 const schema = z.object({
   email: z.string().trim().min(1, 'Email required').email('Invalid email'),
   password: z.string().min(1, 'Password required'),
@@ -40,7 +42,7 @@ export default function LoginScreen() {
     formState: { isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: DEFAULT_USER_EMAIL, password: DEFAULT_USER_PASSWORD },
   });
 
   if (status === 'signedIn') {

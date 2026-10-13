@@ -147,11 +147,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   left: {
-    flex: 1,
-    minWidth: 0,
     justifyContent: 'center',
   },
   right: {
+    flex: 1,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },

@@ -7,7 +7,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Svg, { Rect } from 'react-native-svg';
 import { geistWeights, useTheme } from '@/theme';
 
 export interface BarChartItem {
@@ -92,17 +91,14 @@ export function BarChart({
               style={styles.barColumn}
             >
               <View style={[styles.barWrapper, { height: `${pct}%` }]}>
-                <Svg width="100%" height="100%" preserveAspectRatio="none">
-                  <Rect
-                    x={0}
-                    y={0}
-                    width="100%"
-                    height="100%"
-                    rx={4}
-                    ry={1}
-                    fill={barColor}
-                  />
-                </Svg>
+                <View
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: 4,
+                    backgroundColor: barColor,
+                  }}
+                />
               </View>
             </Pressable>
           );

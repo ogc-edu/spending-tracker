@@ -341,6 +341,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     gap: 16,
+    flexGrow: 1,
   },
   center: {
     flex: 1,

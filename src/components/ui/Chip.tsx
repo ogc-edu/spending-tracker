@@ -97,6 +97,7 @@ export function Chip({
 const styles = StyleSheet.create({
   chip: {
     height: 36,
+    minWidth: 44,
     paddingHorizontal: 14,
     borderRadius: 18,
     borderWidth: 1,
@@ -109,8 +110,10 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    lineHeight: 19,
+    lineHeight: 18,
+    includeFontPadding: false,
     textAlign: 'center',
+    textAlignVertical: 'center',
   },
   pressed: {
     opacity: 0.7,
