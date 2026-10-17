@@ -15,7 +15,7 @@
  * all reload here. No SQL, no money math — services + engine only.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -28,14 +28,7 @@ import type { ScheduledPayment } from '@/engine/commitments';
 import { useUiStore } from '@/store/uiStore';
 import { formatDayLabel, todayLocal } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
-import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
-import { Card } from '@/components/ui/Card';
-import { BentoCard } from '@/components/ui/BentoCard';
-import { BudgetMeter } from '@/components/ui/BudgetMeter';
-import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
-import { StatusPill } from '@/components/ui/StatusPill';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 import { COMMITMENT_TYPE_ICONS, COMMITMENT_TYPE_LABELS } from '@/components/commitmentMeta';
 import { ScheduleRow } from '@/components/ScheduleRow';
 import { PaymentFlowSheet } from '@/components/PaymentFlowSheet';
@@ -55,6 +48,7 @@ export default function CommitmentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authService } = useAuth();
   const toast = useToast();
+  const { colors } = useTheme();
   const commitmentId = Number(id);
   const lastUsedAccountId = useUiStore((s) => s.lastUsedAccountId);
 
@@ -75,12 +69,9 @@ export default function CommitmentDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [payingSlot, setPayingSlot] = useState<ScheduledPayment | null>(null);
-  // Plan 016: destructive confirms go through the shared ConfirmSheet;
-  // each sheet's confirm button is disabled while `busy` (double-tap guard).
+
   const [confirmUnPay, setConfirmUnPay] = useState<CommitmentPayment | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // Plan 016 follow-up: monthly commitments default to a compact view —
-  // the first 3 upcoming slots only; "Show all" expands the rest.
   const [showAllSchedule, setShowAllSchedule] = useState(false);
 
   const load = useCallback(async () => {
@@ -182,7 +173,7 @@ export default function CommitmentDetailScreen() {
     try {
       await services.commitments.delete(commitmentId);
       setConfirmDelete(false);
-      router.back(); // the tab refreshes on focus
+      router.back();
     } catch (error: unknown) {
       toast.show(`Could not delete commitment: ${errMsg(error)}`);
       setConfirmDelete(false);
@@ -204,53 +195,65 @@ export default function CommitmentDetailScreen() {
   const archived = commitment !== null && commitment.archivedAt !== null;
   const canMarkPaid = commitment !== null && commitment.status === 'active' && !archived;
 
-  // Compact schedule view: the summary + first N upcoming slots (expandable).
   const unpaid = schedule.filter((slot) => !paidByDate.has(slot.dueDate));
   const paidSlots = schedule.filter((slot) => paidByDate.has(slot.dueDate));
   const visibleUnpaid = showAllSchedule ? unpaid : unpaid.slice(0, UPCOMING_PREVIEW_COUNT);
   const hiddenUnpaid = unpaid.length - visibleUnpaid.length;
   const nextDue = unpaid[0]?.dueDate ?? null;
-  /** Plan 018: the hero tints danger while the next payment is overdue. */
   const overdueNext = nextDue !== null && nextDue < today;
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <Card>
-          <View style={{ gap: spacing.sm }}>
-            <View style={{ height: 24, width: '55%', backgroundColor: colors.border, opacity: 0.55, borderRadius: 6 }} />
-            <View style={{ height: 34, width: '40%', backgroundColor: colors.border, opacity: 0.55, borderRadius: 8 }} />
-          </View>
-        </Card>
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
   if (loadError || !commitment) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>{loadError ?? 'Commitment not found'}</Text>
-        <Button label="Back" variant="secondary" onPress={() => router.back()} />
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>{loadError ?? 'Commitment not found'}</Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backLink}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.backLinkLabel, { color: colors.link }]}>Back</Text>
+        </Pressable>
       </View>
     );
   }
 
+  const payoffPercent =
+    commitment.totalSen !== null && commitment.totalSen > 0
+      ? Math.max(0, Math.min(100, ((commitment.totalSen - commitment.remainingSen) / commitment.totalSen) * 100))
+      : 0;
+
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.bg }]}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 48 }]}
       testID="commitment-detail-screen"
     >
-      {/* Header card / Digital Pass (hero) */}
-      <BentoCard
-        className={`border ${overdueNext && commitment.status === 'active' ? 'border-destructive/60 bg-destructive/5' : 'border-border/60 bg-card'} rounded-2xl p-5 mb-5`}
+      {/* Header card / Hero */}
+      <View
+        style={[
+          styles.heroCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: overdueNext && commitment.status === 'active' ? colors.danger : colors.separator,
+          },
+        ]}
         testID="commitment-hero"
       >
         <View style={styles.titleRow}>
           <View
             style={[
               styles.iconWrap,
-              { backgroundColor: overdueNext && commitment.status === 'active' ? `${colors.danger}22` : `${colors.accent}22` },
+              {
+                backgroundColor: overdueNext && commitment.status === 'active' ? colors.fillStrong : colors.fill,
+              },
             ]}
           >
             <Ionicons
@@ -259,115 +262,193 @@ export default function CommitmentDetailScreen() {
               color={overdueNext && commitment.status === 'active' ? colors.danger : colors.accent}
             />
           </View>
-          <Text style={styles.name}>{commitment.name}</Text>
+          <Text
+            numberOfLines={1}
+            style={[styles.name, { color: colors.text }]}
+          >
+            {commitment.name}
+          </Text>
           {commitment.status !== 'cancelled' && !archived ? (
-            <Button
-              label="Edit"
-              variant="secondary"
-              icon="create-outline"
+            <TouchableOpacity
               onPress={() => router.push(`/commitments/${commitmentId}/edit` as never)}
+              activeOpacity={0.7}
+              style={[
+                styles.editPill,
+                { backgroundColor: colors.fillStrong },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Edit commitment"
               testID="commitment-edit"
-            />
+            >
+              <Text style={[styles.editPillText, { color: colors.text }]}>Edit</Text>
+            </TouchableOpacity>
           ) : null}
           {!archived ? (
-            <IconButton
-              icon="trash-outline"
-              tone="danger"
-              filled
-              label="Delete commitment"
+            <TouchableOpacity
               onPress={handleDelete}
               disabled={busy}
+              activeOpacity={0.7}
+              style={[
+                styles.deleteBtn,
+                { backgroundColor: colors.fillStrong },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Delete commitment"
               testID="commitment-delete"
-            />
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            </TouchableOpacity>
           ) : null}
         </View>
 
         <View style={styles.badgeRow}>
-          <StatusPill
-            variant={
-              commitment.status === 'completed'
-                ? 'healthy'
-                : commitment.status === 'cancelled'
-                  ? 'neutral'
-                  : overdueNext && commitment.status === 'active'
-                    ? 'danger'
-                    : 'accent'
-            }
-            label={
-              commitment.status === 'completed'
+          <View
+            style={[
+              styles.statusPill,
+              {
+                backgroundColor:
+                  commitment.status === 'completed'
+                    ? colors.fillStrong
+                    : overdueNext && commitment.status === 'active'
+                      ? colors.fillStrong
+                      : colors.fillStrong,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor:
+                    commitment.status === 'completed'
+                      ? colors.accent
+                      : commitment.status === 'cancelled'
+                        ? colors.textTertiary
+                        : overdueNext && commitment.status === 'active'
+                          ? colors.danger
+                          : colors.accent,
+                },
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color:
+                    overdueNext && commitment.status === 'active'
+                      ? colors.danger
+                      : colors.text,
+                },
+              ]}
+            >
+              {commitment.status === 'completed'
                 ? 'Completed'
                 : commitment.status === 'cancelled'
                   ? 'Cancelled'
                   : overdueNext && commitment.status === 'active'
                     ? 'Overdue'
-                    : 'Active'
-            }
-            dot
-          />
-          {archived ? <StatusPill variant="warning" label="Archived" /> : null}
-          <Text style={styles.typeLabel}>
+                    : 'Active'}
+            </Text>
+          </View>
+
+          {archived ? (
+            <View style={[styles.statusPill, { backgroundColor: colors.fillStrong }]}>
+              <Text style={[styles.statusText, { color: colors.textSecondary }]}>Archived</Text>
+            </View>
+          ) : null}
+
+          <Text style={[styles.typeLabel, { color: colors.textSecondary }]}>
             {COMMITMENT_TYPE_LABELS[commitment.type as keyof typeof COMMITMENT_TYPE_LABELS] ?? 'Other'}
             {commitment.frequency === 'one_time' ? ' · one-time' : ' · monthly'}
           </Text>
         </View>
 
-        <View className="border-t border-border/40 my-3" />
+        <View style={[styles.divider, { backgroundColor: colors.separator }]} />
 
-        <MoneyDisplay
-          amountInSen={commitment.paymentSen}
-          size="hero"
-          className="mb-1"
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+          style={[styles.amountHero, { color: colors.text }]}
           accessibilityLabel={`Payment amount, ${spokenMoneyLabel(commitment.paymentSen)}`}
-        />
+        >
+          {formatSen(commitment.paymentSen)}
+        </Text>
 
         {commitment.totalSen !== null ? (
           <>
-            <BudgetMeter
-              spentSen={Math.max(0, commitment.totalSen - commitment.remainingSen)}
-              totalSen={commitment.totalSen}
-              customColor="bg-emerald-500"
-              heightClass="h-2"
-              className="mt-2 mb-1.5"
-            />
-            <Text style={styles.remaining}>
+            <View style={[styles.progressTrack, { backgroundColor: colors.track }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: colors.accent,
+                    width: `${payoffPercent}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={[styles.remaining, { color: colors.textSecondary }]}>
               {formatSen(commitment.remainingSen)} of {formatSen(commitment.totalSen)} remaining
             </Text>
           </>
         ) : commitment.frequency === 'monthly' ? (
-          <Text style={styles.remaining}>
+          <Text style={[styles.remaining, { color: colors.textSecondary }]}>
             Recurring monthly · {nextDue !== null ? `${overdueNext ? 'Overdue' : 'Next due'} ${formatDayLabel(nextDue)}` : 'All paid'}
           </Text>
         ) : (
-          <Text style={styles.remaining}>
+          <Text style={[styles.remaining, { color: colors.textSecondary }]}>
             {nextDue !== null ? `${overdueNext ? 'Overdue' : 'Maturity date'} ${formatDayLabel(nextDue)}` : 'Settled'}
           </Text>
         )}
-      </BentoCard>
+      </View>
 
-      {/* Schedule */}
-      <Text style={styles.sectionTitle}>Schedule</Text>
+      {/* Schedule Section */}
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Schedule</Text>
       {schedule.length === 0 ? (
-        <Text style={styles.sectionNote}>No payments in this window.</Text>
+        <Text style={[styles.sectionNote, { color: colors.textTertiary }]}>
+          No payments in this window.
+        </Text>
       ) : (
         <>
-          {/* Compact payment-plan summary — one row replaces the wall of slots. */}
-          <View className="flex-col bg-accent/10 border border-border/60 rounded-xl p-4 mb-3" style={styles.planCard} testID="commitment-plan-summary">
-            <View className="flex-row items-center gap-2" style={styles.planLine}>
+          {/* Summary Plan Card */}
+          <View
+            style={[
+              styles.planCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.separator,
+              },
+            ]}
+            testID="commitment-plan-summary"
+          >
+            <View style={styles.planLine}>
               <Ionicons
                 name={commitment.frequency === 'one_time' ? 'calendar-outline' : 'repeat-outline'}
                 size={16}
                 color={colors.accent}
               />
-              <Text className="flex-1 text-base font-bold text-foreground" style={styles.planCadence}>
+              <Text
+                numberOfLines={1}
+                style={[styles.planCadence, { color: colors.text }]}
+              >
                 {commitment.frequency === 'one_time'
                   ? 'One-time payment'
                   : commitment.totalSen !== null
                     ? 'Monthly payment'
                     : 'Recurring monthly'}
               </Text>
-              <Text className="text-base font-extrabold text-foreground" style={styles.planAmount}>{formatSen(commitment.paymentSen)}</Text>
+              <Text
+                numberOfLines={1}
+                style={[styles.planAmount, { color: colors.text }]}
+              >
+                {formatSen(commitment.paymentSen)}
+              </Text>
             </View>
-            <Text className="mt-1 text-xs text-muted-foreground font-medium" style={styles.planNote}>
+            <Text
+              numberOfLines={1}
+              style={[styles.planNote, { color: colors.textSecondary }]}
+            >
               {nextDue !== null
                 ? `Next payment ${formatDayLabel(nextDue)} · ${unpaid.length} payment${unpaid.length === 1 ? '' : 's'} left`
                 : 'All payments paid'}
@@ -379,7 +460,7 @@ export default function CommitmentDetailScreen() {
 
           {visibleUnpaid.length > 0 ? (
             <>
-              <Text style={styles.sectionSubtitle}>
+              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
                 Upcoming{hiddenUnpaid > 0 ? ` · next ${UPCOMING_PREVIEW_COUNT} of ${unpaid.length}` : ''}
               </Text>
               {visibleUnpaid.map((slot) => (
@@ -396,24 +477,27 @@ export default function CommitmentDetailScreen() {
                 />
               ))}
               {hiddenUnpaid > 0 ? (
-                <Pressable
+                <TouchableOpacity
                   onPress={() => setShowAllSchedule((v) => !v)}
-                  style={({ pressed }) => [styles.showAllButton, pressed && styles.pressed]}
+                  activeOpacity={0.7}
+                  style={[styles.showAllButton]}
                   accessibilityRole="button"
                   testID="commitment-schedule-expand"
                 >
-                  <Ionicons name={showAllSchedule ? 'chevron-up' : 'chevron-down'} size={16} color={colors.accent} />
-                  <Text style={styles.showAllLabel}>
+                  <Ionicons name={showAllSchedule ? 'chevron-up' : 'chevron-down'} size={16} color={colors.link} />
+                  <Text style={[styles.showAllLabel, { color: colors.link }]}>
                     {showAllSchedule ? 'Show fewer' : `Show all ${unpaid.length} payments`}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               ) : null}
             </>
           ) : null}
 
           {paidSlots.length > 0 ? (
             <>
-              <Text style={styles.sectionSubtitle}>Paid history</Text>
+              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
+                Paid history
+              </Text>
               {paidSlots.map((slot) => (
                 <ScheduleRow
                   key={slot.dueDate}
@@ -431,23 +515,31 @@ export default function CommitmentDetailScreen() {
           ) : null}
         </>
       )}
+
       {payments.length > 0 && schedule.length === 0 ? (
-        <Text style={styles.sectionNote}>
+        <Text style={[styles.sectionNote, { color: colors.textTertiary }]}>
           {payments.length} payment{payments.length === 1 ? '' : 's'} paid (outside this window).
         </Text>
       ) : null}
 
-      {/* Status controls — Cancel is no longer shown (plan 016 follow-up); delete
-          lives in the trash icon, edit in the header pill. */}
+      {/* Restore control for archived */}
       {archived ? (
-        <Button
-          label="Restore commitment"
-          variant="secondary"
-          icon="refresh-outline"
+        <TouchableOpacity
           onPress={handleRestore}
           disabled={busy}
+          activeOpacity={0.7}
+          style={[
+            styles.restoreBtn,
+            { backgroundColor: colors.fillStrong },
+          ]}
+          accessibilityRole="button"
           testID="commitment-restore"
-        />
+        >
+          <Ionicons name="refresh-outline" size={16} color={colors.text} />
+          <Text style={[styles.restoreBtnText, { color: colors.text }]}>
+            Restore commitment
+          </Text>
+        </TouchableOpacity>
       ) : null}
 
       <PaymentFlowSheet
@@ -492,17 +584,48 @@ export default function CommitmentDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+  },
   center: {
     flex: 1,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    padding: 16,
   },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  emptyTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    marginBottom: 8,
+  },
+  backLink: {
+    padding: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  backLinkLabel: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  heroCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 20,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
   iconWrap: {
     width: 36,
     height: 36,
@@ -510,53 +633,173 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { fontSize: typography.title, fontWeight: '700', color: colors.text, flex: 1 },
-  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.md },
-  typeLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '600', flexShrink: 1 },
-  amount: {
-    fontSize: typography.money,
-    fontWeight: '800',
-    color: colors.text,
-    fontVariant: moneyFontVariant,
-    marginBottom: spacing.xs,
-    letterSpacing: -0.3,
+  name: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    flex: 1,
   },
-  remaining: { fontSize: typography.body, color: colors.muted },
+  editPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editPillText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  deleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  typeLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  divider: {
+    height: 1,
+    marginVertical: 12,
+  },
+  amountHero: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    fontVariant: tabularNumsVariant,
+    marginBottom: 8,
+  },
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  progressFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  remaining: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400',
+  },
   sectionTitle: {
-    fontSize: typography.emphasis,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    marginBottom: 10,
   },
-  sectionNote: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md },
+  sectionNote: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 12,
+  },
   sectionSubtitle: {
-    fontSize: typography.caption,
-    fontWeight: '700',
-    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
+    letterSpacing: 0.5,
+    marginTop: 14,
+    marginBottom: 8,
   },
   planCard: {
-    flexDirection: 'column',
-    backgroundColor: colors.accentSoft,
-    borderRadius: spacing.md,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 12,
+    gap: 4,
   },
-  planLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  planCadence: { flex: 1, fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
-  planAmount: { fontSize: typography.emphasis, fontWeight: '800', color: colors.text, fontVariant: moneyFontVariant },
-  planNote: { marginTop: spacing.xs, fontSize: typography.caption, color: colors.muted, fontWeight: '500' },
+  planLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  planCadence: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  planAmount: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    fontVariant: tabularNumsVariant,
+  },
+  planNote: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '400',
+  },
   showAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
+    gap: 4,
     minHeight: 44,
-    marginTop: spacing.xs,
+    marginTop: 4,
   },
-  showAllLabel: { color: colors.accent, fontSize: typography.body, fontWeight: '600' },
-  pressed: { opacity: 0.7 },
+  showAllLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  restoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 14,
+    marginTop: 16,
+  },
+  restoreBtnText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
 });

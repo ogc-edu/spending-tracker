@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Commitments</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./theme.css">
+</helmet>
+<div style="position: relative; width: 354px; height: 792px; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: 'Geist', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 44px 16px 16px; display: flex; flex-direction: column; gap: 20px">
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between">
+      <h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.02em">Due</h1>
+      <button aria-label="Add commitment" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: var(--fill); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+      </button>
+    </div>
+
+    <div style="background: var(--surface); border-radius: 16px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center">
+      <div>
+        <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">Due by 31 Oct</div>
+        <div style="font-size: 22px; line-height: 28px; font-weight: 600; color: var(--emphasis)">{{dueTotal}}</div>
+      </div>
+      <div style="text-align: right">
+        <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">November so far</div>
+        <div style="font-size: 17px; line-height: 28px; font-weight: 600">RM1,536.00</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <h2 style="margin: 0; font-size: 15px; font-weight: 600">Pay later</h2>
+      <div style="border-radius: 16px; background: var(--card-spl); color: #FFFFFF; padding: 14px 16px 6px">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start">
+          <div>
+            <div style="font-size: 15px; font-weight: 600">SPayLater</div>
+            <div style="font-size: 12px; opacity: 0.85">Cycle 21st–20th · due end of month</div>
+          </div>
+          <div style="text-align: right">
+            <div style="font-size: 15px; font-weight: 600">{{owed}}</div>
+            <div style="font-size: 12px; opacity: 0.85">Owed</div>
+          </div>
+        </div>
+        <div style="margin-top: 12px; display: flex; flex-direction: column">
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 56px; border-top: 1px solid rgba(255,255,255,0.22)">
+            <div style="flex: 1; min-width: 0">
+              <div style="font-size: 14px; font-weight: 600">October bill</div>
+              <div style="font-size: 12px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{octSub}}</div>
+            </div>
+            <div style="font-size: 15px; font-weight: 600; white-space: nowrap">RM412.50</div>
+            <sc-if value="{{octPaid}}" hint-placeholder-val="{{false}}">
+              <span style="height: 32px; padding: 0 12px; border-radius: 16px; background: rgba(0,0,0,0.25); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center">Paid</span>
+            </sc-if>
+            <sc-if value="{{octUnpaid}}" hint-placeholder-val="{{true}}">
+              <button onClick="{{openPay}}" style="height: 36px; min-width: 64px; padding: 0 14px; border: 0; border-radius: 18px; background: #FFFFFF; color: #7A2A07; font-size: 14px; font-weight: 700; cursor: pointer">Pay</button>
+            </sc-if>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; min-height: 56px; border-top: 1px solid rgba(255,255,255,0.22)">
+            <div style="flex: 1; min-width: 0">
+              <div style="font-size: 14px; font-weight: 600">November bill</div>
+              <div style="font-size: 12px; opacity: 0.85">Open · closes 20 Nov</div>
+            </div>
+            <div style="font-size: 15px; font-weight: 600; white-space: nowrap">RM86.00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column">
+      <h2 style="margin: 0 0 6px; font-size: 15px; font-weight: 600">Commitments</h2>
+      <sc-for list="{{items}}" as="c" hint-placeholder-count="4">
+        <div style="display: flex; align-items: center; gap: 12px; min-height: 60px; border-bottom: 1px solid var(--separator); padding: 6px 0">
+          <div style="width: 40px; height: 40px; border-radius: 10px; background: var(--fill); display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0">
+            <div style="font-size: 15px; font-weight: 700; line-height: 16px">{{c.day}}</div>
+            <div style="font-size: 9px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-secondary)">{{c.mon}}</div>
+          </div>
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+            <div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.name}}</div>
+            <div style="font-size: 12px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.sub}}</div>
+            <sc-if value="{{c.hasProgress}}" hint-placeholder-val="{{false}}">
+              <div style="height: 4px; border-radius: 2px; background: var(--track); overflow: hidden"><div style="height: 4px; background: var(--accent); width: {{c.pct}}%"></div></div>
+            </sc-if>
+          </div>
+          <div style="font-size: 14px; font-weight: 600; white-space: nowrap">{{c.amount}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <nav aria-label="Main" style="flex-shrink: 0; height: 80px; box-sizing: border-box; padding: 6px 8px 16px; background: var(--tabbar); border-top: 1px solid var(--separator); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center">
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><path d="M6 3h12"></path></svg>Home</a>
+    <a href="Expenses.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="3.5" cy="6" r="1"></circle><circle cx="3.5" cy="12" r="1"></circle><circle cx="3.5" cy="18" r="1"></circle></svg>Expenses</a>
+    <a href="AddExpense.dc.html" aria-label="Add expense" style="display: flex; justify-content: center">
+      <span style="width: 48px; height: 48px; border-radius: 24px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+      </span>
+    </a>
+    <a href="Commitments.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text); font-size: 11px; font-weight: 600; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Due</a>
+    <a href="Analytics.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V12M12 20V5M19 20v-9"></path></svg>Analytics</a>
+  </nav>
+
+  <sc-if value="{{sheetOpen}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; inset: 0; background: var(--scrim); display: flex; flex-direction: column; justify-content: flex-end">
+      <div role="dialog" aria-label="Pay October bill" style="background: var(--sheet); border-radius: 20px 20px 0 0; padding: 10px 16px 28px; display: flex; flex-direction: column; gap: 16px">
+        <div style="width: 36px; height: 4px; border-radius: 2px; background: var(--handle); align-self: center"></div>
+        <div>
+          <div style="font-size: 13px; color: var(--text-secondary)">SPayLater · October bill</div>
+          <div style="font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.02em">RM412.50</div>
+          <div style="font-size: 12px; color: var(--text-tertiary)">Moves money from your account to SPayLater. No new expense — the purchases were already counted.</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">Pay from</div>
+          <div style="display: flex; gap: 8px">
+            <sc-for list="{{sources}}" as="s" hint-placeholder-count="2">
+              <button onClick="{{s.pick}}" aria-pressed="{{s.on}}" style="flex: 1; min-height: 56px; border-radius: 12px; padding: 8px 12px; text-align: left; cursor: pointer; color: var(--text); background: {{s.bg}}; border: 1.5px solid {{s.border}}">
+                <div style="font-size: 14px; font-weight: 600">{{s.name}}</div>
+                <div style="font-size: 12px; color: var(--text-secondary)">{{s.bal}}</div>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <button onClick="{{closePay}}" style="flex: 1; height: 50px; border: 0; border-radius: 14px; background: var(--fill-strong); color: var(--text); font-size: 15px; font-weight: 600; cursor: pointer">Cancel</button>
+          <button onClick="{{confirmPay}}" style="flex: 2; height: 50px; border: 0; border-radius: 14px; background: var(--accent); color: var(--on-accent); font-size: 15px; font-weight: 700; cursor: pointer">Pay RM412.50</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":354,"height":792}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sheet: false, paid: false, source: 'bank' };
+  }
+  renderVals() {
+    const paid = this.state.paid;
+    const sources = [
+      { id: 'bank', name: 'Savings', bal: 'RM3,912.40' },
+      { id: 'cash', name: 'Cash', bal: 'RM395.30' },
+    ].map((s) => {
+      const on = this.state.source === s.id;
+      return { ...s, on, bg: on ? 'var(--selected-bg)' : 'var(--fill-strong)', border: on ? 'var(--accent)' : 'var(--fill-strong)', pick: () => this.setState({ source: s.id }) };
+    });
+    const items = [
+      { day: '15', mon: 'OCT', name: 'Phone bill', sub: 'Monthly · ongoing', amount: 'RM175.00', hasProgress: false, pct: 0 },
+      { day: '28', mon: 'OCT', name: 'Rent', sub: 'Monthly · ongoing', amount: 'RM600.00', hasProgress: false, pct: 0 },
+      { day: '05', mon: 'NOV', name: 'Car loan', sub: 'Instalment 13 of 60 · RM40,800 left', amount: 'RM850.00', hasProgress: true, pct: 20 },
+      { day: '12', mon: 'NOV', name: 'Laptop (0% plan)', sub: 'Instalment 4 of 6', amount: 'RM600.00', hasProgress: true, pct: 50 },
+    ];
+    return {
+      items,
+      sources,
+      sheetOpen: this.state.sheet,
+      octPaid: paid,
+      octUnpaid: !paid,
+      octSub: paid ? 'Paid 10 Oct · Savings' : 'Due 31 Oct',
+      owed: paid ? 'RM86.00' : 'RM498.50',
+      dueTotal: paid ? 'RM775.00' : 'RM1,187.50',
+      openPay: () => this.setState({ sheet: true }),
+      closePay: () => this.setState({ sheet: false }),
+      confirmPay: () => this.setState({ sheet: false, paid: true }),
+    };
+  }
+}
+</script>
+</body>
+</html>

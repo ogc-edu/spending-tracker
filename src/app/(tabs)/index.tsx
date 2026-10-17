@@ -1,48 +1,91 @@
-/**
- * Dashboard tab. Plan 020 cut it down to what the user reads:
- * 1. Month summary: spent this month + due by end of month.
- * 2. Commitments due by end of month.
- * 3. Category summary.
- * 4. "Ask about your money" AI box.
- * Plus the Add-expense FAB.
- *
- * Invariants:
- * - Deterministic data flow: CashFlowService.snapshot(now) is the sole source of truth.
- * - Zero arithmetic on screen.
- * - Pure integer sen.
- */
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
-import type { Category } from '@/db/schema';
+import type { Account, Category, Expense } from '@/db/schema';
 import { CashFlowService, type CashFlowSnapshot } from '@/services/CashFlowService';
 import { CategoryService } from '@/services/CategoryService';
+import { AccountService } from '@/services/AccountService';
+import { CreditBillService } from '@/services/CreditBillService';
 import { AiConfigService, aiServiceOptions } from '@/services/AiConfigService';
 import { toAskSnapshot } from '@/services/toAskSnapshot';
 import { createAIService } from '@/ai/AIService';
 import { AIUnavailableError, toAIError } from '@/ai/errors';
 import type { AIResult, AskSnapshot } from '@/ai/types';
-import { formatDayLabel, formatMonthLabel, nextMonthStartDate } from '@/utils/dates';
-import { colors, spacing } from '@/theme';
-import { EmptyState } from '@/components/EmptyState';
-import { InlineError } from '@/components/ui/InlineError';
-import { SkeletonHome } from '@/components/ui/Skeleton';
-import { useUiStore } from '@/store/uiStore';
-import { MonthSummaryCard } from '@/components/dashboard/MonthSummaryCard';
-import { UpcomingList } from '@/components/dashboard/UpcomingList';
-import { CategorySummary } from '@/components/dashboard/CategorySummary';
-import { AskAiCard } from '@/components/dashboard/AskAiCard';
-import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
-import { Fab } from '@/components/ui/Fab';
+import type { CreditBill } from '@/engine/creditBills';
+import { daysInMonth, toLocalDateString } from '@/utils/dates';
+import { formatSen } from '@/utils/money';
+import { accountShades, geistWeights, useTheme } from '@/theme';
+
+import { DueRow } from '@/components/ui/DueRow';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { IconButton } from '@/components/ui/IconButton';
+import { ScreenTitleBlock } from '@/components/ui/ScreenTitleBlock';
+import { SummaryStrip } from '@/components/ui/SummaryStrip';
+import { TextLinkButton } from '@/components/ui/TextLinkButton';
+import { WalletStack, type WalletCardData } from '@/components/ui/WalletStack';
+import type { WalletCardLine } from '@/components/ui/WalletCard';
+import type { AccountCardType } from '@/components/ui/AccountSwatch';
+import { AskAiSheet } from '@/components/dashboard/AskAiSheet';
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const MONTH_SHORT = [
+  'JAN',
+  'FEB',
+  'MAR',
+  'APR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'AUG',
+  'SEP',
+  'OCT',
+  'NOV',
+  'DEC',
+];
+
+const DAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+}
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Retry is a no-op while there is nothing to retry (idle/pending/result). */
 const NOOP_RETRY = (): void => {};
 
 function useSafeInsets() {
@@ -53,11 +96,11 @@ function useSafeInsets() {
   }
 }
 
-export default function DashboardScreen() {
+export default function HomeScreen() {
   const { authService } = useAuth();
   const router = useRouter();
   const insets = useSafeInsets();
-  const setExpenseCategory = useUiStore((s) => s.setExpenseCategory);
+  const { colors } = useTheme();
 
   const services = useMemo(() => {
     const repos = repositories();
@@ -67,9 +110,20 @@ export default function DashboardScreen() {
         repos.expenses,
         repos.commitments,
         authService,
+        repos.creditBills,
       ),
       categories: new CategoryService(repos.categories),
+      accounts: new AccountService(repos.accounts, authService),
+      creditBills: repos.creditBills
+        ? new CreditBillService(
+            repos.accounts,
+            repos.expenses,
+            repos.creditBills,
+            authService,
+          )
+        : null,
       aiConfig: new AiConfigService(repos.settings, authService),
+      repos,
     };
   }, [authService]);
 
@@ -80,10 +134,16 @@ export default function DashboardScreen() {
 
   const [snapshot, setSnapshot] = useState<CashFlowSnapshot | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountExpenses, setAccountExpenses] = useState<Map<number, Expense[]>>(new Map());
+  const [accountBills, setAccountBills] = useState<Map<number, CreditBill[]>>(new Map());
+  const [monthlyExpenseCount, setMonthlyExpenseCount] = useState<number>(0);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [aiSheetVisible, setAiSheetVisible] = useState(false);
   const [aiPending, setAiPending] = useState(false);
   const [aiError, setAiError] = useState<AIUnavailableError | null>(null);
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
@@ -94,19 +154,60 @@ export default function DashboardScreen() {
   const load = useCallback(async () => {
     try {
       const now = new Date();
-      const [snap, cats] = await Promise.all([
+      const todayStr = toLocalDateString(now);
+      const user = await authService.currentUser();
+      const userId = user?.id ?? 1;
+
+      const [snap, cats, accs, monthExpenses] = await Promise.all([
         services.cashflow.snapshot(now),
         services.categories.list(),
+        services.accounts.list(),
+        services.repos.expenses.listForMonth(userId, now.getFullYear(), now.getMonth() + 1),
       ]);
+
       setSnapshot(snap);
       setCategories(cats);
+      setAccounts(accs);
+      setMonthlyExpenseCount(monthExpenses.length);
+
+      // Load recent expenses for liquid accounts and bills for credit accounts
+      const expensesMap = new Map<number, Expense[]>();
+      const billsMap = new Map<number, CreditBill[]>();
+
+      await Promise.all(
+        accs.map(async (acc) => {
+          if (acc.type === 'credit_card' || acc.type === 'paylater') {
+            if (services.creditBills) {
+              try {
+                const bills = await services.creditBills.listBillsForAccount(acc.id, todayStr);
+                billsMap.set(acc.id, bills);
+              } catch {
+                billsMap.set(acc.id, []);
+              }
+            }
+          } else {
+            try {
+              const recent = await services.repos.expenses.query(userId, {
+                accountId: acc.id,
+                limit: 3,
+              });
+              expensesMap.set(acc.id, recent);
+            } catch {
+              expensesMap.set(acc.id, []);
+            }
+          }
+        }),
+      );
+
+      setAccountExpenses(expensesMap);
+      setAccountBills(billsMap);
       setError(null);
     } catch (loadError: unknown) {
       setError(errMsg(loadError));
     } finally {
       setLoading(false);
     }
-  }, [services.cashflow, services.categories]);
+  }, [services, authService]);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,127 +268,320 @@ export default function DashboardScreen() {
     [aiPending, aiError, aiResult, onAskRetry],
   );
 
-  const refreshControl = (
-    <RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} tintColor={colors.muted} />
-  );
+  const now = new Date();
+  const dateCaption = `${DAY_NAMES[now.getDay()]}, ${now.getDate()} ${MONTH_NAMES[now.getMonth()]}`;
+  const monthTitle = MONTH_NAMES[now.getMonth()] ?? 'Home';
 
-  if (loading && !snapshot) {
+  const categoryMap = useMemo(() => {
+    const map = new Map<number, Category>();
+    for (const c of categories) {
+      map.set(c.id, c);
+    }
+    return map;
+  }, [categories]);
+
+  // Account card builder
+  const walletCards: WalletCardData[] = useMemo(() => {
+    const shades = accountShades(accounts);
+    return accounts.map((acc) => {
+      const isCredit = acc.type === 'credit_card' || acc.type === 'paylater';
+
+      let kindLabel = 'Account';
+      if (acc.type === 'bank') kindLabel = 'Bank';
+      else if (acc.type === 'cash') kindLabel = 'Wallet';
+      else if (acc.type === 'ewallet') kindLabel = 'E-wallet';
+      else if (acc.type === 'credit_card') {
+        if (acc.statementDay && acc.dueDay) {
+          kindLabel = `Statement ${ordinal(acc.statementDay)} · due ${ordinal(acc.dueDay)}`;
+        } else {
+          kindLabel = 'Credit card';
+        }
+      } else if (acc.type === 'paylater') {
+        if (acc.statementDay) {
+          kindLabel = `Pay later · closes ${ordinal(acc.statementDay)}`;
+        } else {
+          kindLabel = 'Pay later';
+        }
+      }
+
+      const lines: WalletCardLine[] = [];
+
+      if (!isCredit) {
+        const exps = accountExpenses.get(acc.id) ?? [];
+        for (const exp of exps) {
+          const [, em, ed] = exp.date.split('-').map(Number);
+          const shortMonth = MONTH_NAMES[(em ?? 1) - 1]?.slice(0, 3) ?? 'M';
+          const cat = exp.categoryId ? categoryMap.get(exp.categoryId)?.name : null;
+          const noteText = exp.description ? exp.description : cat ?? 'Expense';
+          lines.push({
+            label: `${ed} ${shortMonth} · ${noteText}`,
+            value: `−${formatSen(exp.amountSen)}`,
+          });
+        }
+      } else {
+        const bills = accountBills.get(acc.id) ?? [];
+        if (acc.statementDay == null || acc.dueDay == null) {
+          lines.push({
+            label: 'Set billing cycle',
+            value: `Statement ${acc.statementDay ?? '—'} · Due ${acc.dueDay ?? '—'}`,
+          });
+        } else {
+          const closedUnpaid = bills.filter(
+            (b) => b.status === 'unpaid' && b.outstandingSen > 0,
+          );
+          const openBill = bills.find((b) => b.status === 'open');
+
+          if (closedUnpaid.length > 0) {
+            const b = closedUnpaid[0]!;
+            const [, cm, cd] = b.closeDate.split('-').map(Number);
+            const [, dm, dd] = b.dueDate.split('-').map(Number);
+            const closeM = MONTH_NAMES[(cm ?? 1) - 1]?.slice(0, 3) ?? 'M';
+            const dueM = MONTH_NAMES[(dm ?? 1) - 1]?.slice(0, 3) ?? 'M';
+            lines.push({
+              label: `${b.label} · closed ${cd} ${closeM}`,
+              value: formatSen(b.outstandingSen),
+            });
+            lines.push({
+              label: 'Due',
+              value: `${dd} ${dueM}`,
+            });
+          }
+          if (openBill) {
+            lines.push({
+              label: `${openBill.label} · open`,
+              value: formatSen(openBill.amountSen),
+            });
+          }
+        }
+      }
+
+      return {
+        id: String(acc.id),
+        name: acc.name,
+        kind: kindLabel,
+        amount: formatSen(acc.balanceSen),
+        amountLabel: isCredit ? 'Owed' : 'Balance',
+        accountType: acc.type as AccountCardType,
+        shade: shades.get(acc.id),
+        lines,
+      };
+    });
+  }, [accounts, accountExpenses, accountBills, categoryMap]);
+
+  if (!snapshot && loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-background" style={styles.centerBox} testID="dashboard-loading">
-        <SkeletonHome />
-      </View>
+      <View style={[styles.screen, styles.centerBox, { backgroundColor: colors.bg }]} testID="dashboard-loading" />
     );
   }
 
-  if (error && !snapshot) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background" style={styles.centerBox}>
-        <InlineError message={error} testID="dashboard-error" />
-      </View>
-    );
-  }
+  const endDay = snapshot
+    ? daysInMonth(snapshot.month.year, snapshot.month.month)
+    : 31;
+  const shortMonth = snapshot
+    ? MONTH_NAMES[snapshot.month.month - 1]?.slice(0, 3)
+    : 'Month';
+  const dueByLabel = `Due by ${endDay} ${shortMonth}`;
 
-  if (!snapshot) return null;
-
-  if (snapshot.accountCount === 0) {
-    return (
-      <ScrollView className="flex-1 bg-background" contentContainerStyle={styles.emptyWrap} refreshControl={refreshControl} testID="dashboard-empty-accounts">
-        <EmptyState
-          icon="wallet-outline"
-          title="No accounts yet"
-          body="Add an account to start tracking your spending and commitments."
-          action={{ label: 'Create an account', onPress: () => router.navigate('/settings' as never) }}
-          testID="dashboard-empty-accounts"
-        />
-      </ScrollView>
-    );
-  }
-
-  const noData = snapshot.spentSen === 0 && snapshot.upcomingItems.length === 0;
-  const dueBeforeLabel = formatDayLabel(nextMonthStartDate(snapshot.month.year, snapshot.month.month));
-  const topCategories = snapshot.categorySummary.slice(0, 5);
-  const goToAnalytics = () => router.navigate('/analytics' as never);
+  const topUpcoming = (snapshot?.upcomingItems ?? []).slice(0, 5);
 
   return (
-    <View className="flex-1 bg-background" testID="dashboard-screen">
-      <KeyboardAwareScrollView
-        className="flex-1 bg-background"
+    <View style={[styles.screen, { backgroundColor: colors.bg }]} testID="dashboard-screen">
+      <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[
-          styles.content,
+          styles.scrollContent,
           {
-            paddingTop: Math.max(insets.top, spacing.lg),
-            paddingBottom: Math.max(insets.bottom, 24) + 80,
+            paddingBottom: Math.max(insets.bottom, 16) + 72,
           },
         ]}
-        refreshControl={refreshControl}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={colors.accent}
+          />
+        }
       >
-        <View className="px-4">
-          {error ? <InlineError message={error} testID="dashboard-error" /> : null}
+        {/* Title Block */}
+        <ScreenTitleBlock
+          caption={dateCaption}
+          title={monthTitle}
+          right={
+            <>
+              <IconButton
+                glyph="ai"
+                onPress={() => setAiSheetVisible(true)}
+                accessibilityLabel="Ask AI"
+                testID="home-ai-button"
+              />
+              <IconButton
+                glyph="settings"
+                onPress={() => router.push('/settings' as never)}
+                accessibilityLabel="Settings"
+                testID="dashboard-settings"
+              />
+            </>
+          }
+          testID="home-title-block"
+        />
 
-          {noData ? (
+        <View style={styles.body}>
+          {error ? (
+            <Text style={[styles.errorText, { color: colors.danger }]} testID="dashboard-error">
+              {error}
+            </Text>
+          ) : null}
+
+          {snapshot && snapshot.accountCount === 0 ? (
             <EmptyState
-              icon="receipt-outline"
-              title="No data yet"
-              body="Record an expense or add a commitment to get started."
-              action={{ label: 'Record an expense', onPress: () => router.push('/expenses/new' as never) }}
-              testID="dashboard-empty-data"
+              headline="No accounts yet"
+              caption="Add an account to start tracking your spending and commitments."
+              buttonLabel="Create an account"
+              onButtonPress={() => router.navigate('/settings' as never)}
+              testID="dashboard-empty-accounts"
             />
-          ) : null}
+          ) : (
+            <>
+              {/* Summary Strip */}
+              {snapshot ? (
+                <SummaryStrip
+                  spentLabel="Spent this month"
+                  spentAmount={formatSen(snapshot.spentSen)}
+                  spentMeta={`${monthlyExpenseCount} ${
+                    monthlyExpenseCount === 1 ? 'expense' : 'expenses'
+                  }`}
+                  dueLabel={dueByLabel}
+                  dueAmount={formatSen(snapshot.upcomingSen)}
+                  dueMeta={`${snapshot.upcomingItems.length} to pay`}
+                  testID="home-summary-strip"
+                />
+              ) : null}
 
-          <MonthSummaryCard
-            spentSen={snapshot.spentSen}
-            dueSen={snapshot.upcomingSen}
-            monthLabel={formatMonthLabel(snapshot.month.year, snapshot.month.month)}
-          />
+              {/* Accounts Wallet Stack */}
+              <WalletStack
+                cards={walletCards}
+                availableAmount={
+                  snapshot ? formatSen(snapshot.availableSen) : undefined
+                }
+                headerTitle="Accounts"
+                testID="home-wallet-stack"
+              />
 
-          <View className="mb-4">
-            <UpcomingList
-              items={snapshot.upcomingItems}
-              totalSen={snapshot.upcomingSen}
-              dueBeforeLabel={dueBeforeLabel}
-              onOpenCommitment={(commitmentId) => router.push(`/commitments/${commitmentId}` as never)}
-            />
-          </View>
+              {/* Due section */}
+              <View style={styles.dueSection}>
+                <View style={styles.dueHeaderRow}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                    {dueByLabel}
+                  </Text>
+                  <TextLinkButton
+                    label="See all"
+                    onPress={() => router.navigate('/commitments' as never)}
+                    testID="home-due-see-all"
+                  />
+                </View>
 
-          {/* Category Summary (if spending recorded in categories) */}
-          {topCategories.length > 0 ? (
-            <CategorySummary
-              summary={topCategories}
-              categories={categories}
-              onShowAll={goToAnalytics}
-              onOpenCategory={(categoryId) => {
-                setExpenseCategory(categoryId);
-                router.navigate('/expenses' as never);
-              }}
-            />
-          ) : null}
+                {topUpcoming.length === 0 ? (
+                  <Text style={[styles.emptyDueText, { color: colors.textTertiary }]}>
+                    No upcoming commitments or credit bills due this month.
+                  </Text>
+                ) : (
+                  <View style={styles.dueList}>
+                    {topUpcoming.map((item, index) => {
+                      const [, im, id] = item.dueDate.split('-').map(Number);
+                      const itemMonth = MONTH_SHORT[(im ?? 1) - 1] ?? 'OCT';
+                      const isLast = index === topUpcoming.length - 1;
 
-          {/* Ask about your money (plan 019) */}
-          <AskAiCard
-            ai={aiState}
-            label={aiQuestion ? `You asked: ${aiQuestion}` : null}
-            onSubmit={onAsk}
-            disabled={snapshot === null}
-          />
+                      let metaText = item.frequency === 'monthly' ? 'Monthly' : 'One-time';
+                      if (item.kind === 'credit_bill') {
+                        metaText = 'Credit bill';
+                      }
 
-          <View style={styles.spacer} />
+                      return (
+                        <DueRow
+                          key={`${item.commitmentId}-${item.dueDate}-${index}`}
+                          day={id ?? 1}
+                          month={itemMonth}
+                          name={item.name}
+                          meta={metaText}
+                          amount={formatSen(item.amountSen)}
+                          isLast={isLast}
+                          onPress={() => {
+                            if (item.kind === 'credit_bill') {
+                              router.navigate('/commitments' as never);
+                            } else {
+                              router.push(`/commitments/${item.commitmentId}` as never);
+                            }
+                          }}
+                          testID={`upcoming-row-${item.commitmentId}`}
+                        />
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            </>
+          )}
         </View>
-      </KeyboardAwareScrollView>
+      </ScrollView>
 
-      <Fab onPress={() => router.push('/expenses/new' as never)} label="Add expense" testID="add-expense-fab" />
+      {/* Ask AI Sheet */}
+      <AskAiSheet
+        visible={aiSheetVisible}
+        onClose={() => setAiSheetVisible(false)}
+        ai={aiState}
+        label={aiQuestion ? `You asked: ${aiQuestion}` : null}
+        onSubmit={onAsk}
+        disabled={snapshot === null}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  content: { flexGrow: 1 },
-  emptyWrap: {
+  screen: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
     flexGrow: 1,
+  },
+  centerBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    backgroundColor: colors.background,
   },
-  spacer: { height: spacing.lg },
+  body: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    gap: 20,
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: geistWeights.medium,
+  },
+  dueSection: {
+    gap: 10,
+  },
+  dueHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  emptyDueText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: geistWeights.medium,
+    paddingVertical: 12,
+  },
+  dueList: {
+    flexDirection: 'column',
+  },
 });

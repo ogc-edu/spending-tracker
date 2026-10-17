@@ -1,0 +1,510 @@
+// Spending Tracker — new UI design spec (approved by the user 2026-10-11).
+//
+// Precedence when sources disagree: THIS FILE > images/ (rendered PNGs) > mockups/*.dc.html.
+// The HTML mockups use the exact same token names as CSS variables (mockups/theme.css), so you can
+// open any mockup in a browser (?theme=light | ?theme=dark) and inspect a value if this file is silent.
+//
+// Units: dp (React Native density-independent pixels). Colours: hex. Letter-spacing values are
+// already converted to RN `letterSpacing` points. Money is formatted "RM1,234.56" (no space).
+{
+  "meta": {
+    "name": "Spending Tracker — Wallet redesign",
+    "version": 1,
+    "date": "2026-10-11",
+    "status": "approved",
+    "approvedNotes": [
+      "User approved the dark design shown in the mockup: all buttons, theme, layout, icon.",
+      "User asked for a Light/Dark choice in Settings. Light theme follows images/reference/light-theme-reference.png: light grey canvas, white cards, near-black primary buttons (incl. the centre + tab), monochrome text, soft mint for the chart highlight, pastel category tiles."
+    ],
+    "targetDevice": {
+      "model": "Oppo Reno 10 Pro+ (CPH2521), Android 16",
+      "widthDp": 354,
+      "heightDp": 792,
+      "statusBarDp": 40,
+      "gestureNavDp": 16,
+      "fontScale": 1.0,
+      "rule": "Design and verify at 354 dp FIRST (narrower than the common 360+). Must also work from 320 dp to 430 dp wide and at fontScale 1.3 without clipping, overlap, or text wrapping one character per line."
+    },
+    "functionalScope": "docs/plans/020-scope-reset-credit-bills.md (Phase A is done; Phases B and C are built as part of this redesign).",
+    "images": {
+      "dark": "images/dark/*.png",
+      "light": "images/light/*.png",
+      "note": "Rendered at 2x (708×1584 px = 354×792 dp). Files ending -fullscroll.png show the whole scrollable content of a screen."
+    }
+  },
+
+  // ───────────────────────────────────────────────────────────── Principles
+  "principles": [
+    "Apple Wallet feel: accounts are physical-looking cards stacked on Home; everything else is quiet.",
+    "Dense and informative: no hero illustrations, no marketing copy, no decorative gradients, glows, neon or emoji.",
+    "One accent per theme. Dark: amber #F5B83D. Light: near-black #111111 (as in the reference). Colour is otherwise reserved for account cards, category tiles and the chart.",
+    "Money is the loudest thing on screen: tabular figures, semibold/bold, never wraps.",
+    "Every row is single-line per text line with ellipsis; amounts sit on the right and never shrink below their content.",
+    "No half-width columns that contain free text unless the text has numberOfLines={1} (this caused the old 'infinite column' bug on the 354 dp phone).",
+    "One styling system and one source of colour: tokens from @/theme via the active theme. No hex literals in components."
+  ],
+
+  // ───────────────────────────────────────────────────────────── Theme modes
+  "themeMode": {
+    "options": ["system", "light", "dark"],
+    "default": "dark",
+    "labels": { "system": "System", "light": "Light", "dark": "Dark" },
+    "settingLocation": "Settings → APPEARANCE (first section), segmented control. See images/*/06-settings.png.",
+    "helperText": {
+      "system": "Follows your phone’s dark-mode setting.",
+      "light": "Always light, whatever your phone is set to.",
+      "dark": "Always dark, whatever your phone is set to."
+    },
+    "persistence": "Store in SQLite `settings` table (new column `theme_mode` TEXT NOT NULL DEFAULT 'dark'), read through a service. Not Zustand-persisted, not SecureStore. Applies instantly without restart.",
+    "beforeDbReady": "Loading / DB-error / login screens before the preference is read: use the OS scheme (useColorScheme), falling back to dark.",
+    "systemChrome": "Status bar icons light on dark theme, dark on light theme. Set the root background (expo-system-ui) and Android navigation bar to theme.bg so no white flash shows between screens.",
+    "appJson": "Keep expo.userInterfaceStyle = \"automatic\" so `system` works."
+  },
+
+  // ───────────────────────────────────────────────────────────── Colour tokens
+  // Same names as mockups/theme.css (kebab-case there, camelCase here).
+  "themes": {
+    "dark": {
+      "bg":               { "value": "#000000", "use": "Screen canvas (true black, OLED)." },
+      "tabbar":           { "value": "#0B0B0C", "use": "Bottom tab bar background." },
+      "surface":          { "value": "#111113", "use": "Cards/panels on the canvas: summary strip, grouped settings, form groups." },
+      "fill":             { "value": "#1C1C1E", "use": "Unselected chips, date tiles, icon buttons, search field, account tiles." },
+      "fillStrong":       { "value": "#2C2C2E", "use": "Buttons inside sheets/panels (Cancel, stepper −/+), unselected month options." },
+      "sheet":            { "value": "#1C1C1E", "use": "Bottom sheet background." },
+      "separator":        { "value": "#1C1C1E", "use": "Row hairlines on the canvas (1 dp)." },
+      "separatorStrong":  { "value": "#2A2A2E", "use": "Hairlines inside a surface (summary divider, split-total divider, chart baseline)." },
+      "chipBorder":       { "value": "#2C2C2E", "use": "1 dp border on unselected chips/filter pills." },
+      "track":            { "value": "#2A2A2E", "use": "Progress-bar and breakdown-bar track." },
+      "handle":           { "value": "#48484A", "use": "Sheet grab handle." },
+      "scrim":            { "value": "rgba(0,0,0,0.6)", "use": "Behind sheets." },
+      "text":             { "value": "#F5F5F7", "use": "Primary text and amounts." },
+      "textSecondary":    { "value": "#A1A1A6", "use": "Labels, section captions, sub-headers." },
+      "textTertiary":     { "value": "#8E8E93", "use": "Row meta lines, hints, inactive tab labels." },
+      "accent":           { "value": "#F5B83D", "use": "Primary buttons, centre + tab, selected chip, switch on, selected option border." },
+      "onAccent":         { "value": "#000000", "use": "Text/icons on accent." },
+      "emphasis":         { "value": "#F5B83D", "use": "The ONE highlighted figure per screen (Due-by amount, per-month split amount, 'Highest' value)." },
+      "link":             { "value": "#F5B83D", "use": "Text buttons: See all, Cancel, Edit, Add account, back." },
+      "selectedBg":       { "value": "#2A2416", "use": "Background of a selected option tile (account picker, pay-from source); paired with a 1.5 dp accent border." },
+      "switchOff":        { "value": "#3A3A3C", "use": "Switch track off." },
+      "segmentTrack":     { "value": "#1C1C1E", "use": "Segmented control track." },
+      "segmentThumb":     { "value": "#3A3A3C", "use": "Segmented control selected segment." },
+      "chartActive":      { "value": "#F5B83D", "use": "Selected bar." },
+      "chartMax":         { "value": "#8A6A26", "use": "Highest bar when it is not the selected one." },
+      "chartIdle":        { "value": "#3A3A3C", "use": "Other bars." },
+      "barMuted":         { "value": "#8E8E93", "use": "Breakdown share bar fill." },
+      "danger":           { "value": "#FF6961", "use": "Destructive text (Log out, Delete) and validation errors." },
+      "cardShadow":       { "value": "0 -6 14 rgba(0,0,0,0.55)", "use": "Wallet card upward shadow (Android: elevation 6 + shadowColor #000)." }
+    },
+    "light": {
+      "bg":               { "value": "#F2F2F2", "use": "Screen canvas (reference: light grey)." },
+      "tabbar":           { "value": "#FFFFFF" },
+      "surface":          { "value": "#FFFFFF" },
+      "fill":             { "value": "#FFFFFF" },
+      "fillStrong":       { "value": "#EBEBEB" },
+      "sheet":            { "value": "#FFFFFF" },
+      "separator":        { "value": "#E4E4E4" },
+      "separatorStrong":  { "value": "#E4E4E4" },
+      "chipBorder":       { "value": "#E0E0E0" },
+      "track":            { "value": "#E9E9E9" },
+      "handle":           { "value": "#D1D1D6" },
+      "scrim":            { "value": "rgba(0,0,0,0.35)" },
+      "text":             { "value": "#111111" },
+      "textSecondary":    { "value": "#55555A" },
+      "textTertiary":     { "value": "#6C6C70", "use": "Chosen to keep ≥4.5:1 on #F2F2F2." },
+      "accent":           { "value": "#111111", "use": "Reference: black pill/rounded buttons and black centre + tab." },
+      "onAccent":         { "value": "#FFFFFF" },
+      "emphasis":         { "value": "#111111", "use": "Light theme is monochrome — emphasis is weight, not colour." },
+      "link":             { "value": "#111111", "use": "Use fontWeight 600 for links in light theme." },
+      "selectedBg":       { "value": "#F4F4F4" },
+      "switchOff":        { "value": "#E0E0E0" },
+      "segmentTrack":     { "value": "#E8E8E8", "use": "Reference: grey track with a white selected pill." },
+      "segmentThumb":     { "value": "#FFFFFF" },
+      "chartActive":      { "value": "#5FD3A0", "use": "Reference: mint selected bar." },
+      "chartMax":         { "value": "#A9E7CA" },
+      "chartIdle":        { "value": "#E3F6EC", "use": "Reference: very pale mint bars." },
+      "barMuted":         { "value": "#C7C7CC" },
+      "danger":           { "value": "#C5221F" },
+      "cardShadow":       { "value": "0 -4 12 rgba(0,0,0,0.12)" }
+    }
+  },
+
+  // Account cards look the same in both themes (they are "physical" cards) except credit, which is
+  // graphite in dark and near-black in light. Text on every card is #FFFFFF; secondary text on cards
+  // is #FFFFFF at opacity 0.8–0.85; hairlines inside cards rgba(255,255,255,0.22).
+  "accountCards": {
+    // Shade families (src/theme/colors.ts accountCardShades): the n-th account of a type by ascending id
+    // gets shade n (wrapping), so same-type accounts stay distinct in the Wallet stack. Shade 0 below.
+    // Rev 2026-10-17: credit_card dark #3A3A3C → #3A4150 (was the switchOff grey, read as disabled);
+    // paylater #B8430F → #A63C0C (0.8-opacity caption now ≥ 4.5:1). Pay pill text = card colour.
+    "bank":        { "dark": "#24408F", "light": "#24408F", "shades": ["#24408F", "#1D5E9E", "#3A2F86"] },
+    "cash":        { "dark": "#0E6B63", "light": "#0E6B63", "shades": ["#0E6B63", "#2D6834", "#53601A"] },
+    "ewallet":     { "dark": "#5A3E9E", "light": "#5A3E9E", "shades": ["#5A3E9E", "#7A3690", "#8C2F63"] },
+    "credit_card": { "dark": "#3A4150", "light": "#1F1F21", "shadesDark": ["#3A4150", "#5A2A3A", "#4A3F2C"], "shadesLight": ["#1F1F21", "#4A1F2C", "#3A3122"] },
+    "paylater":    { "dark": "#A63C0C", "light": "#A63C0C", "shades": ["#A63C0C", "#A8322D", "#8F500E"], "note": "New account type from plan 020 Phase B (SPayLater)." },
+    "onCard": {
+      "text": "#FFFFFF",
+      "textSoftOpacity": 0.8,
+      "hairline": "rgba(255,255,255,0.22)",
+      "payButton": { "bg": "#FFFFFF", "text": "card colour", "note": "White pill; text takes the card's own colour (≥ 4.5:1 on white for every shade)." },
+      "paidPill": { "bg": "rgba(0,0,0,0.25)", "text": "#FFFFFF" }
+    }
+  },
+
+  // Category tiles: index-aligned with the category seed order in src/db/seed.ts (ids 1..12; wrap for
+  // custom categories), replacing colors.categoryPalette. Dark: letter in `darkFg` on theme.fill.
+  // Light: letter in `lightFg` on pastel `lightTile`. The tile shows the category's first letter
+  // (the Ionicon may be used instead at 16 dp — same colours).
+  "categoryPalette": [
+    { "seed": "Food",             "darkFg": "#F5B83D", "lightTile": "#FBE6B4", "lightFg": "#5C3F00" },
+    { "seed": "Groceries",        "darkFg": "#7FC8A9", "lightTile": "#CDEFDF", "lightFg": "#0F5135" },
+    { "seed": "Transport",        "darkFg": "#7AA7FF", "lightTile": "#D9E6FF", "lightFg": "#173E8C" },
+    { "seed": "Entertainment",    "darkFg": "#FF9F5A", "lightTile": "#FFE2CC", "lightFg": "#7A3510" },
+    { "seed": "Shopping",         "darkFg": "#F28FB1", "lightTile": "#F9D7E3", "lightFg": "#7A1F43" },
+    { "seed": "Bills",            "darkFg": "#C3A6FF", "lightTile": "#E6DCFF", "lightFg": "#45297F" },
+    { "seed": "Health",           "darkFg": "#FF8A7A", "lightTile": "#FFDCD6", "lightFg": "#84261A" },
+    { "seed": "Education",        "darkFg": "#6FD3E0", "lightTile": "#D3F2F6", "lightFg": "#0E5560" },
+    { "seed": "Travel",           "darkFg": "#B7D96A", "lightTile": "#E7F3CC", "lightFg": "#3E5410" },
+    { "seed": "Gifts",            "darkFg": "#E0A387", "lightTile": "#F5E1D8", "lightFg": "#6B3A25" },
+    { "seed": "Debt / Repayment", "darkFg": "#9FB4C7", "lightTile": "#E1E7EE", "lightFg": "#2E4052" },
+    { "seed": "Other",            "darkFg": "#A1A1A6", "lightTile": "#E6E6E8", "lightFg": "#3A3A3C" }
+  ],
+
+  // ───────────────────────────────────────────────────────────── Typography
+  "typography": {
+    "family": {
+      "name": "Geist",
+      "package": "@expo-google-fonts/geist (verify the exact export names in the package; weights 400/500/600/700)",
+      "load": "expo-font useFonts in the root layout, before hiding the splash. Each weight is a separate fontFamily in RN (e.g. Geist_600SemiBold) — never rely on fontWeight with a custom font on Android.",
+      "fallback": "System font if loading fails; never block the app on fonts."
+    },
+    "numbers": "All money, counts, dates in tiles and chart labels use fontVariant ['tabular-nums']. Keep src/theme `moneyFontVariant` contract (tokens.test pins it to the ios preset).",
+    "scale": {
+      "largeTitle":  { "size": 28, "lineHeight": 34, "weight": 700, "letterSpacing": -0.56, "use": "Screen titles: October, Expenses, Due, Analytics." },
+      "amountHero":  { "size": 44, "lineHeight": 52, "weight": 700, "letterSpacing": -0.88, "use": "Amount input on Add expense." },
+      "amountSheet": { "size": 34, "lineHeight": 40, "weight": 700, "letterSpacing": -0.68, "use": "Amount at top of Pay sheet." },
+      "amountL":     { "size": 26, "lineHeight": 32, "weight": 700, "letterSpacing": -0.52, "use": "Selected period total on Analytics." },
+      "amountM":     { "size": 22, "lineHeight": 28, "weight": 600, "letterSpacing": -0.22, "use": "Summary strip figures (Home, Due)." },
+      "amountS":     { "size": 17, "lineHeight": 28, "weight": 600, "use": "Secondary figure in a strip (November so far)." },
+      "headline":    { "size": 15, "lineHeight": 20, "weight": 600, "use": "Section titles (Accounts, Due by 31 Oct), card names, card amounts, nav title." },
+      "body":        { "size": 14, "lineHeight": 19, "weight": 500, "use": "Row titles, chips, form labels. Row amounts use weight 600." },
+      "caption":     { "size": 12, "lineHeight": 16, "weight": 500, "use": "Row meta, field labels, helper text (regular 400 for helper text)." },
+      "sectionCaps": { "size": 12, "lineHeight": 16, "weight": 600, "letterSpacing": 0.5, "transform": "uppercase", "use": "Settings group headers, Expenses day headers." },
+      "tabLabel":    { "size": 11, "lineHeight": 13, "weight": 500, "activeWeight": 600 },
+      "axis":        { "size": 10, "lineHeight": 12, "weight": 500, "use": "Chart x-axis labels." },
+      "tileMonth":   { "size": 9,  "lineHeight": 11, "weight": 600, "letterSpacing": 0.54, "use": "OCT under the day number in date tiles." }
+    },
+    "fontScaling": "Allow system font scaling (do not set allowFontScaling=false globally). Cap with maxFontSizeMultiplier=1.3 on large amounts and tab labels. Amount text: numberOfLines={1} + adjustsFontSizeToFit + minimumFontScale 0.7."
+  },
+
+  // ───────────────────────────────────────────────────────────── Spacing, radius, sizes
+  "spacing": {
+    "screenX": 16,
+    "screenTopBelowSafeArea": 4,
+    "sectionGap": 20,
+    "sectionGapAnalytics": 16,
+    "sectionTitleToContent": 10,
+    "cardPaddingY": 14,
+    "cardPaddingX": 16,
+    "groupPaddingX": 14,
+    "rowGap": 12,
+    "chipGap": 8,
+    "scrollBottomPadding": 16
+  },
+  "radius": {
+    "walletCard": 16,
+    "surface": 16,
+    "group": 14,
+    "sheetTop": 20,
+    "button": 14,
+    "optionTile": 12,
+    "dateTile": 10,
+    "categoryTile": 9,
+    "segmentTrack": 10,
+    "segmentThumb": 8,
+    "searchField": 10,
+    "chip": "pill (height/2)",
+    "iconButton": "circle",
+    "barTop": 4,
+    "progress": 2
+  },
+  "sizes": {
+    "minTouchTarget": 44,
+    "iconButton": 44,
+    "tabBarHeightExcludingInset": 64,
+    "fabInTabBar": 48,
+    "primaryButtonHeight": 52,
+    "sheetButtonHeight": 50,
+    "chipHeight": 36,
+    "filterPillHeight": 32,
+    "segmentHeight": 36,
+    "searchFieldHeight": 40,
+    "rowMinHeight": 52,
+    "commitmentRowMinHeight": 60,
+    "billRowMinHeight": 56,
+    "groupRowMinHeight": 48,
+    "accountRowMinHeight": 56,
+    "dateTile": 40,
+    "categoryTile": 34,
+    "accountSwatch": { "w": 22, "h": 15, "radius": 3, "settingsW": 30, "settingsH": 20, "settingsRadius": 4 },
+    "progressHeight": 4,
+    "chartHeight": 168,
+    "switch": { "w": 51, "h": 31, "knob": 27 },
+    "iconStroke": 1.8,
+    "tabIcon": 22,
+    "headerIcon": 20
+  },
+  "motion": {
+    "walletExpand": "height + overlap animate 220 ms ease (Reanimated). Respect reduce-motion (no animation).",
+    "sheet": "Slide up 250 ms; scrim fades. Close on scrim tap, back gesture and Cancel.",
+    "chartSelect": "Bar colour change only; no bouncing.",
+    "haptics": "Light impact on: save expense, pay bill, toggle split, select bar. Keep existing haptics helper if present."
+  },
+
+  // ───────────────────────────────────────────────────────────── Icons
+  // Mockups use 24×24 stroke glyphs (stroke=currentColor, width 1.8, round caps/joins, fill none).
+  // Implement as one <Glyph name=… size color/> component on react-native-svg (already a dependency)
+  // so the tab bar matches the mockup exactly. Ionicons may stay for category icons.
+  "glyphs": {
+    "home":      ["rect x=3 y=6 w=18 h=13 rx=3", "M3 10h18", "M6 3h12"],
+    "expenses":  ["M8 6h13M8 12h13M8 18h13", "circle cx=3.5 cy=6 r=1", "circle cx=3.5 cy=12 r=1", "circle cx=3.5 cy=18 r=1"],
+    "due":       ["rect x=3 y=5 w=18 h=16 rx=3", "M3 10h18M8 3v4M16 3v4"],
+    "analytics": ["M5 20V12M12 20V5M19 20v-9"],
+    "plus":      ["M12 5v14M5 12h14 (stroke 2.2)"],
+    "ai":        ["M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z", "M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"],
+    "settings":  ["circle cx=12 cy=12 r=3", "gear path: copy from mockups/Main.dc.html (aria-label=Settings)"],
+    "search":    ["circle cx=11 cy=11 r=7", "M20 20l-3.5-3.5 (stroke 2)"],
+    "back":      ["M15 5l-7 7 7 7 (stroke 2.2)"],
+    "chevron":   ["M9 5l7 7-7 7 (stroke 2.2)"]
+  },
+
+  // ───────────────────────────────────────────────────────────── Components
+  "components": {
+    "TabBar": {
+      "image": "any screen with a tab bar",
+      "items": [
+        { "route": "(tabs)/index",       "label": "Home",      "glyph": "home" },
+        { "route": "(tabs)/expenses",    "label": "Expenses",  "glyph": "expenses" },
+        { "route": "expenses/new",       "label": null,        "glyph": "plus", "kind": "centre action — 48 dp circle, bg accent, icon onAccent 24 dp. Opens Add expense modally; it is NOT a tab." },
+        { "route": "(tabs)/commitments", "label": "Due",       "glyph": "due" },
+        { "route": "(tabs)/analytics",   "label": "Analytics", "glyph": "analytics" }
+      ],
+      "style": "bg tabbar, 1 dp top border separator, 5 equal columns, icon 22 over label (gap 3). Active: text colour + weight 600. Inactive: textTertiary. Height 64 + bottom safe-area inset. No header bar on tab screens (titles are in-content large titles).",
+      "settings": "Settings is not a tab; opened from the Home header gear (route stays registered with href null)."
+    },
+    "IconButton": { "size": 44, "bg": "fill", "glyphSize": 20, "color": "text", "shape": "circle" },
+    "ScreenTitleBlock": {
+      "layout": "Row, align bottom, space-between. Left: optional caption (caption, textSecondary) above largeTitle. Right: up to two IconButtons with 4 dp gap.",
+      "topPadding": "safe-area top + 4 dp"
+    },
+    "SummaryStrip": {
+      "image": "01-home.png (top), 02-due.png (top)",
+      "style": "surface, radius 16. Home: 2 equal columns split by 1 dp separatorStrong vertical line, each padding 14×16, label caption textSecondary / amountM / caption textTertiary count. Due: one row, left label+amountM (emphasis), right label+amountS right-aligned.",
+      "rules": "Columns are minmax(0,1fr); amounts numberOfLines 1 with adjustsFontSizeToFit (minimumFontScale 0.7). The due amount uses `emphasis`."
+    },
+    "WalletStack": {
+      "image": "01-home.png, 01b-home-cards-collapsed.png",
+      "header": "Row: 'Accounts' (headline) + right 'Available RMx' (caption textSecondary, amount in text weight 600).",
+      "card": "radius 16, padding 14×16, bg = accountCards[type], text #FFF. Top row: name (headline, 1 line, ellipsis) + kind line (caption, opacity 0.8) on the left; amount (headline) + 'Balance'|'Owed' (caption, opacity 0.8) right-aligned.",
+      "stacking": "Collapsed card height 76; each card after the first overlaps the previous by 18 (marginTop -18); later cards draw on top (zIndex = index). Shadow cardShadow.",
+      "expand": "Tap a card → it grows to fit its detail lines (mockup 172) and shows a hairline + up to 3 lines (label left 13/opacity 0.9, value right 13/600). Only one card open at a time; tap again to collapse. Default: none open (the mockup opens SPayLater only to demonstrate).",
+      "detailLines": {
+        "bank|cash|ewallet": "Last 2–3 expenses from this account: '<date> · <note> (<category>)' → '−RMx'.",
+        "credit_card|paylater": "Closed unpaid bill ('October bill · closed 20 Oct' → amount), 'Due' → date, open bill ('November bill · open' → amount). If not configured: 'Set billing cycle' → 'Statement N · Due M'."
+      },
+      "a11y": "Each card is a button with accessibilityState.expanded."
+    },
+    "DueRow": {
+      "image": "01-home.png (Due by 31 Oct list), 02-due.png (Commitments list)",
+      "layout": "Row min height 52 (60 for commitments with progress), gap 12, bottom hairline separator. Left: DateTile 40×40 radius 10 bg fill — day (15/700, line 16) over month (tileMonth, textSecondary, uppercase). Middle (flex 1, minWidth 0): name (body 500, 1 line) + meta (caption textTertiary, 1 line) + optional progress bar 4 dp (track / accent fill). Right: amount (body 600, no wrap).",
+      "billRowVariant": "Credit bills appear in Home 'Due by' list as 'SPayLater · October bill', meta 'Closed 20 Oct · N purchases'."
+    },
+    "CreditAccountCard": {
+      "image": "02-due.png, 02c-due-after-pay.png",
+      "use": "Due screen, section 'Pay later' (and a 'Credit cards' section the same way if any exist). One card per credit/paylater account.",
+      "layout": "bg accountCards[type], radius 16, padding 14 16 6. Header like a wallet card ('Cycle 21st–20th · due end of month'). Then bill rows (min height 56, top hairline rgba(255,255,255,0.22)): title (14/600) + one-line meta (12, opacity 0.85, ellipsis) | amount (15/600) | action.",
+      "rows": "Closed-unpaid bill → white 'Pay' pill (36 h, min 64 w, radius 18, onCard.payButton). Paid bill → 'Paid' pill (onCard.paidPill) and meta 'Paid 10 Oct · Savings'. Open (current) bill → no action, meta 'Open · closes 20 Nov'. Show at most: oldest unpaid closed bills + current open bill.",
+      "naming": "Bill is named by its closing month (plan 020): 21 Sep–20 Oct = 'October bill', due 31 Oct."
+    },
+    "PaySheet": {
+      "image": "02b-due-pay-sheet.png",
+      "layout": "Bottom sheet (sheet bg, radius 20 top, padding 10 16 28 + bottom inset, gap 16). Handle 36×4 handle colour. Caption '<Account> · <Month> bill' (13 textSecondary), amountSheet, explanation (12 textTertiary): 'Moves money from your account to <Account>. No new expense — the purchases were already counted.' 'Pay from' label + 2-up option tiles (min 56, radius 12, name 14/600 + balance 12 textSecondary; selected = selectedBg + 1.5 accent border; unselected = fillStrong). Buttons row: Cancel (flex 1, fillStrong) + 'Pay RMx' (flex 2, accent/onAccent, 700), height 50 radius 14.",
+      "behaviour": "Only non-credit accounts are sources. Amount defaults to the bill outstanding; allow editing to a smaller partial amount via tapping the amount (MoneyInput). One transaction (plan 020 'Paying a bill'). Success → toast + haptic; the card row turns to Paid."
+    },
+    "Chip": {
+      "height": 36, "paddingX": 14, "radius": "pill", "text": "body 500",
+      "selected": "bg accent, text onAccent, border accent",
+      "unselected": "bg fill, text text, 1 dp border chipBorder"
+    },
+    "FilterPill": { "height": 32, "paddingX": 12, "text": "13", "selected": "accent/onAccent 600", "unselected": "fill + chipBorder, 500" },
+    "SegmentedControl": {
+      "image": "04-analytics-month.png, 06-settings.png",
+      "style": "track segmentTrack radius 10 padding 2; equal segments height 36 radius 8, text 14/600. Selected: segmentThumb bg, text colour. Unselected: transparent, textSecondary.",
+      "a11y": "role radiogroup / radio"
+    },
+    "OptionTile": {
+      "image": "03-add-expense-spaylater-split.png (Paid with)",
+      "style": "2-column grid gap 8; tile min height 48, padding 6×12, radius 12, gap 10: AccountSwatch (22×15 radius 3, account card colour) + name (14/600, ellipsis) over kind (11 textSecondary). Selected: selectedBg + 1.5 accent border. Unselected: fill + 1.5 border same as fill (keeps size stable)."
+    },
+    "Switch": { "w": 51, "h": 31, "knob": 27, "knobColour": "#FFFFFF", "on": "accent", "off": "switchOff" },
+    "Stepper": {
+      "use": "Interest per month",
+      "style": "[−] value [+]; buttons 44×40 radius 10 fillStrong, glyph 20; value min width 56 centred 15/600 tabular, format '0.00%'.",
+      "range": "0.00%–5.00% in 0.50% steps (stored as basis points, monthly_rate_bp)."
+    },
+    "PrimaryButton": { "height": 52, "radius": 14, "bg": "accent", "text": "16/700 onAccent", "placement": "Pinned above the keyboard/safe area at the bottom of form screens, padding 8 16 + bottom inset." },
+    "TextLinkButton": { "text": "15/500 link (600 in light)", "minTouch": 44 },
+    "FormGroup": {
+      "style": "surface radius 14; rows min height 48, padding 0×14, hairline separator between rows; label 14 textSecondary left, value 14/500 text right (inputs right-aligned, placeholder textTertiary)."
+    },
+    "SettingsGroup": {
+      "image": "06-settings.png",
+      "style": "Header sectionCaps textSecondary with 4 dp inset; group surface radius 14; rows 48 (accounts 56) with hairlines; footnote 12 textTertiary below."
+    },
+    "SearchField": { "height": 40, "radius": 10, "bg": "fill", "paddingX": 12, "glyph": "search 16 textTertiary", "text": "14" },
+    "ExpenseRow": {
+      "image": "05-expenses.png",
+      "layout": "min height 52, gap 12, bottom hairline. CategoryTile 34×34 radius 9 (categoryPalette; dark: fill bg + darkFg letter; light: lightTile bg + lightFg letter, 13/700). Middle: note (14/500, 1 line; falls back to category name if no note) over meta '<Category> · <Account>[ · 3 mo]' (12 textTertiary, 1 line). Right: amount 14/600."
+    },
+    "DayHeader": { "layout": "space-between, padding 14 0 6, sectionCaps textSecondary: 'TODAY · FRI 10 OCT' … day total." },
+    "BarChart": {
+      "image": "04-analytics-month.png, 04b-analytics-week.png, 04c-analytics-day.png",
+      "impl": "react-native-svg; no new chart dependency.",
+      "layout": "height 168, bars flex equally with gap 6 (day view 2), bar radius 4 top / 1 bottom, baseline 1 dp separatorStrong. Labels row below (axis, textTertiary; selected bar's label in text). Height = value / max (min 2%).",
+      "colours": "selected chartActive; highest (if not selected) chartMax; others chartIdle.",
+      "interaction": "Tap a bar to select it; default selection = the highest bar. Each bar has an accessibilityLabel '<period>, RMx'.",
+      "labels": "Month: 3-letter month for all 12. Week: 'd MMM' of Monday on every other bar. Day: day-of-month every 5th bar."
+    },
+    "BreakdownRow": {
+      "layout": "padding 10 0, bottom hairline; row: name 14/500 | pct (12 textTertiary, margin-right 8) + amount 14/600. Bar below: 4 dp, track bg, barMuted fill width = pct."
+    },
+    "Sheet": "Shared bottom-sheet primitive used by PaySheet, ConfirmSheet, CalendarSheet, CategoryAddSheet, AccountBalanceSheet — restyle existing ones to sheet/scrim/handle tokens.",
+    "Toast": "Pill above the tab bar: bg text colour inverted (dark: #F5F5F7 bg/#000 text; light: #111 bg/#FFF text), 14/600, radius pill.",
+    "EmptyState": "No illustrations. One line headline (15/600) + one line caption (12 textTertiary) + optional accent text button. Centered in the list area."
+  },
+
+  // ───────────────────────────────────────────────────────────── Screens
+  "screens": {
+    "home": {
+      "route": "src/app/(tabs)/index.tsx",
+      "images": ["01-home.png", "01-home-fullscroll.png", "01b-home-cards-collapsed.png"],
+      "order": [
+        "ScreenTitleBlock: caption 'Friday, 10 October' (today), title = month name ('October'); right: AI IconButton (opens the existing Ask-about-your-money flow — AI is kept unchanged functionally) + Settings IconButton.",
+        "SummaryStrip: 'Spent this month' RMx + 'N expenses' | 'Due by <last day of month>' RMx (emphasis) + 'N to pay'.",
+        "WalletStack with 'Available RMx' header.",
+        "Section 'Due by <d MMM>' + 'See all' link (→ Due tab): DueRows for unpaid commitment slots AND closed unpaid credit bills due before next month start, overdue first, then by date. Max 5 rows; 'See all' shows the rest."
+      ],
+      "removed": "CategorySummary card and AskAiCard are no longer on Home (category view lives in Analytics; AI moves behind the sparkle button). The old floating 'Add expense' FAB is replaced by the centre + in the tab bar.",
+      "data": "CashFlowService snapshot: spentSen, upcomingSen (+ credit bills due this month after Phase B), upcomingItems, availableSen; accounts list with type/balance; per-account recent expenses; credit bills from the Phase B service."
+    },
+    "expenses": {
+      "route": "src/app/(tabs)/expenses.tsx",
+      "images": ["05-expenses.png", "05-expenses-fullscroll.png"],
+      "order": [
+        "Sticky header block (bg, bottom hairline separator): largeTitle 'Expenses' left; right: '<Month> · N items' (12 textSecondary) over month total (15/600).",
+        "SearchField 'Search notes'.",
+        "FilterPills row: period ('This month'), 'All categories', 'All accounts' — each opens the existing picker sheet; a pill is 'selected' style when its filter is not the default.",
+        "SectionList by day: DayHeader + ExpenseRows. Tap → expense detail."
+      ],
+      "fixes": [
+        "Pagination must APPEND pages (current code replaces rows on offset change) and reset on filter change; offset must not leak via Zustand across visits.",
+        "keyExtractor must use the expense id, not index.",
+        "Use SectionList/FlatList virtualization with stable item heights; no ScrollView-wrapped lists."
+      ]
+    },
+    "addExpense": {
+      "route": "src/app/expenses/new.tsx (and edit.tsx reuses the same form)",
+      "images": ["03-add-expense-spaylater-split.png", "03-add-expense-spaylater-split-fullscroll.png", "03b-add-expense-6mo-interest.png", "03c-add-expense-bank.png"],
+      "presentation": "Modal stack screen (no tab bar). Top bar: 'Cancel' text link left, title 'New expense' (15/600) centre ('Edit expense' when editing).",
+      "order": [
+        "Amount: label 'Amount' (12 textSecondary, centred), 'RM' (22/600 textTertiary) + amountHero input, autofocus, decimal keyboard.",
+        "Category chips (wrap). Last-used category preselected (existing uiStore behaviour).",
+        "'Paid with' OptionTile grid of accounts.",
+        "When the chosen account is credit_card or paylater: FormGroup 'Split into months' with Switch (subtitle 'Each part lands in a later bill'). When on: month options 3 / 6 / 12 mo (equal buttons, 40 h, radius 10; selected accent/onAccent, unselected fillStrong); 'Interest per month' Stepper (subtitle 'On the price, added to each part'); summary under a separatorStrong hairline: 'Per month' → amount in emphasis (+ ' (last RMx)' when the remainder goes to the last part), 'Total payable' → amount, footnote 'Lands in the Oct – Dec bills · last part absorbs rounding'.",
+        "FormGroup: 'Date' → 'Today, 10 Oct' (opens CalendarSheet); 'Note' → right-aligned input placeholder 'Optional'.",
+        "PrimaryButton 'Save expense' pinned at bottom."
+      ],
+      "math": "Display only — compute via the plan 020 engine (floor(principal/N) per part, last part absorbs the remainder, interest floor(principal*bp/10000) per part). UI must not do the money math itself."
+    },
+    "due": {
+      "route": "src/app/(tabs)/commitments.tsx (tab label 'Due')",
+      "images": ["02-due.png", "02-due-fullscroll.png", "02b-due-pay-sheet.png", "02c-due-after-pay.png"],
+      "order": [
+        "ScreenTitleBlock: largeTitle 'Due'; right IconButton plus → new commitment.",
+        "SummaryStrip (Due variant): 'Due by <d MMM>' amount (emphasis) | '<Next month> so far' amount.",
+        "Section 'Pay later' (and 'Credit cards' when present): CreditAccountCard per account.",
+        "Section 'Commitments': DueRows, ordered by next due date, with month in the date tile; instalments show 'Instalment 13 of 60 · RM40,800 left' + progress bar. Tap → commitment detail (existing mark-paid flow)."
+      ]
+    },
+    "analytics": {
+      "route": "src/app/(tabs)/analytics.tsx",
+      "images": ["04-analytics-month.png", "04-analytics-month-fullscroll.png", "04b-analytics-week.png", "04c-analytics-day.png", "04d-analytics-food-month.png"],
+      "order": [
+        "largeTitle 'Analytics'.",
+        "Horizontal-scroll category chips: 'All' + every category (screen-edge padding 16 inside the scroll).",
+        "SegmentedControl Day / Week / Month (default Month).",
+        "Selected period: caption title ('Nov 2025' / 'Week of 6 Oct' / '10 Oct', plus ' · Food' when a category is selected) over amountL; right-aligned 'Average per <unit>' + value.",
+        "BarChart (Month = 12 months, Week = 12 weeks Monday-start, Day = 30 days; all ending at the current period).",
+        "Footnote: 'Highest: <period> · RMx' (value in emphasis) + ' · tap a bar to compare'.",
+        "'Breakdown · <period>': BreakdownRows for the selected period (all categories when 'All'; when one category is selected, show just that category)."
+      ],
+      "data": "AnalyticsService + new engine spendingSeries(expenses, {granularity, endDate, count, categoryId?}) from plan 020 Phase C. Remove month-selector/StatGrid/MoM chip from the old screen unless they fit this layout."
+    },
+    "settings": {
+      "route": "src/app/(tabs)/settings.tsx (pushed from Home gear; not a tab)",
+      "images": ["06-settings.png", "06-settings-fullscroll.png"],
+      "order": [
+        "Top bar: back link '‹ Home' left, title 'Settings' centre.",
+        "APPEARANCE: SegmentedControl System / Light / Dark + helper text (themeMode.helperText).",
+        "ACCOUNTS: rows (swatch 30×20, name, kind line — credit accounts show 'Statement 20 · due month-end' —, amount + Balance/Owed) + 'Add account' link row; footnote 'Credit card and pay-later balances are amounts owed. Set the statement and due day on each.' Tap a row → account form (edit).",
+        "CATEGORIES: header with 'Edit' link; static chips (fill + chipBorder) + dashed '+ Add' chip. Edit mode keeps the existing multi-select delete behaviour.",
+        "AI: rows 'Provider' → name ›, 'API key' → Saved/Not set ›. (Existing ai/[provider] screens.)",
+        "SIGNED IN: user name + 'This phone only'; 'Log out' in danger."
+      ],
+      "hidden": "Payroll stays hidden (plan 020)."
+    },
+    "notMockedScreens": {
+      "rule": "Not drawn — build them from the same components and tokens; no new visual ideas.",
+      "list": {
+        "login / register": "bg canvas; app icon 64 dp centred top third; largeTitle; FormGroup inputs; PrimaryButton; secondary text link.",
+        "expenses/[id] (detail)": "Top bar back + 'Edit' link; amountSheet + category tile + meta; FormGroup of facts (Date, Account, Category, Note, Instalment plan if any); danger 'Delete expense' text button at bottom with ConfirmSheet.",
+        "commitments/new, [id]/edit": "Same form pattern as Add expense (top bar Cancel/Save title, FormGroups, PrimaryButton).",
+        "commitments/[id] (detail)": "Header card (surface) with name, amount, schedule; list of payment slots as DueRows with 'Mark paid' accent pill; existing PaymentFlowSheet restyled as a Sheet.",
+        "AccountForm": "Type chips (Bank, Cash, E-wallet, Credit card, Pay later); name; balance (or 'Owed now' for credit types = opening_owed); for credit types: 'Statement day' and 'Due day' steppers/pickers (default SPayLater 20 / last day).",
+        "settings/ai/[provider]": "SettingsGroup style rows; key input secure; 'Test' button = PrimaryButton secondary variant (fillStrong bg, text colour).",
+        "DbLoadingScreen / DbErrorScreen": "Theme bg (OS scheme), app icon, one line of text, Retry PrimaryButton."
+      }
+    }
+  },
+
+  // ───────────────────────────────────────────────────────────── App icon & splash
+  "appIcon": {
+    "concept": "Three stacked rounded cards — bank blue #24408F (back), pay-later rust #B8430F (middle), amber #F5B83D (front, with a small dark stripe) — on black. No currency symbol, no glow.",
+    "sources": {
+      "icon/app-icon.svg": "Full-bleed square, opaque black background → assets/images/icon.png (1024).",
+      "icon/adaptive-foreground.svg": "Transparent; art inside the 66/108 safe zone → assets/images/android-icon-foreground.png.",
+      "icon/adaptive-monochrome.svg": "Alpha-only themed icon → assets/images/android-icon-monochrome.png.",
+      "icon/splash-icon.svg": "Transparent → assets/images/splash-icon.png."
+    },
+    "renderedPngs": "images/icon/*.png (1024 px; favicon 48 px) — copy these into assets/images with the names above.",
+    "appJsonChanges": {
+      "expo.android.adaptiveIcon.backgroundColor": "#000000",
+      "expo.android.adaptiveIcon.backgroundImage": "remove (solid colour background) or replace with a 1024 black PNG",
+      "expo-splash-screen.backgroundColor": "#000000",
+      "expo-splash-screen.dark.backgroundColor": "#000000 (light mode splash may use #F2F2F2 via the plugin's per-scheme config)",
+      "expo.ios.icon": "currently ./assets/expo.icon (Icon Composer). Replace with ./assets/images/icon.png or rebuild the .icon bundle from app-icon.svg.",
+      "expo.web.favicon": "images/icon/favicon-48.png"
+    },
+    "nativeRebuild": "android/ and ios/ are generated (gitignored). Icon/splash changes need `npx expo prebuild --clean` then `npx expo run:android --device` to show on the phone."
+  },
+
+  // ───────────────────────────────────────────────────────────── Acceptance
+  "acceptance": [
+    "Every screen in screens.* visually matches its image in BOTH themes at 354×792 dp on the user's phone (compare adb screenshots side by side with images/).",
+    "Switching Appearance in Settings recolours every screen immediately, including tab bar, status bar, sheets, toasts and navigation backgrounds; choice survives app restart.",
+    "No literal hex colours or rgba() in src/components or src/app (grep) — only theme tokens. Exception: the onCard constants and account/category palettes live in src/theme.",
+    "No text wraps to one-character-per-line at 320 dp width; no clipped amounts at fontScale 1.3.",
+    "Expenses list scrolls through >200 expenses with correct append pagination and no duplicate or missing rows.",
+    "Contrast: text tokens ≥4.5:1 on bg and surface in both themes (tokens.test.ts updated); touch targets ≥44 dp.",
+    "npm test, npm run typecheck, npm run lint all pass."
+  ]
+}

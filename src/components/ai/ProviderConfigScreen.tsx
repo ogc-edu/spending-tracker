@@ -1,5 +1,6 @@
 /**
  * Plan 013 — ProviderConfigScreen: per-provider BYOK configuration (PRD AI-6..10).
+ * Restyled to SettingsGroup + theme tokens for new UI design system.
  *
  * Flow: masked key field (paste/add/replace) → Test Connection (distinct
  * ✓/✕ results, never the raw credential) → discovered model picker, or a
@@ -11,12 +12,22 @@
  * in memory for test/discovery calls — never rendered, never logged.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { AIService } from '@/ai/AIService';
 import type { ModelInfo, TestResult, TestStep } from '@/ai/types';
 import type { AiConfigService, ConfigurableAIProvider } from '@/services/AiConfigService';
-import { colors, spacing, typography } from '@/theme';
-import { Button } from '@/components/ui/Button';
+import { geistWeights, useTheme } from '@/theme';
+import { SettingsGroup } from '@/components/ui/SettingsGroup';
 import { maskKeySuffix } from './ProviderRow';
 import { PROVIDER_LABELS } from './providerMeta';
 import { ModelPicker } from './ModelPicker';
@@ -48,6 +59,8 @@ export function ProviderConfigScreen({
   /** The AIService facade — the UI never calls providers directly (plan ¶10). */
   service: Pick<AIService, 'testConnection' | 'listModels'>;
 }) {
+  const { colors } = useTheme();
+
   const [keyText, setKeyText] = useState('');
   const [hasKey, setHasKey] = useState(false);
   const [storedKey, setStoredKey] = useState<string | null>(null);
@@ -225,184 +238,339 @@ export function ProviderConfigScreen({
 
   if (!ready) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.bg }]}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       testID="provider-config-screen"
     >
-      <Text style={styles.title}>{providerLabel}</Text>
-      <Text style={styles.subtitle}>
-        Bring your own {providerLabel} API key. The key is stored securely on this device and sent
-        only to {providerLabel}.
-      </Text>
-
-      {/* Key section */}
-      <Text style={styles.sectionTitle}>API key</Text>
-      <TextInput
-        value={keyText}
-        onChangeText={setKeyText}
-        placeholder={hasKey ? 'Enter a new key to replace the current one' : 'Paste your API key'}
-        placeholderTextColor={colors.muted}
-        secureTextEntry
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.input}
-        testID="ai-key-input"
-      />
-      {hasKey && storedKey ? (
-        <Text style={styles.maskedHint} testID="ai-key-masked">
-          Current key: {maskKeySuffix(storedKey)}
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: colors.text }]}>{providerLabel}</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Bring your own {providerLabel} API key. The key is stored securely on this device and sent
+          only to {providerLabel}.
         </Text>
-      ) : null}
-      <View style={styles.buttonRow}>
-        <Button
-          label={hasKey ? 'Replace key' : 'Save key'}
-          variant="primary"
-          flex
-          busy={saving}
-          disabled={!keyText.trim() || saving}
-          onPress={() => void saveKey()}
-          testID="ai-save-key-button"
-        />
-        {hasKey ? (
-          <Button
-            label="Remove"
-            variant="danger"
-            icon="trash-outline"
-            disabled={removing}
-            onPress={removeKey}
-            testID="ai-remove-key-button"
-          />
-        ) : null}
       </View>
 
-      {/* Test Connection */}
-      <Text style={styles.sectionTitle}>Connection</Text>
-      <View style={styles.buttonRow}>
-        <Button
-          label={testing ? 'Testing…' : 'Test Connection'}
-          variant="secondary"
-          icon={testing ? undefined : 'sparkles-outline'}
-          flex
-          busy={testing}
-          disabled={!effectiveKey || testing}
-          onPress={() => void runTest()}
-          testID="ai-test-button"
-        />
-        {testing ? (
-          <Button
-            label="Stop"
-            variant="secondary"
-            icon="stop-circle-outline"
-            onPress={stopTest}
-            testID="ai-stop-test-button"
+      {/* API Key Group */}
+      <SettingsGroup title="API key">
+        <View style={styles.groupBody}>
+          <TextInput
+            value={keyText}
+            onChangeText={setKeyText}
+            placeholder={
+              hasKey ? 'Enter a new key to replace the current one' : 'Paste your API key'
+            }
+            placeholderTextColor={colors.textTertiary}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={[
+              styles.input,
+              {
+                borderColor: colors.separator,
+                backgroundColor: colors.fill,
+                color: colors.text,
+              },
+            ]}
+            testID="ai-key-input"
           />
-        ) : null}
-      </View>
-      {testing && testStep ? (
-        <View style={styles.stepRow} testID="ai-test-step">
-          <View style={styles.stepDot} />
-          <Text style={styles.stepText}>{stepLabel(testStep)}</Text>
+
+          {hasKey && storedKey ? (
+            <Text
+              numberOfLines={1}
+              style={[styles.maskedHint, { color: colors.textSecondary }]}
+              testID="ai-key-masked"
+            >
+              Current key: {maskKeySuffix(storedKey)}
+            </Text>
+          ) : null}
+
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              onPress={() => void saveKey()}
+              disabled={!keyText.trim() || saving}
+              accessibilityRole="button"
+              testID="ai-save-key-button"
+              activeOpacity={0.8}
+              style={[
+                styles.button,
+                styles.buttonFlex,
+                {
+                  backgroundColor: colors.accent,
+                  opacity: !keyText.trim() || saving ? 0.4 : 1,
+                },
+              ]}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={colors.onAccent} />
+              ) : (
+                <Text
+                  numberOfLines={1}
+                  style={[styles.buttonLabel, { color: colors.onAccent }]}
+                >
+                  {hasKey ? 'Replace key' : 'Save key'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {hasKey ? (
+              <TouchableOpacity
+                onPress={removeKey}
+                disabled={removing}
+                accessibilityRole="button"
+                testID="ai-remove-key-button"
+                activeOpacity={0.8}
+                style={[
+                  styles.button,
+                  {
+                    backgroundColor: colors.fillStrong,
+                    borderColor: colors.danger,
+                    borderWidth: 1,
+                    opacity: removing ? 0.4 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text
+                  numberOfLines={1}
+                  style={[styles.buttonLabel, { color: colors.danger }]}
+                >
+                  Remove
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
-      ) : null}
-      {testStopped ? (
-        <Text style={styles.stoppedText} testID="ai-test-stopped">
-          Connection test stopped.
-        </Text>
-      ) : null}
-      {!effectiveKey ? (
-        <Text style={styles.note}>Enter a key to test the connection.</Text>
-      ) : null}
-      <TestResultBadge result={testResult} providerLabel={providerLabel} />
+      </SettingsGroup>
 
-      {/* Model selection */}
-      <Text style={styles.sectionTitle}>Model</Text>
-      {discoveryLoading ? (
-        <ActivityIndicator style={styles.loading} testID="ai-model-loading" />
-      ) : (
-        <ModelPicker
-          models={models}
-          selected={model}
-          onSelect={selectModel}
-          manual={showManual}
-          manualValue={manualId}
-          onManualChange={setManualId}
-        />
-      )}
+      {/* Connection Group */}
+      <SettingsGroup title="Connection">
+        <View style={styles.groupBody}>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              onPress={() => void runTest()}
+              disabled={!effectiveKey || testing}
+              accessibilityRole="button"
+              testID="ai-test-button"
+              activeOpacity={0.8}
+              style={[
+                styles.button,
+                styles.buttonFlex,
+                {
+                  backgroundColor: colors.fillStrong,
+                  borderColor: colors.separatorStrong,
+                  borderWidth: 1,
+                  opacity: !effectiveKey || testing ? 0.4 : 1,
+                },
+              ]}
+            >
+              {testing ? (
+                <ActivityIndicator size="small" color={colors.text} />
+              ) : (
+                <Ionicons name="sparkles-outline" size={16} color={colors.text} />
+              )}
+              <Text
+                numberOfLines={1}
+                style={[styles.buttonLabel, { color: colors.text }]}
+              >
+                {testing ? 'Testing…' : 'Test Connection'}
+              </Text>
+            </TouchableOpacity>
+
+            {testing ? (
+              <TouchableOpacity
+                onPress={stopTest}
+                accessibilityRole="button"
+                testID="ai-stop-test-button"
+                activeOpacity={0.8}
+                style={[
+                  styles.button,
+                  {
+                    backgroundColor: colors.fillStrong,
+                    borderColor: colors.danger,
+                    borderWidth: 1,
+                  },
+                ]}
+              >
+                <Ionicons name="stop-circle-outline" size={16} color={colors.danger} />
+                <Text
+                  numberOfLines={1}
+                  style={[styles.buttonLabel, { color: colors.danger }]}
+                >
+                  Stop
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {testing && testStep ? (
+            <View style={styles.stepRow} testID="ai-test-step">
+              <View style={[styles.stepDot, { backgroundColor: colors.accent }]} />
+              <Text
+                numberOfLines={1}
+                style={[styles.stepText, { color: colors.textSecondary }]}
+              >
+                {stepLabel(testStep)}
+              </Text>
+            </View>
+          ) : null}
+
+          {testStopped ? (
+            <Text
+              numberOfLines={1}
+              style={[styles.stoppedText, { color: colors.textTertiary }]}
+              testID="ai-test-stopped"
+            >
+              Connection test stopped.
+            </Text>
+          ) : null}
+
+          {!effectiveKey ? (
+            <Text
+              numberOfLines={1}
+              style={[styles.note, { color: colors.textTertiary }]}
+            >
+              Enter a key to test the connection.
+            </Text>
+          ) : null}
+
+          <TestResultBadge result={testResult} providerLabel={providerLabel} />
+        </View>
+      </SettingsGroup>
+
+      {/* Model Selection Group */}
+      <SettingsGroup title="Model">
+        <View style={styles.groupBody}>
+          {discoveryLoading ? (
+            <ActivityIndicator
+              style={styles.loading}
+              color={colors.accent}
+              testID="ai-model-loading"
+            />
+          ) : (
+            <ModelPicker
+              models={models}
+              selected={model}
+              onSelect={selectModel}
+              manual={showManual}
+              manualValue={manualId}
+              onManualChange={setManualId}
+            />
+          )}
+        </View>
+      </SettingsGroup>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  center: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: typography.title, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
-  subtitle: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.xl },
-  sectionTitle: {
-    fontSize: typography.emphasis,
+  container: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 48,
+    gap: 20,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  header: {
+    gap: 4,
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: '700',
-    color: colors.text,
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+    fontFamily: geistWeights.bold,
+  },
+  subtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: geistWeights.regular,
+  },
+  groupBody: {
+    padding: 14,
+    gap: 12,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    minHeight: 48,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    fontSize: typography.body,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    borderRadius: 10,
+    minHeight: 46,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: geistWeights.regular,
   },
-  maskedHint: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.sm },
-  buttonRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  maskedHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.medium,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    borderRadius: 12,
-    minHeight: 48,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    gap: 6,
+    borderRadius: 10,
+    minHeight: 44,
+    paddingHorizontal: 16,
   },
-  buttonFlex: { flex: 1 },
-  buttonStop: { borderWidth: 1, borderColor: colors.danger, backgroundColor: colors.surface },
-  buttonStopLabel: { color: colors.danger, fontSize: typography.emphasis, fontWeight: '600' },
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  buttonFlex: {
+    flex: 1,
+  },
+  buttonLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   stepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  stepText: { flex: 1, fontSize: typography.caption, color: colors.muted },
-  stoppedText: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.md },
-  buttonPrimary: { backgroundColor: colors.accent, flex: 1 },
-  buttonPrimaryLabel: { color: colors.onAccent, fontSize: typography.emphasis, fontWeight: '600' },
-  buttonDanger: { backgroundColor: colors.danger, paddingHorizontal: spacing.md },
-  buttonDangerLabel: { color: colors.onAccent, fontSize: typography.emphasis, fontWeight: '600' },
-  buttonOutline: {
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.md,
+  stepText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.regular,
   },
-  buttonOutlineLabel: { color: colors.accent, fontSize: typography.emphasis, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.5 },
-  pressed: { opacity: 0.8 },
-  note: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.sm },
-  loading: { alignSelf: 'flex-start', marginBottom: spacing.md },
+  stoppedText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.regular,
+  },
+  note: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.regular,
+  },
+  loading: {
+    alignSelf: 'center',
+    paddingVertical: 16,
+  },
 });

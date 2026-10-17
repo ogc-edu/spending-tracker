@@ -14,6 +14,8 @@
 import type { PasswordHasher } from '@/auth/passwordHasher';
 import { DrizzleUserRepository } from '@/repositories/drizzle/userRepository';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
+import { eq } from 'drizzle-orm';
+import { users } from './schema';
 
 export const DEFAULT_USER_EMAIL = 'ooiguancheng18@gmail.com';
 export const DEFAULT_USER_PASSWORD = '1234';
@@ -22,11 +24,23 @@ type AnyDb = BaseSQLiteDatabase<'sync' | 'async', unknown, typeof import('@/db/s
 
 export async function seedDefaultUserIfEmpty(db: AnyDb, hasher: PasswordHasher): Promise<number> {
   const repo = new DrizzleUserRepository(db);
+  const normalized = DEFAULT_USER_EMAIL.trim().toLowerCase();
+  const existingUser = await repo.byEmail(normalized);
+
+  if (existingUser) {
+    // If the default user exists with a legacy argon2 hash, upgrade it to PBKDF2 automatically
+    if (existingUser.passwordHash.startsWith('$argon2id$')) {
+      const passwordHash = await hasher.hash(DEFAULT_USER_PASSWORD);
+      await db.update(users).set({ passwordHash }).where(eq(users.id, existingUser.id));
+      return 1;
+    }
+    return 0;
+  }
+
   const count = await repo.count();
   if (count > 0) return 0;
 
   const passwordHash = await hasher.hash(DEFAULT_USER_PASSWORD);
-  const normalized = DEFAULT_USER_EMAIL.trim().toLowerCase();
   await repo.create({ email: normalized, passwordHash });
   return 1;
 }

@@ -60,6 +60,21 @@ export class InMemorySettingsRepository implements SettingsRepository {
     this.rows.set(userId, row);
     return row as never;
   }
+  async themeMode(userId: number): Promise<'system' | 'light' | 'dark'> {
+    return (this.rows.get(userId) as { themeMode?: 'system' | 'light' | 'dark' })?.themeMode ?? 'dark';
+  }
+  async setThemeMode(userId: number, mode: 'system' | 'light' | 'dark') {
+    this.recordWrite(userId, { themeMode: mode });
+    const existing = this.rows.get(userId) ?? {
+      safetyBufferSen: 30000,
+      aiActiveProvider: null,
+      aiModelGemini: null,
+      aiModelDeepseek: null,
+    };
+    const row = { ...existing, themeMode: mode };
+    this.rows.set(userId, row as never);
+    return row as never;
+  }
   private recordWrite(userId: number, patch: unknown) {
     this.writes.push({ userId, patch });
   }

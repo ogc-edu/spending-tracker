@@ -23,6 +23,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import type { AIErrorReason, AIResult } from '@/ai/types';
 import { AIUnavailableError } from '@/ai/errors';
 import { TouchTarget } from '@/components/ui/TouchTarget';
+import { useTheme } from '@/theme';
 
 /** Fixed user-facing message per typed failure reason — never raw provider text. */
 export const AI_ERROR_LABELS: Record<AIErrorReason, string> = {
@@ -64,6 +65,7 @@ export function AIAnalysisCard({
   onRetry,
   label = null,
 }: AIAnalysisState & { label?: string | null }) {
+  const { colors } = useTheme();
   if (!pending && !error && !result) return null;
 
   return (
@@ -76,7 +78,7 @@ export function AIAnalysisCard({
 
       {pending ? (
         <View className="flex-row items-center gap-2 py-1" testID="ai-analysis-pending">
-          <ActivityIndicator color="#06b6d4" />
+          <ActivityIndicator color={colors.accent} />
           <Text className="text-sm text-muted-foreground font-medium">Analyzing…</Text>
         </View>
       ) : null}

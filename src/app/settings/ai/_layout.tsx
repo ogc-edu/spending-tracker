@@ -5,17 +5,19 @@
  * the Settings tab that links here).
  */
 import { Stack } from 'expo-router';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 export default function AiSettingsLayout() {
+  const { colors } = useTheme();
+
   return (
     <Stack
       screenOptions={{
         headerShown: true,
         headerTintColor: colors.text,
         headerTitleStyle: { color: colors.text },
-        headerStyle: { backgroundColor: colors.background },
-        contentStyle: { backgroundColor: colors.background },
+        headerStyle: { backgroundColor: colors.bg },
+        contentStyle: { backgroundColor: colors.bg },
       }}
     >
       <Stack.Screen name="[provider]" options={{ title: 'AI Provider' }} />

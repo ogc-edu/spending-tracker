@@ -4,10 +4,10 @@
  * AI-8). No model ids are hardcoded anywhere — the list comes from discovery;
  * manual entry carries whatever the user types.
  */
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ModelInfo } from '@/ai/types';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 
 export function ModelPicker({
   models,
@@ -26,32 +26,60 @@ export function ModelPicker({
   manualValue: string;
   onManualChange: (text: string) => void;
 }) {
+  const { colors } = useTheme();
+
   if (manual) {
     return (
       <View style={styles.block} testID="ai-model-manual">
-        <Text style={styles.label}>Model ID (manual)</Text>
+        <Text
+          numberOfLines={1}
+          style={[styles.label, { color: colors.textSecondary }]}
+        >
+          Model ID (manual)
+        </Text>
         <TextInput
           value={manualValue}
           onChangeText={onManualChange}
           placeholder="Enter a model ID"
-          placeholderTextColor={colors.muted}
+          placeholderTextColor={colors.textTertiary}
           autoCapitalize="none"
           autoCorrect={false}
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              borderColor: colors.separator,
+              backgroundColor: colors.fill,
+              color: colors.text,
+            },
+          ]}
           testID="ai-model-manual-input"
         />
-        <Text style={styles.note}>
+        <Text
+          style={[styles.note, { color: colors.textTertiary }]}
+        >
           Discovery failed — enter the model ID manually (must be valid for the test to pass).
         </Text>
-        <Pressable
+        <TouchableOpacity
           onPress={() => manualValue.trim() && onSelect(manualValue.trim())}
           disabled={!manualValue.trim()}
-          style={({ pressed }) => [styles.useButton, pressed && !manualValue.trim() ? null : styles.pressed]}
+          activeOpacity={0.7}
+          style={[
+            styles.useButton,
+            {
+              backgroundColor: colors.accent,
+              opacity: !manualValue.trim() ? 0.4 : 1,
+            },
+          ]}
           accessibilityRole="button"
           testID="ai-model-manual-use"
         >
-          <Text style={styles.useButtonLabel}>Use this model</Text>
-        </Pressable>
+          <Text
+            numberOfLines={1}
+            style={[styles.useButtonLabel, { color: colors.onAccent }]}
+          >
+            Use this model
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -59,38 +87,76 @@ export function ModelPicker({
   if (models.length === 0) {
     return (
       <View style={styles.block} testID="ai-model-empty">
-        <Text style={styles.note}>Test the connection to discover available models.</Text>
+        <Text
+          style={[styles.note, { color: colors.textTertiary }]}
+        >
+          Test the connection to discover available models.
+        </Text>
       </View>
     );
   }
 
   return (
     <View style={styles.block} testID="ai-model-list">
-      <Text style={styles.label}>Model</Text>
-      {models.map((model) => {
-        const active = model.id === selected;
+      <Text
+        numberOfLines={1}
+        style={[styles.label, { color: colors.textSecondary }]}
+      >
+        Model
+      </Text>
+      {models.map((m) => {
+        const active = m.id === selected;
         return (
-          <Pressable
-            key={model.id}
-            onPress={() => onSelect(model.id)}
-            style={({ pressed }) => [styles.modelRow, active && styles.modelRowActive, pressed && styles.pressed]}
+          <TouchableOpacity
+            key={m.id}
+            onPress={() => onSelect(m.id)}
+            activeOpacity={0.7}
+            style={[
+              styles.modelRow,
+              {
+                borderColor: active ? colors.accent : colors.separator,
+                backgroundColor: colors.fill,
+              },
+            ]}
             accessibilityRole="radio"
             accessibilityState={{ selected: active }}
-            testID={`ai-model-option-${model.id}`}
+            testID={`ai-model-option-${m.id}`}
           >
             <Ionicons
               name={active ? 'radio-button-on' : 'radio-button-off'}
               size={18}
-              color={active ? colors.accent : colors.muted}
+              color={active ? colors.accent : colors.textTertiary}
             />
             <View style={styles.modelInfo}>
-              <Text style={[styles.modelId, active && styles.modelIdActive]}>{model.id}</Text>
-              {model.label && model.label !== model.id ? (
-                <Text style={styles.modelLabel}>{model.label}</Text>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.modelId,
+                  {
+                    color: active ? colors.accent : colors.text,
+                  },
+                ]}
+              >
+                {m.id}
+              </Text>
+              {m.label && m.label !== m.id ? (
+                <Text
+                  numberOfLines={1}
+                  style={[styles.modelLabel, { color: colors.textTertiary }]}
+                >
+                  {m.label}
+                </Text>
               ) : null}
             </View>
-            {active ? <Text style={styles.activeTag}>Selected</Text> : null}
-          </Pressable>
+            {active ? (
+              <Text
+                numberOfLines={1}
+                style={[styles.activeTag, { color: colors.accent }]}
+              >
+                Selected
+              </Text>
+            ) : null}
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -98,45 +164,76 @@ export function ModelPicker({
 }
 
 const styles = StyleSheet.create({
-  block: { marginBottom: spacing.lg },
-  label: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.sm },
-  note: { fontSize: typography.caption, color: colors.muted, marginBottom: spacing.sm },
+  block: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: geistWeights.medium,
+    marginBottom: 6,
+  },
+  note: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.regular,
+    marginBottom: 10,
+  },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    fontSize: typography.body,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    minHeight: 44,
+    marginBottom: 8,
+    fontFamily: geistWeights.regular,
   },
   useButton: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  useButtonLabel: { color: colors.onAccent, fontSize: typography.emphasis, fontWeight: '600' },
+  useButtonLabel: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
   modelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.xs,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    marginBottom: 6,
   },
-  modelRowActive: { borderColor: colors.accent },
-  modelInfo: { flex: 1 },
-  modelId: { fontSize: typography.body, color: colors.text, fontWeight: '600' },
-  modelIdActive: { color: colors.accent },
-  modelLabel: { fontSize: typography.caption, color: colors.muted },
-  activeTag: { fontSize: typography.caption, color: colors.accent, fontWeight: '600' },
-  pressed: { opacity: 0.7 },
+  modelInfo: {
+    flex: 1,
+  },
+  modelId: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  modelLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.regular,
+    marginTop: 1,
+  },
+  activeTag: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
 });

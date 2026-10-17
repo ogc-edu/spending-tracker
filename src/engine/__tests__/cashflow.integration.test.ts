@@ -40,10 +40,12 @@ import { insertDefaultCategoriesIfEmpty } from '@/db/seed';
 import { DrizzleAccountRepository } from '@/repositories/drizzle/accountRepository';
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
 import { DrizzleCommitmentRepository } from '@/repositories/drizzle/commitmentRepository';
+import { DrizzleCreditBillRepository } from '@/repositories/drizzle/creditBillRepository';
 import { DrizzleExpenseRepository } from '@/repositories/drizzle/expenseRepository';
 import type { CurrentUserSource } from '@/services/AccountService';
 import { CashFlowService } from '@/services/CashFlowService';
 import { CommitmentService } from '@/services/CommitmentService';
+import { CreditBillService } from '@/services/CreditBillService';
 import { ExpenseService } from '@/services/ExpenseService';
 import type { ExpenseInput } from '@/repositories/types';
 
@@ -397,3 +399,50 @@ describe('CashFlowService.snapshot — re-query after mutation', () => {
     expect(snap.upcomingSen).toBe(80000); // spending never touches what is due
   });
 });
+
+describe('CashFlowService.snapshot — credit bills (Plan 020 Phase B)', () => {
+  it('incorporates unpaid credit bills due on or before month end into upcomingSen and upcomingItems', async () => {
+    const f = await makeFixture();
+    await seedCanonicalFixture(f);
+
+    const creditBillRepo = new DrizzleCreditBillRepository(f.test.db as unknown as never);
+    const accountRepo = new DrizzleAccountRepository(f.test.db as unknown as never);
+    const expenseRepo = new DrizzleExpenseRepository(f.test.db as unknown as never);
+    const commitmentRepo = new DrizzleCommitmentRepository(f.test.db as unknown as never);
+    const auth: CurrentUserSource = { currentUser: async () => f.user };
+    const billService = new CreditBillService(accountRepo, expenseRepo, creditBillRepo, auth);
+    const cashflowWithBills = new CashFlowService(accountRepo, expenseRepo, commitmentRepo, auth, billService);
+
+    // Create an SPL account: statement 20, due 30
+    const spl = await accountRepo.create({
+      userId: f.user.id,
+      name: 'ShopeePayLater',
+      type: 'paylater',
+      initialBalanceSen: 0,
+      statementDay: 20,
+      dueDay: 30,
+    });
+
+    // Add an expense on SPL on 2026-09-05 for RM150 (15000 sen).
+    // Statement day is 20, so cycle closes 2026-09-20, due 2026-09-30 (September bill).
+    await f.expenses.create({
+      amountSen: 15000,
+      categoryId: f.categories[0]!.id,
+      accountId: spl.id,
+      date: '2026-09-05',
+    });
+
+    const snap = await cashflowWithBills.snapshot(new Date(2026, 8, 25)); // 25 Sep
+
+    // Canonical commitments upcoming was 80000 sen.
+    // Now with SPL bill of 15000 sen due 2026-09-30: upcomingSen = 80000 + 15000 = 95000 sen.
+    expect(snap.upcomingSen).toBe(95000);
+
+    const billItem = snap.upcomingItems.find((item) => item.kind === 'credit_bill');
+    expect(billItem).toBeDefined();
+    expect(billItem?.name).toBe('ShopeePayLater Bill');
+    expect(billItem?.dueDate).toBe('2026-09-30');
+    expect(billItem?.amountSen).toBe(15000);
+  });
+});
+

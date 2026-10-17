@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./theme.css">
+</helmet>
+<div style="width: 354px; height: 792px; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: 'Geist', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 44px 16px 16px; display: flex; flex-direction: column; gap: 20px">
+
+    <div style="display: flex; align-items: flex-end; justify-content: space-between">
+      <div>
+        <div style="font-size: 13px; font-weight: 500; color: var(--text-secondary)">Friday, 10 October</div>
+        <h1 style="margin: 2px 0 0; font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.02em">October</h1>
+      </div>
+      <div style="display: flex; gap: 4px">
+        <button aria-label="Ask about your money" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: var(--fill); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"></path><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"></path></svg>
+        </button>
+        <a href="Settings.dc.html" aria-label="Settings" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: var(--fill); color: var(--text); display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+        </a>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: var(--surface); border-radius: 16px">
+      <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px">
+        <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">Spent this month</div>
+        <div style="font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap">RM396.00</div>
+        <div style="font-size: 12px; color: var(--text-tertiary)">12 expenses</div>
+      </div>
+      <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--separator-strong)">
+        <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">Due by 31 Oct</div>
+        <div style="font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; color: var(--emphasis)">RM1,187.50</div>
+        <div style="font-size: 12px; color: var(--text-tertiary)">3 to pay</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Accounts</h2>
+        <div style="font-size: 12px; color: var(--text-secondary)">Available <span style="color: var(--text); font-weight: 600">RM4,307.70</span></div>
+      </div>
+      <div style="display: flex; flex-direction: column">
+        <sc-for list="{{cards}}" as="c" hint-placeholder-count="4">
+          <button onClick="{{c.toggle}}" aria-expanded="{{c.open}}" style="position: relative; display: flex; flex-direction: column; text-align: left; border: 0; cursor: pointer; padding: 14px 16px; border-radius: 16px; color: #FFFFFF; box-shadow: var(--card-shadow); height: {{c.h}}px; margin-top: {{c.mt}}px; background: {{c.bg}}; z-index: {{c.z}}; transition: height 220ms ease, margin-top 220ms ease">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; gap: 8px">
+              <div style="min-width: 0">
+                <div style="font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.name}}</div>
+                <div style="font-size: 12px; opacity: 0.8">{{c.kind}}</div>
+              </div>
+              <div style="text-align: right">
+                <div style="font-size: 15px; font-weight: 600; white-space: nowrap">{{c.amount}}</div>
+                <div style="font-size: 12px; opacity: 0.8; white-space: nowrap">{{c.amountLabel}}</div>
+              </div>
+            </div>
+            <sc-if value="{{c.open}}" hint-placeholder-val="{{false}}">
+              <div style="margin-top: 14px; width: 100%; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.22); padding-top: 12px">
+                <sc-for list="{{c.lines}}" as="l" hint-placeholder-count="3">
+                  <div style="display: flex; justify-content: space-between; font-size: 13px">
+                    <span style="opacity: 0.9">{{l.label}}</span>
+                    <span style="font-weight: 600; white-space: nowrap">{{l.value}}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Due by 31 Oct</h2>
+        <a href="Commitments.dc.html" style="font-size: 13px; font-weight: 500; padding: 8px 0">See all</a>
+      </div>
+      <sc-for list="{{due}}" as="d" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--separator)">
+          <div style="width: 40px; height: 40px; border-radius: 10px; background: var(--fill); display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0">
+            <div style="font-size: 15px; font-weight: 700; line-height: 16px">{{d.day}}</div>
+            <div style="font-size: 9px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-secondary)">OCT</div>
+          </div>
+          <div style="flex: 1; min-width: 0">
+            <div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{d.name}}</div>
+            <div style="font-size: 12px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{d.sub}}</div>
+          </div>
+          <div style="font-size: 14px; font-weight: 600; white-space: nowrap">{{d.amount}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <nav aria-label="Main" style="flex-shrink: 0; height: 80px; box-sizing: border-box; padding: 6px 8px 16px; background: var(--tabbar); border-top: 1px solid var(--separator); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center">
+    <a href="Main.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text); font-size: 11px; font-weight: 600; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><path d="M6 3h12"></path></svg>Home</a>
+    <a href="Expenses.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="3.5" cy="6" r="1"></circle><circle cx="3.5" cy="12" r="1"></circle><circle cx="3.5" cy="18" r="1"></circle></svg>Expenses</a>
+    <a href="AddExpense.dc.html" aria-label="Add expense" style="display: flex; justify-content: center">
+      <span style="width: 48px; height: 48px; border-radius: 24px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+      </span>
+    </a>
+    <a href="Commitments.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Due</a>
+    <a href="Analytics.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V12M12 20V5M19 20v-9"></path></svg>Analytics</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":354,"height":792}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: 'spl' };
+  }
+  renderVals() {
+    const accounts = [
+      { id: 'bank', name: 'Savings account', kind: 'Bank', amount: 'RM3,912.40', amountLabel: 'Balance', bg: 'var(--card-bank)',
+        lines: [{ label: 'Today · Lunch (Food)', value: '−RM18.50' }, { label: '9 Oct · Grab (Transport)', value: '−RM12.00' }, { label: '1 Oct · Pay bill from here', value: 'Rent, Phone' }] },
+      { id: 'cash', name: 'Cash', kind: 'Wallet', amount: 'RM395.30', amountLabel: 'Balance', bg: 'var(--card-cash)',
+        lines: [{ label: '8 Oct · Kopitiam (Food)', value: '−RM9.80' }, { label: '6 Oct · Parking (Transport)', value: '−RM4.00' }] },
+      { id: 'card', name: 'Credit card', kind: 'Statement 25th · due 15th', amount: 'RM0.00', amountLabel: 'Owed', bg: 'var(--card-credit)',
+        lines: [{ label: 'Set billing cycle', value: 'Statement 25 · Due 15' }] },
+      { id: 'spl', name: 'SPayLater', kind: 'Pay later · closes 20th', amount: 'RM498.50', amountLabel: 'Owed', bg: 'var(--card-spl)',
+        lines: [{ label: 'October bill · closed 20 Oct', value: 'RM412.50' }, { label: 'Due', value: '31 Oct' }, { label: 'November bill · open', value: 'RM86.00' }] },
+    ];
+    const open = this.state.open;
+    const cards = accounts.map((a, i) => {
+      const isOpen = a.id === open;
+      return {
+        ...a,
+        open: isOpen,
+        h: isOpen ? 172 : 76,
+        mt: i === 0 ? 0 : -18,
+        z: i + 1,
+        toggle: () => this.setState({ open: isOpen ? null : a.id }),
+      };
+    });
+    const due = [
+      { day: '15', name: 'Phone bill', sub: 'Monthly · Savings account', amount: 'RM175.00' },
+      { day: '28', name: 'Rent', sub: 'Monthly · Savings account', amount: 'RM600.00' },
+      { day: '31', name: 'SPayLater · October bill', sub: 'Closed 20 Oct · 9 purchases', amount: 'RM412.50' },
+    ];
+    return { cards, due };
+  }
+}
+</script>
+</body>
+</html>

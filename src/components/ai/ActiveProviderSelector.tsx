@@ -4,11 +4,11 @@
  * "No AI provider configured" empty state. No automatic fallback — the user
  * picks the active provider explicitly, one tap to switch.
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { AIProviderName } from '@/ai/types';
 import type { ConfigurableAIProvider } from '@/services/AiConfigService';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 import { PROVIDER_ICONS, PROVIDER_LABELS } from './providerMeta';
 
 export function ActiveProviderSelector({
@@ -20,13 +20,34 @@ export function ActiveProviderSelector({
   active: AIProviderName | null;
   onSelect: (provider: ConfigurableAIProvider) => void;
 }) {
+  const { colors } = useTheme();
+
   if (configured.length === 0) {
     return (
-      <View style={styles.empty} testID="ai-active-selector-empty">
-        <Ionicons name="sparkles-outline" size={18} color={colors.muted} />
+      <View
+        style={[
+          styles.empty,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.separator,
+          },
+        ]}
+        testID="ai-active-selector-empty"
+      >
+        <Ionicons name="sparkles-outline" size={18} color={colors.textTertiary} />
         <View style={styles.emptyInfo}>
-          <Text style={styles.emptyTitle}>No AI provider configured</Text>
-          <Text style={styles.emptyNote}>Configure Gemini or DeepSeek to enable AI analysis.</Text>
+          <Text
+            numberOfLines={1}
+            style={[styles.emptyTitle, { color: colors.text }]}
+          >
+            No AI provider configured
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[styles.emptyNote, { color: colors.textSecondary }]}
+          >
+            Configure Gemini or DeepSeek to enable AI analysis.
+          </Text>
         </View>
       </View>
     );
@@ -37,24 +58,57 @@ export function ActiveProviderSelector({
       {configured.map((provider) => {
         const isActive = active === provider;
         return (
-          <Pressable
+          <TouchableOpacity
             key={provider}
             onPress={() => onSelect(provider)}
-            style={({ pressed }) => [styles.option, isActive && styles.optionActive, pressed && styles.pressed]}
+            activeOpacity={0.7}
+            style={[
+              styles.option,
+              {
+                backgroundColor: colors.surface,
+                borderColor: isActive ? colors.accent : colors.separator,
+              },
+            ]}
             accessibilityRole="radio"
             accessibilityState={{ selected: isActive }}
             testID={`ai-active-option-${provider}`}
           >
-            <Ionicons name={PROVIDER_ICONS[provider]} size={18} color={isActive ? colors.accent : colors.muted} />
-            <Text style={[styles.optionLabel, isActive && styles.optionLabelActive]}>
+            <Ionicons
+              name={PROVIDER_ICONS[provider]}
+              size={18}
+              color={isActive ? colors.accent : colors.textTertiary}
+            />
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.optionLabel,
+                {
+                  color: isActive ? colors.accent : colors.text,
+                },
+              ]}
+            >
               {PROVIDER_LABELS[provider]}
             </Text>
             {isActive ? (
-              <View style={styles.activeTag} testID={`ai-active-tag-${provider}`}>
-                <Text style={styles.activeTagLabel}>Active</Text>
+              <View
+                style={[
+                  styles.activeTag,
+                  {
+                    backgroundColor: colors.fillStrong,
+                    borderColor: colors.accent,
+                  },
+                ]}
+                testID={`ai-active-tag-${provider}`}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[styles.activeTagLabel, { color: colors.accent }]}
+                >
+                  Active
+                </Text>
               </View>
             ) : null}
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -62,44 +116,62 @@ export function ActiveProviderSelector({
 }
 
 const styles = StyleSheet.create({
-  block: { marginBottom: spacing.lg },
+  block: {
+    marginBottom: 16,
+  },
   empty: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
+    gap: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
   },
-  emptyInfo: { flex: 1 },
-  emptyTitle: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  emptyNote: { fontSize: typography.caption, color: colors.muted },
+  emptyInfo: {
+    flex: 1,
+  },
+  emptyTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  emptyNote: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.regular,
+    marginTop: 2,
+  },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: 12,
-    backgroundColor: colors.surface,
     minHeight: 48,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 8,
   },
-  optionActive: { borderColor: colors.accent },
-  optionLabel: { flex: 1, fontSize: typography.body, color: colors.text, fontWeight: '600' },
-  optionLabelActive: { color: colors.accent },
+  optionLabel: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
   activeTag: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    borderRadius: 6,
+    borderWidth: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
   },
-  activeTagLabel: { color: colors.accent, fontSize: typography.caption, fontWeight: '700' },
-  pressed: { opacity: 0.7 },
+  activeTagLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+  },
 });

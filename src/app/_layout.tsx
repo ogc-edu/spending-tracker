@@ -1,18 +1,27 @@
 import '../../global.css';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
+import {
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+  Geist_700Bold,
+} from '@expo-google-fonts/geist';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PortalHost } from '@rn-primitives/portal';
-import { initDb } from '@/db';
+import { initDb, repositories } from '@/db';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
 import { DbErrorScreen } from '@/components/DbErrorScreen';
 import { DbLoadingScreen } from '@/components/DbLoadingScreen';
 import { ToastProvider } from '@/components/ToastProvider';
+import { SettingsService } from '@/services/SettingsService';
+import { ThemeProvider, useTheme } from '@/theme';
 
 // Prevent splash screen from auto-hiding until initial fonts, db, and auth are verified
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -25,35 +34,70 @@ SplashScreen.setOptions({
 // offline (dev-tools websocket failures). REVERT BEFORE COMMIT.
 LogBox.ignoreAllLogs();
 
-/**
- * Root layout — plan 002 init gate + plan 003 AuthProvider gate,
- * plan 016: ToastProvider (write-failure toasts) + SafeAreaProvider
- * (safe-area insets for the toast and keyboard-avoiding screens;
- * react-native-safe-area-context's hooks throw outside a provider).
- * Flow: initDb() (migrations + category seed + user seed) → AuthProvider
- * (validates SecureStore session) → Stack. Tabs are gated by AuthProvider
- * status; login/register redirect to (tabs) when signed in and vice-versa
- * (each screen handles its own Redirect).
- */
 type DbState = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready' };
+
+/**
+ * Applies the signed-in user's saved theme mode at boot. The mode lives in `settings` (SQLite);
+ * without this the provider stays on its 'dark' default until the Settings tab is focused, so
+ * a light/system choice appeared lost after every restart. Returns false until it is applied.
+ */
+function useStoredThemeMode(): boolean {
+  const { status, user, authService } = useAuth();
+  const { setMode } = useTheme();
+  const userId = user?.id ?? null;
+  const settingsService = useMemo(
+    () => new SettingsService(repositories().settings, authService),
+    [authService],
+  );
+  const [loadedFor, setLoadedFor] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (status !== 'signedIn' || userId === null) return;
+    let cancelled = false;
+    settingsService
+      .getThemeMode()
+      .then((mode) => {
+        if (!cancelled) setMode(mode);
+      })
+      .catch((err: unknown) => console.error('Failed to load theme mode:', err))
+      .finally(() => {
+        if (!cancelled) setLoadedFor(userId);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // setMode is recreated every render; the load only needs to re-run per user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, userId, settingsService]);
+
+  if (status === 'loading') return false;
+  if (status === 'signedIn') return loadedFor === userId;
+  return true;
+}
 
 function RootStack() {
   const { status } = useAuth();
+  const { scheme, colors } = useTheme();
+  const themeReady = useStoredThemeMode();
 
   useEffect(() => {
-    if (status !== 'loading') {
+    if (themeReady) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [status]);
+  }, [themeReady]);
 
-  if (status === 'loading') {
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
+  }, [colors.bg]);
+
+  if (status === 'loading' || !themeReady) {
     return <DbLoadingScreen />;
   }
 
   return (
     <>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
         <Stack.Screen name="register" />
@@ -62,12 +106,21 @@ function RootStack() {
   );
 }
 
-export default function RootLayout() {
+function RootContent() {
   const [dbState, setDbState] = useState<DbState>({ status: 'loading' });
-  // Preload Ionicons so the tab bar glyphs render on first mount (New
-  // Architecture + bottom-tabs race: without this, icon codepoints show as
-  // blank boxes on cold start). Gate the tree until ready.
-  const [fontsLoaded] = useFonts({ ...Ionicons.font });
+  const [fontsLoaded, fontError] = useFonts({
+    ...Ionicons.font,
+    Geist_400Regular,
+    Geist_500Medium,
+    Geist_600SemiBold,
+    Geist_700Bold,
+  });
+  const [fontFallback, setFontFallback] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setFontFallback(true), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const runInit = useCallback(() => {
     initDb().then(
@@ -94,7 +147,9 @@ export default function RootLayout() {
     }
   }, [dbState.status]);
 
-  if (!fontsLoaded || dbState.status === 'loading') {
+  const fontsReady = fontsLoaded || fontError != null || fontFallback;
+
+  if (!fontsReady || dbState.status === 'loading') {
     return <DbLoadingScreen />;
   }
 
@@ -111,5 +166,13 @@ export default function RootLayout() {
       </AuthProvider>
       <PortalHost />
     </SafeAreaProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootContent />
+    </ThemeProvider>
   );
 }

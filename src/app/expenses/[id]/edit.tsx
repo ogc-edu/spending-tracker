@@ -1,35 +1,29 @@
-/**
- * Edit expense screen (plan 005 / EXP-2, EXP-3) — push screen at
- * /expenses/[id]/edit. Loads the row, renders the form prefilled from the row
- * (amount as an input string), save edits in place (same row, balance deltas
- * computed by the service), delete asks for confirmation before reversing the
- * balance effect.
- *
- * E7 linked expenses (auto-created from a commitment payment) render as a
- * READ-ONLY view: badge + values + hint, no save, no delete — the service
- * blocks too (defense in depth).
- */
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
-import type { Account, Category, Expense } from '@/db/schema';
+import type { Account, Category, Expense, ExpenseInstallment } from '@/db/schema';
 import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
-import { ExpenseForm, expenseToFormValues } from '@/components/ExpenseForm';
-import { ConfirmSheet } from '@/components/ConfirmSheet';
-import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
-import { KeyboardScreen } from '@/components/KeyboardScreen';
+import { ExpenseForm } from '@/components/ExpenseForm';
 import { useToast } from '@/components/ToastProvider';
-import { categoryColor } from '@/components/categoryMeta';
-import { useUiStore } from '@/store/uiStore';
 import { formatDayLabel } from '@/utils/dates';
-import { formatSen, spokenMoneyLabel } from '@/utils/money';
+import { formatSen, formatSenInput, spokenMoneyLabel } from '@/utils/money';
+import { CategoryTile } from '@/components/ui/CategoryTile';
+import { FormGroup, FormRow } from '@/components/ui/FormGroup';
 import type { ExpenseInput } from '@/repositories/types';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -37,9 +31,11 @@ function errMsg(error: unknown): string {
 
 export default function EditExpenseScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authService } = useAuth();
   const toast = useToast();
+  const { colors } = useTheme();
   const expenseId = Number(id);
 
   const services = useMemo(() => {
@@ -52,14 +48,12 @@ export default function EditExpenseScreen() {
   }, [authService]);
 
   const [expense, setExpense] = useState<Expense | null>(null);
+  const [installment, setInstallment] = useState<ExpenseInstallment | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  // Plan 016: destructive delete through ConfirmSheet (busy guard = deleting).
-  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!Number.isInteger(expenseId) || expenseId <= 0) {
@@ -68,12 +62,14 @@ export default function EditExpenseScreen() {
       return;
     }
     try {
-      const [row, accs, cats] = await Promise.all([
+      const [row, inst, accs, cats] = await Promise.all([
         services.expenses.byId(expenseId),
+        services.expenses.getInstallment(expenseId).catch(() => null),
         services.accounts.list(),
         services.categories.list(),
       ]);
       setExpense(row);
+      setInstallment(inst);
       setAccounts(accs);
       setCategories(cats);
       setLoadError(null);
@@ -82,7 +78,7 @@ export default function EditExpenseScreen() {
     } finally {
       setLoading(false);
     }
-  }, [expenseId, services.expenses, services.accounts, services.categories]);
+  }, [expenseId, services]);
 
   useFocusEffect(
     useCallback(() => {
@@ -94,7 +90,6 @@ export default function EditExpenseScreen() {
     setSubmitting(true);
     try {
       await services.expenses.edit(expenseId, input);
-      useUiStore.getState().setLastUsed(input.categoryId, input.accountId);
       toast.show('Expense saved');
       router.back();
     } catch (error: unknown) {
@@ -104,218 +99,323 @@ export default function EditExpenseScreen() {
     }
   };
 
-  const confirmDelete = () => {
-    if (!expense) return;
-    setConfirmDeleteVisible(true);
-  };
-
-  const doDelete = async () => {
-    if (!expense) return;
-    setDeleting(true);
-    try {
-      await services.expenses.delete(expenseId);
-      setConfirmDeleteVisible(false);
-      router.back();
-    } catch (error: unknown) {
-      toast.show(`Could not delete expense: ${errMsg(error)}`);
-      setConfirmDeleteVisible(false);
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
   if (loadError || !expense) {
     return (
-      <View className="flex-1 bg-background items-center justify-center p-6" style={styles.center}>
-        <Text className="text-lg font-bold text-foreground mb-2" style={styles.emptyTitle}>{loadError ?? 'Expense not found'}</Text>
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>{loadError ?? 'Expense not found'}</Text>
         <Pressable
           onPress={() => router.back()}
-          className="border border-border rounded-xl py-3 px-6 min-h-[44px] items-center justify-center bg-card active:opacity-70"
-          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+          style={[styles.backBtn, { borderColor: colors.separator, backgroundColor: colors.surface }]}
           accessibilityRole="button"
         >
-          <Text className="text-foreground text-base font-semibold" style={styles.backButtonLabel}>Back</Text>
+          <Text style={[styles.backBtnLabel, { color: colors.text }]}>Back</Text>
         </Pressable>
       </View>
     );
   }
 
-  const mapped = expenseToFormValues(expense);
+  const linked = expense.commitmentPaymentId !== null;
+  const category = categories.find((c) => c.id === expense.categoryId);
+  const account = accounts.find((a) => a.id === expense.accountId);
 
-  if (mapped.readOnly) {
-    // E7: auto-created from a commitment payment — read-only, no edit/delete.
-    const category = categories.find((c) => c.id === expense.categoryId);
-    const account = accounts.find((a) => a.id === expense.accountId);
+  // Linked read-only view
+  if (linked) {
     return (
-      <KeyboardScreen>
-        <ScrollView className="flex-1 bg-background" style={styles.container} contentContainerStyle={styles.content} testID="linked-expense-view">
+      <View
+        style={[
+          styles.screen,
+          {
+            backgroundColor: colors.bg,
+            paddingTop: Math.max(insets.top, 12),
+          },
+        ]}
+        testID="linked-expense-view"
+      >
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            style={styles.cancelLink}
+            testID="linked-expense-back"
+          >
+            <Text style={[styles.cancelText, { color: colors.link }]}>Back</Text>
+          </Pressable>
+          <Text style={[styles.screenTitle, { color: colors.text }]}>Linked expense</Text>
+          <View style={styles.topBarRightSpacer} />
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(24, insets.bottom + 16) },
+          ]}
+        >
           <View
-            className="flex-row items-center justify-center gap-1.5 bg-amber-500/10 rounded-xl py-2 px-3 mb-4"
-            style={styles.linkedBadge}
+            style={[
+              styles.linkedBadge,
+              {
+                backgroundColor: colors.fill,
+                borderColor: colors.separator,
+              },
+            ]}
             testID="linked-commitment-lock"
           >
-            <Ionicons name="lock-closed-outline" size={16} color={colors.warning} />
-            <Text className="text-amber-500 text-xs font-bold text-center flex-1" style={styles.linkedBadgeLabel}>
-              This expense is linked to an active recurring commitment. Manage or reverse this transaction from the Commitments tab.
+            <Ionicons name="lock-closed" size={16} color={colors.accent} />
+            <Text style={[styles.linkedBadgeLabel, { color: colors.text }]}>
+              Linked to commitment payment
             </Text>
           </View>
-          <View className="bg-card rounded-2xl border border-border p-5 mb-4" style={styles.card}>
+
+          <View style={styles.heroBlock}>
             <Text
-              className="text-2xl font-bold text-foreground mb-3"
-              style={styles.amount}
               numberOfLines={1}
+              style={[
+                styles.amountSheetText,
+                {
+                  color: colors.text,
+                },
+              ]}
               accessibilityLabel={`Expense amount, ${spokenMoneyLabel(expense.amountSen)}`}
             >
               {formatSen(expense.amountSen)}
             </Text>
-            <View className="flex-row items-center gap-2 mb-2" style={styles.row}>
-              <Ionicons name={category?.icon as never} size={18} color={categoryColor(expense.categoryId)} />
-              <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
+            <View style={styles.categoryHeaderRow}>
+              <CategoryTile categoryIndex={category?.id} name={category?.name} />
+              <Text style={[styles.categoryHeaderText, { color: colors.text }]}>
+                {category?.name ?? 'Expense'}
+              </Text>
             </View>
-            <View className="flex-row items-center gap-2 mb-2" style={styles.row}>
-              <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-              <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{formatDayLabel(expense.date)} · {expense.date}</Text>
-            </View>
-            {account ? (
-              <View className="flex-row items-center gap-2 mb-2" style={styles.row}>
-                <Ionicons name="wallet-outline" size={18} color={colors.muted} />
-                <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{account.name}</Text>
-              </View>
-            ) : null}
-            {expense.description ? <Text className="text-base text-muted-foreground mt-1 italic" style={styles.description}>{expense.description}</Text> : null}
           </View>
-          <Text className="text-xs text-muted-foreground leading-4 mb-4" style={styles.linkedHint}>
-            This expense was created when you marked a commitment payment as paid. To change or remove it, un-pay the
-            payment in Commitments.
+
+          <FormGroup style={styles.factsGroup}>
+            <FormRow
+              label="Date"
+              value={`${formatDayLabel(expense.date)} · ${expense.date}`}
+            />
+            <FormRow
+              label="Account"
+              value={account ? account.name : 'None'}
+            />
+            <FormRow
+              label="Category"
+              value={category?.name ?? 'Uncategorized'}
+            />
+            {expense.description ? (
+              <FormRow label="Note" value={expense.description} isLast />
+            ) : null}
+          </FormGroup>
+
+          <Text style={[styles.linkedHint, { color: colors.textTertiary }]}>
+            This expense was created automatically when you recorded a commitment payment. It cannot be edited directly — manage it in Due instead.
           </Text>
-          <Pressable
-            onPress={() => router.back()}
-            className="border border-border rounded-xl py-3 min-h-[44px] items-center justify-center bg-card active:opacity-70"
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-            accessibilityRole="button"
-            testID="linked-expense-back"
-          >
-            <Text className="text-foreground text-base font-semibold" style={styles.backButtonLabel}>Back</Text>
-          </Pressable>
         </ScrollView>
-      </KeyboardScreen>
+      </View>
     );
   }
 
+  const defaults = {
+    amount: formatSenInput(installment ? installment.principalSen : expense.amountSen),
+    categoryId: expense.categoryId,
+    accountId: expense.accountId ?? undefined,
+    date: expense.date,
+    description: expense.description ?? '',
+    installment: installment
+      ? { months: installment.months, monthlyRateBp: installment.monthlyRateBp }
+      : undefined,
+  };
+
   return (
-    <KeyboardAwareScrollView
-      className="flex-1 bg-background"
-      style={styles.container}
-      contentContainerStyle={styles.content}
+    <View
+      style={[
+        styles.screen,
+        {
+          backgroundColor: colors.bg,
+          paddingTop: Math.max(insets.top, 12),
+        },
+      ]}
       testID="edit-expense-screen"
     >
-      <ExpenseForm
-        categories={categories}
-        accounts={accounts}
-        defaults={mapped.values}
-        submitLabel="Save changes"
-        onSubmit={handleSubmit}
-        submitting={submitting}
-        onCancel={() => router.back()}
-        onCreateCategory={async (name, icon) => {
-          const created = await services.categories.create(name, icon);
-          setCategories((prev) => [...prev, created]);
-          return created;
-        }}
-        onDeleteCategory={async (id) => {
-          await services.categories.delete(id);
-          setCategories((prev) => prev.filter((c) => c.id !== id));
-        }}
-      />
-      <Pressable
-        onPress={confirmDelete}
-        className="flex-row items-center justify-center gap-1.5 border border-destructive/30 rounded-xl py-3.5 mt-4 min-h-[48px] bg-destructive/10 active:opacity-70"
-        style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
-        accessibilityRole="button"
-        disabled={submitting}
-        testID="expense-delete-button"
-      >
-        <Ionicons name="trash-outline" size={18} color={colors.danger} />
-        <Text className="text-destructive text-base font-bold" style={styles.deleteLabel}>Delete expense</Text>
-      </Pressable>
+      <View style={styles.topBar}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+          style={styles.cancelLink}
+        >
+          <Text style={[styles.cancelText, { color: colors.link }]}>Cancel</Text>
+        </Pressable>
 
-      <ConfirmSheet
-        visible={confirmDeleteVisible}
-        title="Delete expense"
-        message="This reverses the balance change on its account."
-        confirmLabel="Delete"
-        busy={deleting}
-        onConfirm={() => void doDelete()}
-        onCancel={() => setConfirmDeleteVisible(false)}
-      />
-    </KeyboardAwareScrollView>
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.screenTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          Edit expense
+        </Text>
+
+        <View style={styles.topBarRightSpacer} />
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(24, insets.bottom + 16) },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <ExpenseForm
+          categories={categories}
+          accounts={accounts}
+          defaults={defaults}
+          submitLabel="Save expense"
+          onSubmit={handleSubmit}
+          submitting={submitting}
+          onCancel={() => router.back()}
+          onCreateCategory={async (name, icon) => {
+            const created = await services.categories.create(name, icon);
+            setCategories((prev) => [...prev, created]);
+            return created;
+          }}
+          onDeleteCategory={async (id) => {
+            await services.categories.delete(id);
+            setCategories((prev) => prev.filter((c) => c.id !== id));
+          }}
+        />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  screen: {
+    flex: 1,
+  },
+  topBar: {
+    height: 48,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cancelLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  cancelText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+  },
+  screenTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    textAlign: 'center',
+  },
+  topBarRightSpacer: {
+    width: 60,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 16,
+    flexGrow: 1,
+  },
   center: {
     flex: 1,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    padding: 24,
   },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  emptyTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    marginBottom: 16,
+  },
+  backBtn: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  backBtnLabel: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
   linkedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.warningSoft,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  linkedBadgeLabel: { color: colors.warning, fontSize: typography.caption, fontWeight: '700' },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: spacing.sm,
+    gap: 6,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
-  amount: { fontSize: typography.money, fontWeight: '700', color: colors.text, marginBottom: spacing.md },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-  rowValue: { fontSize: typography.body, color: colors.text, flex: 1 },
-  description: { fontSize: typography.body, color: colors.muted, marginTop: spacing.xs, fontStyle: 'italic' },
-  linkedHint: { fontSize: typography.caption, color: colors.muted, lineHeight: 18, marginBottom: spacing.lg },
-  backButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
+  linkedBadgeLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  heroBlock: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    paddingVertical: 12,
+    gap: 12,
   },
-  backButtonLabel: { color: colors.text, fontSize: typography.emphasis, fontWeight: '600' },
-  deleteButton: {
+  amountSheetText: {
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    letterSpacing: -0.68,
+    fontVariant: tabularNumsVariant,
+    textAlign: 'center',
+  },
+  categoryHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    marginTop: spacing.lg,
-    backgroundColor: colors.dangerSoft,
+    gap: 10,
   },
-  deleteLabel: { color: colors.danger, fontSize: typography.emphasis, fontWeight: '700' },
-  pressed: { opacity: 0.7 },
+  categoryHeaderText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  factsGroup: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  linkedHint: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: geistWeights.regular,
+  },
 });

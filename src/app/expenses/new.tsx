@@ -1,12 +1,13 @@
-/**
- * New expense screen (plan 005 / EXP-1, EXP-8 fast entry) — push screen at
- * /expenses/new. Prefills: date = today, category/account = last-used (or the
- * first seeded category / first account when the user hasn't recorded one
- * yet). Amount input auto-focuses → record in ≤3 taps. On success the
- * last-used picks are stored for the NEXT fast entry.
- */
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
@@ -16,12 +17,11 @@ import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
 import { ExpenseForm } from '@/components/ExpenseForm';
-import { KeyboardAwareScrollView } from '@/components/KeyboardAwareScrollView';
 import { useToast } from '@/components/ToastProvider';
 import { useUiStore } from '@/store/uiStore';
 import { todayLocal } from '@/utils/dates';
 import type { ExpenseInput } from '@/repositories/types';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -32,6 +32,7 @@ export default function NewExpenseScreen() {
   const insets = useSafeAreaInsets();
   const { authService } = useAuth();
   const toast = useToast();
+  const { colors } = useTheme();
   const { lastUsedCategoryId, lastUsedAccountId } = useUiStore();
 
   const services = useMemo(() => {
@@ -73,7 +74,7 @@ export default function NewExpenseScreen() {
     setSubmitting(true);
     try {
       await services.expenses.create(input);
-      // Fast entry (EXP-8): remember the picks for next time.
+      // Fast entry: remember last-used picks
       useUiStore.getState().setLastUsed(input.categoryId, input.accountId);
       toast.show('Expense saved');
       router.back();
@@ -86,19 +87,60 @@ export default function NewExpenseScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
   if (accounts.length === 0) {
     return (
-      <View className="flex-1 bg-background items-center justify-center p-6" style={styles.center}>
-        <Text className="text-lg font-bold text-foreground mb-2" style={styles.emptyTitle}>No accounts yet</Text>
-        <Text className="text-sm text-muted-foreground text-center leading-6" style={styles.emptyBody}>
-          Add an account in Settings → Accounts before recording expenses — every expense adjusts its account balance.
-        </Text>
+      <View
+        style={[
+          styles.screen,
+          {
+            backgroundColor: colors.bg,
+            paddingTop: Math.max(insets.top, 12),
+          },
+        ]}
+        testID="new-expense-screen"
+      >
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            style={styles.cancelLink}
+          >
+            <Text style={[styles.cancelText, { color: colors.link }]}>Cancel</Text>
+          </Pressable>
+          <Text numberOfLines={1} style={[styles.screenTitle, { color: colors.text }]}>
+            New expense
+          </Text>
+          <View style={styles.topBarRightSpacer} />
+        </View>
+
+        <View style={styles.center}>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No accounts yet</Text>
+          <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+            Add an account in Settings → Accounts before recording expenses — every expense adjusts its account balance.
+          </Text>
+          <Pressable
+            onPress={() => {
+              router.back();
+              router.push('/(tabs)/settings');
+            }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go to Settings"
+            style={[styles.settingsButton, { backgroundColor: colors.accent }]}
+          >
+            <Text style={[styles.settingsButtonText, { color: colors.onAccent }]}>
+              Go to Settings
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -110,58 +152,153 @@ export default function NewExpenseScreen() {
   };
 
   return (
-    <KeyboardAwareScrollView
-      className="flex-1 bg-background"
-      style={styles.container}
-      contentContainerStyle={[
-        styles.content,
-        { paddingBottom: Math.max(spacing.xxl, insets.bottom + spacing.xl) },
+    <View
+      style={[
+        styles.screen,
+        {
+          backgroundColor: colors.bg,
+          paddingTop: Math.max(insets.top, 12),
+        },
       ]}
       testID="new-expense-screen"
     >
-      <ExpenseForm
-        categories={categories}
-        accounts={accounts}
-        defaults={defaults}
-        submitLabel="Add expense"
-        onSubmit={handleSubmit}
-        submitting={submitting}
-        onCancel={() => router.back()}
-        onCreateCategory={async (name, icon) => {
-          const created = await services.categories.create(name, icon);
-          setCategories((prev) => [...prev, created]);
-          return created;
-        }}
-        onDeleteCategory={async (id) => {
-          await services.categories.delete(id);
-          setCategories((prev) => prev.filter((c) => c.id !== id));
-        }}
-      />
-      <Pressable
-        onPress={() => router.back()}
-        className="items-center py-4 min-h-[44px] justify-center active:opacity-60"
-        style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
-        accessibilityRole="button"
+      {/* Top Modal Navigation Bar */}
+      <View style={styles.topBar}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+          style={styles.cancelLink}
+        >
+          <Text
+            style={[
+              styles.cancelText,
+              {
+                color: colors.link,
+              },
+            ]}
+          >
+            Cancel
+          </Text>
+        </Pressable>
+
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.screenTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          New expense
+        </Text>
+
+        <View style={styles.topBarRightSpacer} />
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(24, insets.bottom + 16) },
+        ]}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text className="text-muted-foreground text-base font-semibold" style={styles.cancelLinkLabel}>Cancel</Text>
-      </Pressable>
-    </KeyboardAwareScrollView>
+        <ExpenseForm
+          categories={categories}
+          accounts={accounts}
+          defaults={defaults}
+          submitLabel="Save expense"
+          onSubmit={handleSubmit}
+          submitting={submitting}
+          onCancel={() => router.back()}
+          onCreateCategory={async (name, icon) => {
+            const created = await services.categories.create(name, icon);
+            setCategories((prev) => [...prev, created]);
+            return created;
+          }}
+          onDeleteCategory={async (id) => {
+            await services.categories.delete(id);
+            setCategories((prev) => prev.filter((c) => c.id !== id));
+          }}
+        />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  screen: {
+    flex: 1,
+  },
+  topBar: {
+    height: 48,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cancelLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  cancelText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+  },
+  screenTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+    textAlign: 'center',
+  },
+  topBarRightSpacer: {
+    width: 60,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    flexGrow: 1,
+  },
   center: {
     flex: 1,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    padding: 24,
   },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  emptyBody: { fontSize: typography.body, color: colors.muted, textAlign: 'center', lineHeight: 22 },
-  cancelLink: { alignItems: 'center', paddingVertical: spacing.lg },
-  cancelLinkLabel: { color: colors.muted, fontSize: typography.body, fontWeight: '600' },
-  pressed: { opacity: 0.6 },
+  emptyTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    marginBottom: 8,
+  },
+  emptyBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: geistWeights.regular,
+    textAlign: 'center',
+  },
+  settingsButton: {
+    marginTop: 20,
+    height: 44,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsButtonText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
 });

@@ -83,11 +83,14 @@ Refined from the spec schema (money columns suffixed `_sen`; two structural addi
 | Table | Columns (key additions bolded) | Notes |
 |---|---|---|
 | `users` | id, email (**UNIQUE, COLLATE NOCASE**), password_hash (PBKDF2-SHA256 encoded, A7 rev), created_at | seeded with the default user in feature 003 |
-| `categories` | id, name, icon, type, created_at | seeded with the 12 defaults; **global** (shared by all users); editable in a future version |
-| `accounts` | id, **user_id FK**, name, type (`cash`\|`bank`\|`ewallet`\|`credit_card`), balance_sen, created_at, updated_at | balance_sen on a credit card = **amount owed** (positive); counted negatively in "available" |
-| `expenses` | id, **user_id FK**, amount_sen, category_id FK, description, date (TEXT `YYYY-MM-DD`, local), account_id FK **nullable**, **commitment_payment_id FK nullable UNIQUE**, created_at, updated_at | unique link enforces D3 idempotency (a payment's expense is created exactly once) |
-| `commitments` | id, **user_id FK**, name, type, **total_sen nullable**, remaining_sen, payment_sen, frequency (`monthly`\|`one_time`), start_date, end_date **nullable**, due_date, status (`active`\|`completed`\|`cancelled`), **archived_at nullable**, created_at, updated_at | total_sen NULL = ongoing recurring (rent/subscription); fixed otherwise; `archived_at` = soft-delete (C1, plan 008) |
-| `commitment_payments` | id, **user_id FK**, commitment_id FK, amount_sen, due_date, paid_date **nullable**, status (`paid`) | **stores only PAID payments** (see §7); unpaid schedule is derived |
+| `categories` | id, name, icon, type, created_at | seeded with the 12 defaults; **global** (shared by all users); editable |
+| `accounts` | id, **user_id FK**, name, type (`cash`\|`bank`\|`ewallet`\|`credit_card`\|`paylater`), balance_sen, **statement_day**, **due_day**, **opening_owed_sen**, created_at, updated_at | balance_sen on credit_card / paylater = **amount owed**; cycle settings for bill derivation |
+| `expenses` | id, **user_id FK**, amount_sen, category_id FK, description, date (TEXT `YYYY-MM-DD`, local), account_id FK **nullable**, **commitment_payment_id FK nullable UNIQUE**, created_at, updated_at | unique link enforces D3 idempotency |
+| `expense_installments` | id, **user_id FK**, **expense_id FK UNIQUE**, months (2–24), monthly_rate_bp, principal_sen, created_at | installment split rules with monthly interest in basis points |
+| `credit_bill_payments` | id, **user_id FK**, account_id FK, bill_year, bill_month, amount_sen, paid_date, from_account_id FK, created_at | atomic credit bill payment from asset account without creating expense |
+| `commitments` | id, **user_id FK**, name, type, **total_sen nullable**, remaining_sen, payment_sen, frequency (`monthly`\|`one_time`), start_date, end_date **nullable**, due_date, status (`active`\|`completed`\|`cancelled`), **archived_at nullable**, created_at, updated_at | total_sen NULL = ongoing recurring; fixed otherwise; archived_at = soft-delete |
+| `commitment_payments` | id, **user_id FK**, commitment_id FK, amount_sen, due_date, paid_date **nullable**, status (`paid`) | stores only PAID payments; unpaid schedule is derived |
+| `settings` | id, user_id FK, theme_mode ('system'\|'light'\|'dark'), ai_provider, ai_model, created_at, updated_at | user appearance and AI preferences |
 
 Foreign keys enforced (PRAGMA foreign_keys = ON). Indexes: `users(email)` (unique covers it), `expenses(date)`, `expenses(category_id)`, `commitments(status)`, `commitment_payments(commitment_id)`, plus a `user_id` index on each financial table.
 

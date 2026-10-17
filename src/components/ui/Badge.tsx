@@ -35,7 +35,7 @@ const TONES: Record<BadgeTone, { bg: string; fg: string; className: string; text
     textClass: 'text-muted-foreground',
   },
   onAccent: {
-    bg: 'rgba(15,23,42,0.14)',
+    bg: colors.fill,
     fg: colors.surface,
     className: 'bg-black/15 border-white/20',
     textClass: 'text-white',

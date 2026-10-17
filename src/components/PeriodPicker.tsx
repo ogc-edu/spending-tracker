@@ -10,7 +10,7 @@
  * ≥44 pt touch targets via the shared Chip.
  */
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { PeriodPreset } from '@/utils/dates';
 import { DATE_RE, isValidDateStr, monthStartDate, PERIOD_PRESETS, todayLocal } from '@/utils/dates';
 import { Chip } from '@/components/ui/Chip';
@@ -116,14 +116,15 @@ export function PeriodPicker({ period, customFrom, customTo, onSelect, onApplyCu
               autoCorrect={false}
               testID="custom-range-to"
             />
-            <Pressable
+            <TouchableOpacity
               onPress={applyCustom}
-              style={({ pressed }) => (pressed ? [styles.applyButton, styles.pressed] : styles.applyButton)}
+              activeOpacity={0.7}
+              style={styles.applyButton}
               accessibilityRole="button"
               testID="custom-range-apply"
             >
               <Text style={styles.applyLabel}>Apply</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
           {customError ? (
             <Text style={styles.customError} testID="custom-range-error">
@@ -168,7 +169,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.accentSoft,
   },
-  pressed: { opacity: 0.7 },
   applyLabel: { color: colors.accent, fontSize: typography.caption, fontWeight: '700' },
   customError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
 });

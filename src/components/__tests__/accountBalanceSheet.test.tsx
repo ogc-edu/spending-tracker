@@ -11,7 +11,6 @@ import { Dimensions, Keyboard, StyleSheet } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import type { Account } from '@/db/schema';
 import { AccountBalanceSheet } from '../AccountBalanceSheet';
-import { AccountRow } from '../AccountRow';
 
 /** A typed onSave stub (the prop returns void | Promise<void>). */
 const saveStub = () => jest.fn<(balanceSen: number) => Promise<void>>().mockResolvedValue(undefined);
@@ -65,38 +64,6 @@ async function typeAmount(tree: ReactTestRenderer, digits: string): Promise<void
   });
 }
 
-describe('AccountRow — pressing the row opens the balance sheet', () => {
-  it('is a button with an adjust hint, and keeps delete separate', async () => {
-    const onPress = jest.fn();
-    const onDelete = jest.fn();
-    const tree = render(<AccountRow account={account()} onPress={onPress} onDelete={onDelete} />);
-
-    const row = tree.root.findByProps({ testID: 'account-row-1' });
-    expect(row.props.accessibilityRole).toBe('button');
-    expect(row.props.accessibilityHint).toBe('Adjust the balance');
-
-    await press(tree, 'account-row-1');
-    expect(onPress).toHaveBeenCalledTimes(1);
-    expect(onDelete).not.toHaveBeenCalled();
-
-    await press(tree, 'account-delete-1');
-    expect(onDelete).toHaveBeenCalledTimes(1);
-    expect(onPress).toHaveBeenCalledTimes(1); // the trash tap is not an "adjust"
-  });
-
-  it('says "amount owed" for a credit card', () => {
-    const tree = render(
-      <AccountRow
-        account={account({ type: 'credit_card', name: 'Citi' })}
-        onPress={jest.fn()}
-        onDelete={jest.fn()}
-      />,
-    );
-    expect(tree.root.findByProps({ testID: 'account-row-1' }).props.accessibilityHint).toBe(
-      'Adjust the amount owed',
-    );
-  });
-});
 
 describe('AccountBalanceSheet', () => {
   it('renders nothing until an account is passed', () => {

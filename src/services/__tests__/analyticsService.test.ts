@@ -309,3 +309,74 @@ describe('AnalyticsService month isolation + user scoping (A10)', () => {
     expect(snap.largest.some((l) => l.amountSen === 999999)).toBe(false);
   });
 });
+
+describe('AnalyticsService spendingSeries (Plan 020 Phase C)', () => {
+  it('validates input options', async () => {
+    const { f } = await mainSnapshot();
+    await expect(
+      f.service.spendingSeries({ granularity: 'invalid' as never, endDate: '2026-09-30' }),
+    ).rejects.toThrow();
+    await expect(
+      f.service.spendingSeries({ granularity: 'day', endDate: '2026-13-40' }),
+    ).rejects.toThrow('endDate must be a real date');
+  });
+
+  it('rejects when not signed in', async () => {
+    const f = await makeServiceFixture({ signedIn: false });
+    await expect(
+      f.service.spendingSeries({ granularity: 'day', endDate: '2026-09-30' }),
+    ).rejects.toThrow('not signed in');
+  });
+
+  it('computes daily series scoped to user and category', async () => {
+    const { f } = await mainSnapshot();
+    // In main fixture:
+    // 2026-09-05: Food 12050
+    // 2026-09-08: Transport 800
+    // 2026-09-10: Food 700
+    // other user: 2026-09-09: 999999
+    const result = await f.service.spendingSeries({
+      granularity: 'day',
+      endDate: '2026-09-10',
+      count: 7, // 2026-09-04 to 2026-09-10
+    });
+
+    expect(result.series).toHaveLength(7);
+    expect(result.windowTotal).toBe(12050 + 800 + 700);
+    expect(result.series.find((s) => s.periodStart === '2026-09-05')?.totalSen).toBe(12050);
+    expect(result.series.find((s) => s.periodStart === '2026-09-08')?.totalSen).toBe(800);
+    expect(result.series.find((s) => s.periodStart === '2026-09-10')?.totalSen).toBe(700);
+    // Other user's row is excluded
+    expect(result.series.find((s) => s.periodStart === '2026-09-09')?.totalSen).toBe(0);
+
+    // Filter by Transport category
+    const transportResult = await f.service.spendingSeries({
+      granularity: 'day',
+      endDate: '2026-09-10',
+      count: 7,
+      categoryId: f.categories[2]!.id,
+    });
+    expect(transportResult.windowTotal).toBe(800);
+    expect(transportResult.series.find((s) => s.periodStart === '2026-09-08')?.totalSen).toBe(800);
+    expect(transportResult.series.find((s) => s.periodStart === '2026-09-05')?.totalSen).toBe(0);
+  });
+
+  it('computes monthly series over 12 months', async () => {
+    const { f } = await mainSnapshot();
+    const result = await f.service.spendingSeries({
+      granularity: 'month',
+      endDate: '2026-09-30',
+      count: 12,
+    });
+
+    expect(result.series).toHaveLength(12);
+    // Aug 2026: 50000 + 30000 = 80000
+    // Sep 2026: 12050 + 700 + 800 = 13550
+    const aug = result.series.find((s) => s.periodStart === '2026-08-01');
+    const sep = result.series.find((s) => s.periodStart === '2026-09-01');
+    expect(aug?.totalSen).toBe(80000);
+    expect(sep?.totalSen).toBe(13550);
+    expect(result.highestIndex).toBe(result.series.indexOf(aug!));
+  });
+});
+

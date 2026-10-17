@@ -1,20 +1,28 @@
 /**
  * Theme & design token assertions:
- *  - WCAG AA contrast (≥4.5:1) for Obsidian Luxe and Swiss Porcelain palettes.
+ *  - WCAG AA contrast (≥4.5:1) for Obsidian Luxe, Swiss Porcelain, Dark and Light themes.
  *  - Backward-compatible contrast assertions for chrome colors.
  *  - MIN_TOUCH_TARGET ≥ 44pt (WCAG 2.5.5 / Apple HIG).
  *  - Platform-gated tabular figures and typography scale.
  */
 import { describe, expect, it } from '@jest/globals';
 import {
+  accountCardColor,
+  accountCards,
+  accountCardShades,
+  accountShades,
+  categoryPalette,
   colors,
   fontFamilies,
   MIN_TOUCH_TARGET,
   moneyFontVariant,
   obsidian,
+  onCard,
   porcelain,
   spacing,
   tabularNumsVariant,
+  themes,
+  typeScale,
   typography,
   typographyClasses,
 } from '@/theme';
@@ -70,13 +78,90 @@ describe('theme tokens', () => {
     expect(porcelain.card).toBe('#FFFFFF');
   });
 
-  it('has 12 category palette entries', () => {
-    expect(colors.categoryPalette).toHaveLength(12);
+  it('exports dual theme tokens matching design.jsonc', () => {
+    const tokenKeys = [
+      'bg',
+      'tabbar',
+      'surface',
+      'fill',
+      'fillStrong',
+      'sheet',
+      'separator',
+      'separatorStrong',
+      'chipBorder',
+      'track',
+      'handle',
+      'scrim',
+      'text',
+      'textSecondary',
+      'textTertiary',
+      'accent',
+      'onAccent',
+      'emphasis',
+      'link',
+      'selectedBg',
+      'switchOff',
+      'segmentTrack',
+      'segmentThumb',
+      'chartActive',
+      'chartMax',
+      'chartIdle',
+      'barMuted',
+      'danger',
+      'cardShadow',
+    ] as const;
+
+    for (const k of tokenKeys) {
+      expect(themes.dark[k]).toBeDefined();
+      expect(themes.light[k]).toBeDefined();
+    }
+
+    expect(themes.dark.bg).toBe('#000000');
+    expect(themes.dark.accent).toBe('#F5B83D');
+    expect(themes.light.bg).toBe('#F2F2F2');
+    expect(themes.light.accent).toBe('#111111');
   });
 
-  it('uses a 4-point spacing scale', () => {
+  it('exports accountCards and onCard palettes', () => {
+    expect(accountCards.bank.dark).toBe('#24408F');
+    expect(accountCards.cash.dark).toBe('#0E6B63');
+    expect(accountCards.ewallet.dark).toBe('#5A3E9E');
+    expect(accountCards.credit_card.dark).toBe('#3A4150');
+    expect(accountCards.credit_card.light).toBe('#1F1F21');
+    expect(accountCards.paylater.dark).toBe('#A63C0C');
+
+    expect(onCard.text).toBe('#FFFFFF');
+    expect(onCard.payButton.bg).toBe('#FFFFFF');
+  });
+
+  it('accountCardColor wraps shades and falls back to bank', () => {
+    expect(accountCardColor('bank', 'dark', 1)).toBe('#1D5E9E');
+    expect(accountCardColor('bank', 'dark', 3)).toBe('#24408F');
+    expect(accountCardColor('nope', 'light')).toBe('#24408F');
+  });
+
+  it('accountShades numbers each type by ascending id', () => {
+    const shades = accountShades([
+      { id: 7, type: 'bank' },
+      { id: 2, type: 'cash' },
+      { id: 3, type: 'bank' },
+      { id: 9, type: 'bank' },
+    ]);
+    expect([shades.get(3), shades.get(7), shades.get(9), shades.get(2)]).toEqual([0, 1, 2, 0]);
+  });
+
+  it('has 12 category palette entries aligned with seed', () => {
+    expect(categoryPalette).toHaveLength(12);
+    expect(categoryPalette[0].seed).toBe('Food');
+    expect(categoryPalette[0].darkFg).toBe('#F5B83D');
+    expect(categoryPalette[11].seed).toBe('Other');
+  });
+
+  it('uses a 4-point spacing scale and design spacing tokens', () => {
     expect(spacing.xs).toBe(4);
     expect(spacing.xxl).toBe(32);
+    expect(spacing.screenX).toBe(16);
+    expect(spacing.sectionGap).toBe(20);
   });
 
   it('defines typography scale and display sizes', () => {
@@ -86,6 +171,10 @@ describe('theme tokens', () => {
     expect(typeof typography.header).toBe('number');
     expect(typography.hero).toBe(48);
     expect(typography.header).toBe(11);
+    expect(typography.largeTitle).toBe(28);
+    expect(typography.amountHero).toBe(44);
+    expect(typeScale.largeTitle.fontSize).toBe(28);
+    expect(typeScale.largeTitle.lineHeight).toBe(34);
   });
 
   it('exports font families and typography class presets', () => {
@@ -94,6 +183,59 @@ describe('theme tokens', () => {
     expect(typographyClasses.heroNumber).toContain('tabular-nums');
     expect(typographyClasses.heroNumber).toContain('font-mono');
     expect(tabularNumsVariant).toEqual(['tabular-nums']);
+  });
+});
+
+describe('Wave 1A — Dark theme contrast (WCAG AA ≥ 4.5:1)', () => {
+  it.each([
+    [themes.dark.onDaySelected, themes.dark.daySelectedBg],
+    [themes.dark.text, themes.dark.bg],
+    [themes.dark.text, themes.dark.surface],
+    [themes.dark.textSecondary, themes.dark.bg],
+    [themes.dark.textSecondary, themes.dark.surface],
+    [themes.dark.accent, themes.dark.bg],
+    [themes.dark.onAccent, themes.dark.accent],
+    [themes.dark.danger, themes.dark.bg],
+  ])('%s on %s ≥ 4.5:1', (fg, bg) => {
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('Wave 1A — Light theme contrast (WCAG AA ≥ 4.5:1)', () => {
+  it.each([
+    [themes.light.onDaySelected, themes.light.daySelectedBg],
+    [themes.light.text, themes.light.bg],
+    [themes.light.text, themes.light.surface],
+    [themes.light.textSecondary, themes.light.bg],
+    [themes.light.textSecondary, themes.light.surface],
+    [themes.light.textTertiary, themes.light.bg],
+    [themes.light.onAccent, themes.light.accent],
+    [themes.light.danger, themes.light.surface],
+  ])('%s on %s ≥ 4.5:1', (fg, bg) => {
+    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('Wave 1A — onCard contrast (WCAG AA ≥ 4.5:1)', () => {
+  /** #FFFFFF at `opacity` composited over `bg`. */
+  const softWhite = (bg: string, opacity: number): string => {
+    const v = bg.replace('#', '');
+    return `#${[0, 2, 4]
+      .map((i) => Math.round(255 * opacity + Number.parseInt(v.slice(i, i + 2), 16) * (1 - opacity)))
+      .map((c) => c.toString(16).padStart(2, '0'))
+      .join('')}`;
+  };
+  const shades = Object.entries(accountCardShades).flatMap(([type, family]) =>
+    [...family.dark, ...family.light].map((bg) => [type, bg] as const),
+  );
+
+  // Card text is white; the pay pill uses the card colour on white — same ratio.
+  it.each(shades)('%s %s: white text ≥ 4.5:1', (_type, bg) => {
+    expect(contrast(onCard.text, bg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(shades)('%s %s: 0.8-opacity caption ≥ 4.5:1', (_type, bg) => {
+    expect(contrast(softWhite(bg, onCard.textSoftOpacity), bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
 

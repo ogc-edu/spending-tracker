@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spending Tracker — UI Redesign Showcase</title>
+  <style>
+    :root {
+      --bg: #0E0E10;
+      --surface: #18181B;
+      --surface-border: #27272A;
+      --text: #F4F4F5;
+      --text-muted: #A1A1AA;
+      --accent: #F5B83D;
+      --card-radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 24px; min-height: 100vh; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--surface-border);
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .title-block h1 { font-size: 24px; font-weight: 700; color: #FFF; display: flex; align-items: center; gap: 10px; }
+    .badge { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(245, 184, 61, 0.15); color: var(--accent); border: 1px solid var(--accent); font-weight: 600; text-transform: uppercase; }
+    .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+    .controls { display: flex; gap: 12px; align-items: center; }
+    .btn-group { display: flex; background: var(--surface); padding: 3px; border-radius: 10px; border: 1px solid var(--surface-border); }
+    .btn-group button {
+      background: transparent;
+      border: 0;
+      color: var(--text-muted);
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-group button.active { background: #27272A; color: #FFF; }
+    .btn-group button.active.theme-dark { background: #F5B83D; color: #000; }
+    .btn-group button.active.theme-light { background: #FFFFFF; color: #111; }
+
+    /* Tabs */
+    .nav-tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--surface-border); padding-bottom: 8px; }
+    .tab-btn { background: none; border: none; color: var(--text-muted); font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+    .tab-btn.active { color: #FFF; background: var(--surface); }
+
+    /* Content Panes */
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Wallet Interactive Simulator */
+    .wallet-showcase {
+      display: grid;
+      grid-template-columns: 370px 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+
+    .device-shell {
+      width: 354px;
+      height: 792px;
+      background: #000;
+      border-radius: 36px;
+      padding: 16px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6), 0 0 0 2px #333;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .device-header {
+      padding: 12px 4px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .device-header h2 { font-size: 24px; font-weight: 700; color: #FFF; }
+    .device-header .caption { font-size: 12px; color: #8E8E93; }
+
+    .summary-strip {
+      background: #111113;
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin-bottom: 20px;
+      border: 1px solid #1C1C1E;
+    }
+    .strip-col:first-child { border-right: 1px solid #2A2A2E; padding-right: 12px; }
+    .strip-col:last-child { padding-left: 12px; }
+    .strip-label { font-size: 11px; color: #8E8E93; }
+    .strip-val { font-size: 19px; font-weight: 700; color: #FFF; margin: 2px 0; }
+    .strip-val.due { color: #F5B83D; }
+
+    .wallet-section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #FFF;
+    }
+    .wallet-avail { font-size: 12px; color: #8E8E93; }
+    .wallet-avail span { color: #FFF; font-weight: 600; }
+
+    /* The Stack */
+    .wallet-stack-container {
+      position: relative;
+      margin-top: 4px;
+    }
+
+    .wallet-card {
+      border-radius: 16px;
+      padding: 14px 16px;
+      color: #FFF;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.4);
+      margin-top: -20px;
+    }
+    .wallet-card:first-child { margin-top: 0; }
+
+    .wallet-card.bank { background: #24408F; z-index: 1; }
+    .wallet-card.cash { background: #0E6B63; z-index: 2; }
+    .wallet-card.spay { background: #B8430F; z-index: 3; }
+    .wallet-card.credit { background: #3A3A3C; z-index: 4; }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .card-name { font-size: 15px; font-weight: 600; }
+    .card-kind { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+    .card-amount-box { text-align: right; }
+    .card-amount { font-size: 15px; font-weight: 700; }
+    .card-tag { font-size: 11px; opacity: 0.8; }
+
+    .card-details {
+      display: none;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.22);
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+    .wallet-card.expanded {
+      margin-bottom: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      transform: scale(1.02);
+    }
+    .wallet-card.expanded .card-details { display: block; }
+
+    .card-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .card-row:last-child { margin-bottom: 0; }
+    .card-row .left { opacity: 0.9; }
+    .card-row .right { font-weight: 600; }
+    .pay-btn {
+      background: #FFFFFF;
+      color: #7A2A07;
+      border: 0;
+      border-radius: 14px;
+      padding: 4px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Specs side info */
+    .specs-panel {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+    .specs-panel h3 { font-size: 18px; margin-bottom: 12px; color: #FFF; }
+    .specs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+    .spec-card { background: #202024; padding: 14px; border-radius: 12px; border: 1px solid #2A2A2E; }
+    .spec-card h4 { font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+    .spec-card p { font-size: 14px; color: #FFF; font-weight: 500; }
+
+    /* Frames Grid */
+    .screens-grid {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .screen-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .screen-title { font-size: 14px; font-weight: 600; color: #FFF; }
+    .screen-frame {
+      width: 354px;
+      height: 792px;
+      border-radius: 28px;
+      border: 0;
+      background: #000;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+
+    /* Image Renders Grid */
+    .images-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .img-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      overflow: hidden;
+      padding: 12px;
+    }
+    .img-card h4 { font-size: 13px; margin-bottom: 8px; color: #FFF; }
+    .img-card img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      display: block;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="title-block">
+      <h1>Spending Tracker <span class="badge">Oppo Reno 10 Pro+ Spec (354×792)</span></h1>
+      <div class="subtitle">Interactive UI Redesign Preview & Wallet Card Showcase</div>
+    </div>
+    <div class="controls">
+      <div class="btn-group">
+        <button id="themeDarkBtn" class="active theme-dark" onclick="setTheme('dark')">Dark Theme</button>
+        <button id="themeLightBtn" onclick="setTheme('light')">Light Theme</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="showTab('walletTab', this)">💳 Wallet Card Interactive Demo</button>
+    <button class="tab-btn" onclick="showTab('mockupsTab', this)">📱 Interactive Screen Mockups (6 Frames)</button>
+    <button class="tab-btn" onclick="showTab('rendersTab', this)">🖼️ High-Res Design Renders</button>
+  </div>
+
+  <!-- Tab 1: Wallet Interactive Demo -->
+  <div id="walletTab" class="tab-pane active">
+    <div class="wallet-showcase">
+      <div class="device-shell" id="deviceShell">
+        <div class="device-header">
+          <div>
+            <div class="caption">Friday, 10 October</div>
+            <h2>October</h2>
+          </div>
+          <div style="font-size: 20px;">⚙️</div>
+        </div>
+
+        <div class="summary-strip">
+          <div class="strip-col">
+            <div class="strip-label">SPENT THIS MONTH</div>
+            <div class="strip-val">RM1,842.10</div>
+            <div class="strip-label">42 expenses</div>
+          </div>
+          <div class="strip-col">
+            <div class="strip-label">DUE BY 31 OCT</div>
+            <div class="strip-val due">RM1,148.00</div>
+            <div class="strip-label">3 to pay</div>
+          </div>
+        </div>
+
+        <div class="wallet-section-title">
+          <span>Accounts</span>
+          <span class="wallet-avail">Available <span>RM4,570.00</span></span>
+        </div>
+
+        <div class="wallet-stack-container">
+          <!-- Card 1: Bank -->
+          <div class="wallet-card bank" onclick="toggleCard(this)">
+            <div class="card-top">
+              <div>
+                <div class="card-name">Maybank Main</div>
+                <div class="card-kind">Bank account</div>
+              </div>
+              <div class="card-amount-box">
+                <div class="card-amount">RM4,250.00</div>
+                <div class="card-tag">Balance</div>
+              </div>
+            </div>
+            <div class="card-details">
+              <div class="card-row">
+                <span class="left">10 Oct · Lunch (Food)</span>
+                <span class="right">−RM15.50</span>
+              </div>
+              <div class="card-row">
+                <span class="left">09 Oct · Groceries</span>
+                <span class="right">−RM84.20</span>
+              </div>
+              <div class="card-row">
+                <span class="left">07 Oct · Petrol (Transport)</span>
+                <span class="right">−RM50.00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Cash -->
+          <div class="wallet-card cash" onclick="toggleCard(this)">
+            <div class="card-top">
+              <div>
+                <div class="card-name">Cash Wallet</div>
+                <div class="card-kind">Cash on hand</div>
+              </div>
+              <div class="card-amount-box">
+                <div class="card-amount">RM320.00</div>
+                <div class="card-tag">Balance</div>
+              </div>
+            </div>
+            <div class="card-details">
+              <div class="card-row">
+                <span class="left">08 Oct · Coffee</span>
+                <span class="right">−RM8.00</span>
+              </div>
+              <div class="card-row">
+                <span class="left">05 Oct · Morning Market</span>
+                <span class="right">−RM35.00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: SPayLater -->
+          <div class="wallet-card spay expanded" onclick="toggleCard(this)">
+            <div class="card-top">
+              <div>
+                <div class="card-name">Shopee SPayLater</div>
+                <div class="card-kind">Pay later · Cycle 21st–20th</div>
+              </div>
+              <div class="card-amount-box">
+                <div class="card-amount">RM680.00</div>
+                <div class="card-tag">Owed</div>
+              </div>
+            </div>
+            <div class="card-details">
+              <div class="card-row">
+                <span class="left">October bill · closed 20 Oct</span>
+                <span class="right">RM420.00</span>
+              </div>
+              <div class="card-row">
+                <span class="left">Due 31 Oct · Unpaid</span>
+                <button class="pay-btn" onclick="event.stopPropagation(); alert('Opens Pay Sheet: transfer from Bank account without creating new expense');">Pay</button>
+              </div>
+              <div class="card-row">
+                <span class="left">November bill · open</span>
+                <span class="right">RM260.00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 4: Credit Card -->
+          <div class="wallet-card credit" onclick="toggleCard(this)">
+            <div class="card-top">
+              <div>
+                <div class="card-name">Maybank Visa 2 Gold</div>
+                <div class="card-kind">Credit card · Cycle 25th–24th</div>
+              </div>
+              <div class="card-amount-box">
+                <div class="card-amount">RM468.00</div>
+                <div class="card-tag">Owed</div>
+              </div>
+            </div>
+            <div class="card-details">
+              <div class="card-row">
+                <span class="left">September bill · closed 24 Sep</span>
+                <span class="right">RM468.00</span>
+              </div>
+              <div class="card-row">
+                <span class="left">Due 14 Oct · Unpaid</span>
+                <button class="pay-btn" onclick="event.stopPropagation(); alert('Opens Pay Sheet');">Pay</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="specs-panel">
+        <h3>Wallet Stack Architecture (design.jsonc)</h3>
+        <p style="color: var(--text-muted); font-size: 14px; line-height: 1.5;">
+          Physical card metaphor designed specifically for the <strong>354×792 dp display</strong>.
+          Eliminates column wrapping by keeping all names and amounts single-line with tabular numbers.
+        </p>
+
+        <div class="specs-grid">
+          <div class="spec-card">
+            <h4>Physical Palettes</h4>
+            <p>Bank: <span style="color:#4B7BFF">#24408F</span></p>
+            <p>Cash: <span style="color:#1FB8A9">#0E6B63</span></p>
+            <p>SPayLater: <span style="color:#E06020">#B8430F</span></p>
+            <p>Credit: <span style="color:#BBB">#3A3A3C / #1F1F21</span></p>
+          </div>
+
+          <div class="spec-card">
+            <h4>Stacking Mechanics</h4>
+            <p>Collapsed Height: <strong>76 dp</strong></p>
+            <p>Negative Overlap: <strong>marginTop: -18 dp</strong></p>
+            <p>Z-Index: Incremental top-down</p>
+            <p>Elevation: <code>cardShadow</code> upward</p>
+          </div>
+
+          <div class="spec-card">
+            <h4>Expand Interaction</h4>
+            <p>Single accordion: One open at a time</p>
+            <p>Animation: 220 ms Reanimated ease</p>
+            <p>Sub-rows: Hairline rgba(255,255,255,0.22)</p>
+          </div>
+
+          <div class="spec-card">
+            <h4>SPayLater Pay Action</h4>
+            <p>White pill button (<code>#FFFFFF</code>)</p>
+            <p>Text: Deep rust <code>#7A2A07</code> (high contrast)</p>
+            <p>Triggers PaySheet: Transfer (no expense)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: Interactive Mockups -->
+  <div id="mockupsTab" class="tab-pane">
+    <div class="screens-grid">
+      <div class="screen-col">
+        <div class="screen-title">01 · Home</div>
+        <iframe class="screen-frame" src="mockups/Main.dc.html?theme=dark" id="frameHome"></iframe>
+      </div>
+      <div class="screen-col">
+        <div class="screen-title">02 · Expenses</div>
+        <iframe class="screen-frame" src="mockups/Expenses.dc.html?theme=dark" id="frameExpenses"></iframe>
+      </div>
+      <div class="screen-col">
+        <div class="screen-title">03 · Add Expense (SPayLater Split)</div>
+        <iframe class="screen-frame" src="mockups/AddExpense.dc.html?theme=dark" id="frameAdd"></iframe>
+      </div>
+      <div class="screen-col">
+        <div class="screen-title">04 · Due (SPayLater & Bills)</div>
+        <iframe class="screen-frame" src="mockups/Commitments.dc.html?theme=dark" id="frameDue"></iframe>
+      </div>
+      <div class="screen-col">
+        <div class="screen-title">05 · Analytics</div>
+        <iframe class="screen-frame" src="mockups/Analytics.dc.html?theme=dark" id="frameAnalytics"></iframe>
+      </div>
+      <div class="screen-col">
+        <div class="screen-title">06 · Settings (Appearance)</div>
+        <iframe class="screen-frame" src="mockups/Settings.dc.html?theme=dark" id="frameSettings"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 3: Design Renders -->
+  <div id="rendersTab" class="tab-pane">
+    <div class="images-grid" id="rendersGrid"></div>
+  </div>
+
+  <script>
+    let currentTheme = 'dark';
+
+    function toggleCard(card) {
+      const container = document.querySelector('.wallet-stack-container');
+      const allCards = container.querySelectorAll('.wallet-card');
+      const wasExpanded = card.classList.contains('expanded');
+
+      allCards.forEach(c => c.classList.remove('expanded'));
+      if (!wasExpanded) {
+        card.classList.add('expanded');
+      }
+    }
+
+    function showTab(tabId, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function setTheme(theme) {
+      currentTheme = theme;
+      document.getElementById('themeDarkBtn').className = theme === 'dark' ? 'active theme-dark' : '';
+      document.getElementById('themeLightBtn').className = theme === 'light' ? 'active theme-light' : '';
+
+      // Update mockups frames
+      ['Home:Main', 'Expenses:Expenses', 'Add:AddExpense', 'Due:Commitments', 'Analytics:Analytics', 'Settings:Settings'].forEach(item => {
+        const [id, file] = item.split(':');
+        const frame = document.getElementById('frame' + id);
+        if (frame) frame.src = `mockups/${file}.dc.html?theme=${theme}`;
+      });
+
+      renderImages();
+    }
+
+    const renderImagesList = [
+      { name: '01 Home Screen', dark: 'images/dark/01-home.png', light: 'images/light/01-home.png' },
+      { name: '01b Home (Collapsed Cards)', dark: 'images/dark/01b-home-cards-collapsed.png', light: 'images/light/01b-home-cards-collapsed.png' },
+      { name: '02 Due (SPayLater & Commitments)', dark: 'images/dark/02-due.png', light: 'images/light/02-due.png' },
+      { name: '02b Due (Pay Sheet)', dark: 'images/dark/02b-due-pay-sheet.png', light: 'images/light/02b-due-pay-sheet.png' },
+      { name: '03 Add Expense (SPayLater Split)', dark: 'images/dark/03-add-expense-spaylater-split.png', light: 'images/light/03-add-expense-spaylater-split.png' },
+      { name: '03b Add Expense (6mo Interest)', dark: 'images/dark/03b-add-expense-6mo-interest.png', light: 'images/light/03b-add-expense-6mo-interest.png' },
+      { name: '04 Analytics (Month Bar Chart)', dark: 'images/dark/04-analytics-month.png', light: 'images/light/04-analytics-month.png' },
+      { name: '05 Expenses List', dark: 'images/dark/05-expenses.png', light: 'images/light/05-expenses.png' },
+      { name: '06 Settings & Appearance', dark: 'images/dark/06-settings.png', light: 'images/light/06-settings.png' }
+    ];
+
+    function renderImages() {
+      const grid = document.getElementById('rendersGrid');
+      grid.innerHTML = '';
+      renderImagesList.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'img-card';
+        const src = currentTheme === 'dark' ? item.dark : item.light;
+        card.innerHTML = `<h4>${item.name} (${currentTheme})</h4><img src="${src}" alt="${item.name}" loading="lazy">`;
+        grid.appendChild(card);
+      });
+    }
+
+    renderImages();
+  </script>
+</body>
+</html>

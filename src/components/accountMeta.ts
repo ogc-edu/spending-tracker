@@ -9,6 +9,7 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   bank: 'Bank',
   ewallet: 'E-wallet',
   credit_card: 'Credit card',
+  paylater: 'Pay later',
 };
 
 export const ACCOUNT_TYPE_ICONS: Record<AccountType, string> = {
@@ -16,4 +17,5 @@ export const ACCOUNT_TYPE_ICONS: Record<AccountType, string> = {
   bank: 'business-outline',
   ewallet: 'wallet-outline',
   credit_card: 'card-outline',
+  paylater: 'time-outline',
 };

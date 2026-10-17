@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | Phase A implemented 2026-10-10; Phases B–C pending the UI plan |
-| **Version** | 0.1 |
+| **Status** | Implemented 2026-10-11 (Phases A, B, and C complete) |
+| **Version** | 1.0 |
 | **Date** | 2026-10-09 |
 | **Dependencies** | 004, 005, 008, 009, 010, 011, 019 |
 | **PRD** | Supersedes §2 goals 2 & 4, §7.1 DASH-1/3, §7.3 (all), §7.5 AN-1..3, decision D2 |

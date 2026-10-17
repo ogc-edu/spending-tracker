@@ -20,16 +20,16 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+// TouchableOpacity + static style arrays, not Pressable's style function: NativeWind's css-interop
+// drops function styles on Android (rows collapse, buttons lose their fill) — same fix as 6d99648.
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { z } from 'zod';
 import { COMMITMENT_TYPES, type CommitmentInput } from '@/repositories/types';
 import { formatDDMMYYYY, isValidDateStr } from '@/utils/dates';
 import { parseMoneyToSen } from '@/utils/money';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 import { CalendarSheet } from './CalendarSheet';
 import { Chip } from '@/components/ui/Chip';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/input';
 import { COMMITMENT_TYPE_ICONS, COMMITMENT_TYPE_LABELS } from './commitmentMeta';
 
 /** Matches parseMoneyToSen's MONEY_RE: whole ringgit, ≤2 decimal sen. */
@@ -148,6 +148,7 @@ export function CommitmentForm({
   onCancel,
   defaults,
 }: CommitmentFormProps) {
+  const { colors } = useTheme();
   const { control, handleSubmit, getValues, setValue } = useForm<CommitmentFormValues>({
     resolver: zodResolver(commitmentFormSchema),
     defaultValues: {
@@ -178,13 +179,21 @@ export function CommitmentForm({
       control={control}
       name={name}
       render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-        <View className="mb-4" style={styles.field}>
-          <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
             {label}
             {props.optional ? ' (optional)' : ''}
           </Text>
-          <Input
-            className={error ? 'border-destructive' : undefined}
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surface,
+                borderColor: error ? colors.danger : colors.separator,
+                color: colors.text,
+              },
+            ]}
+            placeholderTextColor={colors.textTertiary}
             keyboardType={props.keyboardType ?? 'default'}
             placeholder={props.placeholder}
             value={value}
@@ -193,7 +202,11 @@ export function CommitmentForm({
             editable={!submitting}
             testID={`commitment-form-${name}`}
           />
-          {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
+          {error ? (
+            <Text style={[styles.fieldError, { color: colors.danger }]}>
+              {error.message}
+            </Text>
+          ) : null}
         </View>
       )}
     />
@@ -216,32 +229,47 @@ export function CommitmentForm({
       render={({ field: { value }, fieldState: { error } }) => {
         const minDate = name === 'endDate' && getValues('startDate') ? getValues('startDate') : undefined;
         return (
-          <View className="mb-4" style={styles.field}>
-            <Text className="text-sm font-semibold text-foreground mb-1.5" style={styles.label}>
+          <View style={styles.field}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
               {label}
               {props.optional ? ' (optional)' : ''}
             </Text>
-            <Pressable
+            <TouchableOpacity
               onPress={() => setDateField(name)}
               disabled={submitting}
-              className={`flex-row items-center gap-2 border rounded-lg px-4 py-3 bg-card min-h-[48px] ${
-                error ? 'border-destructive' : 'border-border'
-              }`}
-              style={({ pressed }) => [styles.dateField, error && styles.inputError, pressed && styles.pressed]}
+              activeOpacity={0.75}
+              style={[
+                styles.dateField,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: error ? colors.danger : colors.separator,
+                },
+              ]}
               accessibilityRole="button"
               accessibilityLabel={`${label}, ${value ? `${formatDDMMYYYY(value)}, picked` : 'not picked'}`}
               testID={`commitment-form-${name}`}
             >
-              <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-              <Text className={`flex-1 text-base font-semibold ${value ? 'text-foreground' : 'text-muted font-normal'}`} style={[styles.dateValue, !value && styles.datePlaceholder]}>
+              <Ionicons name="calendar-outline" size={18} color={colors.textTertiary} />
+              <Text
+                style={[
+                  styles.dateValue,
+                  { color: value ? colors.text : colors.textTertiary },
+                ]}
+              >
                 {value ? formatDDMMYYYY(value) : (props.placeholder ?? 'Select a date')}
               </Text>
-              <Ionicons name="chevron-down" size={16} color={colors.muted} />
-            </Pressable>
+              <Ionicons name="chevron-down" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
             {minDate ? (
-              <Text className="mt-1 text-xs text-muted" style={styles.dateHint}>Earliest: {formatDDMMYYYY(minDate)}</Text>
+              <Text style={[styles.dateHint, { color: colors.textTertiary }]}>
+                Earliest: {formatDDMMYYYY(minDate)}
+              </Text>
             ) : null}
-            {error ? <Text className="mt-1 text-xs text-destructive" style={styles.fieldError}>{error.message}</Text> : null}
+            {error ? (
+              <Text style={[styles.fieldError, { color: colors.danger }]}>
+                {error.message}
+              </Text>
+            ) : null}
           </View>
         );
       }}
@@ -257,7 +285,9 @@ export function CommitmentForm({
       name={name}
       render={({ field: { value, onChange }, fieldState: { error } }) => (
         <View style={styles.field}>
-          <Text style={styles.label}>{name === 'kind' ? 'Schedule' : 'Type'}</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            {name === 'kind' ? 'Schedule' : 'Type'}
+          </Text>
           <View style={styles.chipWrap}>
             {options.map((option) => {
               const selected = value === option.value;
@@ -266,7 +296,7 @@ export function CommitmentForm({
                   key={option.value}
                   label={option.label}
                   icon={option.icon as never}
-                  iconColor={colors.muted}
+                  iconColor={selected ? colors.onAccent : colors.textTertiary}
                   selected={selected}
                   onPress={() => onChange(option.value)}
                   testID={`commitment-form-${name}-${option.value}`}
@@ -274,7 +304,11 @@ export function CommitmentForm({
               );
             })}
           </View>
-          {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+          {error ? (
+            <Text style={[styles.fieldError, { color: colors.danger }]}>
+              {error.message}
+            </Text>
+          ) : null}
         </View>
       )}
     />
@@ -310,22 +344,39 @@ export function CommitmentForm({
       />
 
       <View style={styles.actions}>
-        <Button
-          label={submitLabel}
-          variant="primary"
-          flex
-          busy={submitting}
-          onPress={handleSubmit(onValid)}
-          testID="commitment-form-submit"
-        />
-        <Button
-          label="Cancel"
-          variant="secondary"
-          flex
-          disabled={submitting}
+        {/* Secondary mirrors an unselected chip (surface + hairline border); primary mirrors a
+            selected chip (accent fill: ink in light, amber in dark) — one visual language. */}
+        <TouchableOpacity
           onPress={onCancel}
+          disabled={submitting}
+          activeOpacity={0.75}
+          style={[
+            styles.cancelButton,
+            { backgroundColor: colors.surface, borderColor: colors.chipBorder },
+          ]}
+          accessibilityRole="button"
           testID="commitment-form-cancel"
-        />
+        >
+          <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={handleSubmit(onValid)}
+          disabled={submitting}
+          activeOpacity={0.8}
+          style={[
+            styles.submitButton,
+            { backgroundColor: colors.accent },
+            submitting && styles.buttonDisabled,
+          ]}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: submitting, busy: submitting }}
+          testID="commitment-form-submit"
+        >
+          <Text numberOfLines={1} style={[styles.submitText, { color: colors.onAccent }]}>
+            {submitting ? 'Saving…' : submitLabel}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <CalendarSheet
@@ -353,36 +404,91 @@ export function CommitmentForm({
 }
 
 const styles = StyleSheet.create({
-  field: { marginBottom: spacing.lg },
-  label: { fontSize: typography.body, fontWeight: '600', color: colors.text, marginBottom: spacing.xs },
+  field: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+    marginBottom: 6,
+  },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    fontSize: typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    lineHeight: 18,
+    minHeight: 48,
   },
-  inputError: { borderColor: colors.danger },
   dateField: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 8,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     minHeight: 48,
   },
-  dateValue: { flex: 1, fontSize: typography.body, color: colors.text, fontWeight: '600' },
-  datePlaceholder: { color: colors.muted, fontWeight: '400' },
-  dateHint: { marginTop: spacing.xs, color: colors.muted, fontSize: typography.caption },
-  pressed: { opacity: 0.7 },
-  fieldError: { marginTop: spacing.xs, color: colors.danger, fontSize: typography.caption },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs },
+  dateValue: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  dateHint: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  fieldError: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  submitButton: {
+    flex: 2,
+    height: 50,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitText: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
 });

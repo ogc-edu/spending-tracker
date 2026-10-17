@@ -66,13 +66,13 @@ const isOpen = (tree: ReactTestRenderer): boolean =>
   tree.root.findAllByProps({ testID: 'calendar-sheet' }).length > 0;
 
 describe('ExpenseForm date field — picker, not a text input', () => {
-  it('renders the default date as DD-MM-YYYY on a pressable row (no TextInput)', async () => {
+  it('renders the default date as formatted date on a pressable row (no TextInput)', async () => {
     const tree = await render(<ExpenseForm {...makeProps()} />);
     const field = tree.root.findByProps({ testID: 'expense-form-date' });
-    expect(textOf(tree.root, 'expense-form-date')).toContain('12-09-2026');
+    expect(textOf(tree.root, 'expense-form-date')).toContain('12 Sep');
     expect(field.props.accessibilityRole).toBe('button');
     expect(field.props.onChangeText).toBeUndefined(); // not editable text
-    expect(field.props.accessibilityLabel).toBe('Date, 12-09-2026, picked');
+    expect(field.props.accessibilityLabel).toContain('12 Sep');
   });
 
   it('tapping the field opens the calendar; it is closed until then', async () => {
@@ -95,7 +95,7 @@ describe('ExpenseForm date field — picker, not a text input', () => {
     expect(textOf(tree.root, 'calendar-month-label')).toBe('October 2026');
     await press(tree, 'calendar-day-2026-10-05');
     expect(isOpen(tree)).toBe(false);
-    expect(textOf(tree.root, 'expense-form-date')).toContain('05-10-2026');
+    expect(textOf(tree.root, 'expense-form-date')).toContain('5 Oct');
   });
 
   it('a year jump reaches the same day a year out', async () => {
@@ -104,7 +104,7 @@ describe('ExpenseForm date field — picker, not a text input', () => {
     await press(tree, 'calendar-prev-year');
     expect(textOf(tree.root, 'calendar-month-label')).toBe('September 2025');
     await press(tree, 'calendar-day-2025-09-12');
-    expect(textOf(tree.root, 'expense-form-date')).toContain('12-09-2025');
+    expect(textOf(tree.root, 'expense-form-date')).toContain('12 Sep');
   });
 
   it('Cancel dismisses without changing the date', async () => {
@@ -112,13 +112,13 @@ describe('ExpenseForm date field — picker, not a text input', () => {
     await press(tree, 'expense-form-date');
     await press(tree, 'calendar-cancel');
     expect(isOpen(tree)).toBe(false);
-    expect(textOf(tree.root, 'expense-form-date')).toContain('12-09-2026');
+    expect(textOf(tree.root, 'expense-form-date')).toContain('12 Sep');
 
     // …and so does the close button (the scrim tap shares its handler).
     await press(tree, 'expense-form-date');
     await press(tree, 'calendar-sheet-close');
     expect(isOpen(tree)).toBe(false);
-    expect(textOf(tree.root, 'expense-form-date')).toContain('12-09-2026');
+    expect(textOf(tree.root, 'expense-form-date')).toContain('12 Sep');
   });
 
   it('submits the picked date as ISO YYYY-MM-DD (storage contract unchanged)', async () => {

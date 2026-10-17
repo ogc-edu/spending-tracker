@@ -1,40 +1,58 @@
-/**
- * Expense detail screen (plan 006 / EXP-4) — full view of one expense with
- * Edit (routes to 005's /expenses/[id]/edit form) and Delete (005 service +
- * confirm dialog; E7 preserved — linked expenses render read-only with no
- * edit/delete). Re-read on focus so edits made in the form appear here, and
- * the list behind refreshes on its own focus (SQLite is the source of
- * truth, A4). Deletion pops back to the list, whose totals refresh.
- */
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
-import type { Account, Category, Expense } from '@/db/schema';
+import type { Account, Category, Expense, ExpenseInstallment } from '@/db/schema';
 import { AccountService } from '@/services/AccountService';
 import { CategoryService } from '@/services/CategoryService';
 import { ExpenseService } from '@/services/ExpenseService';
-import { categoryColor } from '@/components/categoryMeta';
+import { splitInstallment } from '@/engine/creditBills';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/components/ToastProvider';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
-import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
-import { Card } from '@/components/ui/Card';
+import { CategoryTile } from '@/components/ui/CategoryTile';
+import { FormGroup, FormRow } from '@/components/ui/FormGroup';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function formatAccountKind(type: string): string {
+  switch (type) {
+    case 'bank':
+      return 'Bank';
+    case 'cash':
+      return 'Wallet';
+    case 'credit_card':
+      return 'Credit';
+    case 'paylater':
+      return 'Pay later';
+    case 'ewallet':
+      return 'eWallet';
+    default:
+      return type;
+  }
+}
+
 export default function ExpenseDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { authService } = useAuth();
   const toast = useToast();
+  const { colors } = useTheme();
   const expenseId = Number(id);
 
   const services = useMemo(() => {
@@ -47,12 +65,11 @@ export default function ExpenseDetailScreen() {
   }, [authService]);
 
   const [expense, setExpense] = useState<Expense | null>(null);
+  const [installment, setInstallment] = useState<ExpenseInstallment | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  // Plan 016: destructive delete goes through ConfirmSheet; deleting guards
-  // the sheet's confirm button against a double-tap firing two deletes.
   const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -63,12 +80,14 @@ export default function ExpenseDetailScreen() {
       return;
     }
     try {
-      const [row, accs, cats] = await Promise.all([
+      const [row, inst, accs, cats] = await Promise.all([
         services.expenses.byId(expenseId),
+        services.expenses.getInstallment(expenseId).catch(() => null),
         services.accounts.list(),
         services.categories.list(),
       ]);
       setExpense(row);
+      setInstallment(inst);
       setAccounts(accs);
       setCategories(cats);
       setLoadError(null);
@@ -77,7 +96,7 @@ export default function ExpenseDetailScreen() {
     } finally {
       setLoading(false);
     }
-  }, [expenseId, services.expenses, services.accounts, services.categories]);
+  }, [expenseId, services]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,19 +104,13 @@ export default function ExpenseDetailScreen() {
     }, [load]),
   );
 
-  const handleDelete = () => {
-    if (!expense) return;
-    setConfirmDeleteVisible(true);
-  };
-
-  /** The actual destructive write — fired by ConfirmSheet's confirm button. */
   const doDelete = async () => {
     if (!expense) return;
     setDeleting(true);
     try {
       await services.expenses.delete(expenseId);
       setConfirmDeleteVisible(false);
-      router.back(); // the list refreshes on focus (totals included)
+      router.back();
     } catch (error: unknown) {
       toast.show(`Could not delete expense: ${errMsg(error)}`);
       setConfirmDeleteVisible(false);
@@ -108,22 +121,22 @@ export default function ExpenseDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
 
   if (loadError || !expense) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>{loadError ?? 'Expense not found'}</Text>
+      <View style={[styles.center, { backgroundColor: colors.bg }]}>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>{loadError ?? 'Expense not found'}</Text>
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => (pressed ? [styles.button, styles.pressed] : styles.button)}
+          style={[styles.backBtn, { borderColor: colors.separator, backgroundColor: colors.surface }]}
           accessibilityRole="button"
         >
-          <Text style={styles.buttonLabel}>Back</Text>
+          <Text style={[styles.backBtnLabel, { color: colors.text }]}>Back</Text>
         </Pressable>
       </View>
     );
@@ -133,72 +146,179 @@ export default function ExpenseDetailScreen() {
   const account = accounts.find((a) => a.id === expense.accountId);
   const linked = expense.commitmentPaymentId !== null;
 
-  return (
-    <ScrollView className="flex-1 bg-background" style={styles.container} contentContainerStyle={styles.content} testID="expense-detail-screen">
-      {linked ? (
-        <View className="flex-row items-center justify-center gap-1.5 bg-warning/10 border border-warning/20 rounded-lg py-2.5 mb-4" style={styles.linkedBadge}>
-          <Ionicons name="link-outline" size={16} color={colors.warning} />
-          <Text className="text-warning text-xs font-bold" style={styles.linkedBadgeLabel}>Auto-created from commitment</Text>
-        </View>
-      ) : null}
+  let splitData = null;
+  if (installment) {
+    splitData = splitInstallment(
+      installment.principalSen,
+      installment.months,
+      installment.monthlyRateBp,
+    );
+  }
 
-      <Card>
-        <View className="flex-row items-center gap-3 mb-3" style={styles.amountRow}>
+  return (
+    <View
+      style={[
+        styles.screen,
+        {
+          backgroundColor: colors.bg,
+          paddingTop: Math.max(insets.top, 12),
+        },
+      ]}
+      testID="expense-detail-screen"
+    >
+      {/* Top Navigation Bar: Back link left, Edit link right */}
+      <View style={styles.topBar}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={styles.navLink}
+        >
+          <Text style={[styles.navLinkText, { color: colors.link }]}>Back</Text>
+        </Pressable>
+
+        {!linked ? (
+          <Pressable
+            onPress={() => router.push(`/expenses/${expense.id}/edit` as never)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Edit"
+            style={styles.navLink}
+            testID="expense-detail-edit"
+          >
+            <Text style={[styles.navLinkText, { color: colors.link }]}>Edit</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.topBarRightSpacer} />
+        )}
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(32, insets.bottom + 20) },
+        ]}
+      >
+        {/* Linked Badge if applicable */}
+        {linked ? (
+          <View
+            style={[
+              styles.linkedBadge,
+              {
+                backgroundColor: colors.fill,
+                borderColor: colors.separator,
+              },
+            ]}
+          >
+            <Ionicons name="link-outline" size={16} color={colors.accent} />
+            <Text style={[styles.linkedBadgeLabel, { color: colors.text }]}>
+              Auto-created from commitment
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Hero Amount & Category Header Block */}
+        <View style={styles.heroBlock}>
           <Text
-            className="text-3xl font-extrabold text-foreground flex-1 tracking-tight"
-            style={styles.amount}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            style={[
+              styles.amountSheetText,
+              {
+                color: colors.text,
+              },
+            ]}
             accessibilityLabel={`Expense amount, ${spokenMoneyLabel(expense.amountSen)}`}
             testID="expense-detail-amount"
           >
             {formatSen(expense.amountSen)}
           </Text>
-          {!linked ? (
+
+          <View style={styles.categoryHeaderRow}>
+            <CategoryTile categoryIndex={category?.id} name={category?.name} />
+            <Text style={[styles.categoryHeaderText, { color: colors.text }]}>
+              {category?.name ?? 'Expense'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Facts FormGroup */}
+        <FormGroup style={styles.factsGroup}>
+          <FormRow
+            label="Date"
+            value={`${formatDayLabel(expense.date)} · ${expense.date}`}
+          />
+          <FormRow
+            label="Account"
+            value={account ? `${account.name} (${formatAccountKind(account.type)})` : 'None'}
+          />
+          <FormRow
+            label="Category"
+            value={category?.name ?? 'Uncategorized'}
+          />
+          {expense.description ? (
+            <FormRow
+              label="Note"
+              value={expense.description}
+              isLast={!installment}
+            />
+          ) : null}
+
+          {installment && splitData ? (
             <>
-              <Button
-                label="Edit"
-                variant="secondary"
-                icon="create-outline"
-                onPress={() => router.push(`/expenses/${expense.id}/edit` as never)}
-                testID="expense-detail-edit"
+              <FormRow
+                label="Installment plan"
+                value={`${installment.months} months`}
               />
-              <IconButton
-                icon="trash-outline"
-                tone="danger"
-                filled
-                label="Delete expense"
-                onPress={handleDelete}
-                testID="expense-detail-delete"
+              <FormRow
+                label="Per month"
+                value={formatSen(splitData.monthlyPaymentSen)}
+              />
+              <FormRow
+                label="Interest rate"
+                value={`${(installment.monthlyRateBp / 100).toFixed(2)}% per month`}
+              />
+              <FormRow
+                label="Total payable"
+                value={formatSen(splitData.totalPayableSen)}
+                isLast
               />
             </>
           ) : null}
-        </View>
-        <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
-          <Ionicons name={category?.icon as never} size={18} color={categoryColor(expense.categoryId)} />
-          <Text className="text-base text-foreground font-semibold flex-1" style={styles.rowValue}>{category?.name ?? `Category ${expense.categoryId}`}</Text>
-        </View>
-        <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
-          <Ionicons name="calendar-outline" size={18} color={colors.muted} />
-          <Text className="text-base text-foreground flex-1" style={styles.rowValue}>
-            {formatDayLabel(expense.date)} · {expense.date}
+        </FormGroup>
+
+        {linked ? (
+          <Text style={[styles.linkedHint, { color: colors.textTertiary }]}>
+            This expense was created when you marked a commitment payment as paid. To change or remove it, un-pay the payment in Due.
           </Text>
-        </View>
-        {account ? (
-          <View className="flex-row items-center gap-3 mb-2" style={styles.row}>
-            <Ionicons name="wallet-outline" size={18} color={colors.muted} />
-            <Text className="text-base text-foreground flex-1" style={styles.rowValue}>{account.name}</Text>
-          </View>
         ) : null}
-        {expense.description ? <Text className="text-base text-muted-foreground mt-1 italic" style={styles.description}>{expense.description}</Text> : null}
-      </Card>
 
-      {linked ? (
-        <Text className="text-xs text-muted-foreground leading-relaxed mb-4 mt-3" style={styles.linkedHint}>
-          This expense was created when you marked a commitment payment as paid. To change or remove it, un-pay the
-          payment in Commitments.
-        </Text>
-      ) : null}
+        {/* Destructive Delete Button */}
+        {!linked ? (
+          <Pressable
+            onPress={() => setConfirmDeleteVisible(true)}
+            style={[
+              styles.deleteButton,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.separator,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Delete expense"
+            testID="expense-detail-delete"
+          >
+            <Text style={[styles.deleteButtonText, { color: colors.danger }]}>
+              Delete expense
+            </Text>
+          </Pressable>
+        ) : null}
+      </ScrollView>
 
+      {/* ConfirmSheet for Delete */}
       <ConfirmSheet
         visible={confirmDeleteVisible}
         title="Delete expense"
@@ -208,51 +328,129 @@ export default function ExpenseDetailScreen() {
         onConfirm={() => void doDelete()}
         onCancel={() => setConfirmDeleteVisible(false)}
       />
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
+  screen: {
+    flex: 1,
+  },
+  topBar: {
+    height: 48,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  navLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  navLinkText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '500',
+    fontFamily: geistWeights.medium,
+  },
+  topBarRightSpacer: {
+    width: 44,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 20,
+  },
   center: {
     flex: 1,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    padding: 24,
   },
-  emptyTitle: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  emptyTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    marginBottom: 16,
+  },
+  backBtn: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  backBtnLabel: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
   linkedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.warningSoft,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  linkedBadgeLabel: { color: colors.warning, fontSize: typography.caption, fontWeight: '700' },
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  amount: { fontSize: typography.display, fontWeight: '800', color: colors.text, flex: 1, fontVariant: moneyFontVariant, letterSpacing: -0.5 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-  rowValue: { fontSize: typography.body, color: colors.text, flex: 1 },
-  description: {
-    fontSize: typography.body,
-    color: colors.muted,
-    marginTop: spacing.xs,
-    fontStyle: 'italic',
-  },
-  linkedHint: { fontSize: typography.caption, color: colors.muted, lineHeight: 18, marginBottom: spacing.lg },
-  button: {
+    gap: 6,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
-  buttonLabel: { color: colors.text, fontSize: typography.emphasis, fontWeight: '600' },
-  pressed: { opacity: 0.7 },
+  linkedBadgeLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  heroBlock: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  amountSheetText: {
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    letterSpacing: -0.68,
+    fontVariant: tabularNumsVariant,
+    textAlign: 'center',
+  },
+  categoryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  categoryHeaderText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  factsGroup: {
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  linkedHint: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: geistWeights.regular,
+  },
+  deleteButton: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
 });

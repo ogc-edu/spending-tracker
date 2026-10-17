@@ -4,7 +4,7 @@
  * credential and never raw error text from the provider.
  */
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 import type { TestResult, TestResultReason } from '@/ai/types';
 
 export const TEST_RESULT_LABELS: Record<TestResultReason, string> = {
@@ -22,35 +22,66 @@ export function TestResultBadge({
   result: TestResult | null;
   providerLabel: string;
 }) {
+  const { colors } = useTheme();
+
   if (!result) return null;
 
   if (result.ok) {
     return (
-      <View style={[styles.badge, styles.ok]} testID="ai-test-result-ok">
-        <Text style={styles.okText}>✓ {providerLabel} connection successful</Text>
+      <View
+        style={[
+          styles.badge,
+          {
+            backgroundColor: colors.fillStrong,
+            borderColor: colors.accent,
+          },
+        ]}
+        testID="ai-test-result-ok"
+      >
+        <Text
+          numberOfLines={1}
+          style={[styles.text, { color: colors.accent }]}
+        >
+          ✓ {providerLabel} connection successful
+        </Text>
       </View>
     );
   }
 
   return (
     <View
-      style={[styles.badge, styles.fail]}
+      style={[
+        styles.badge,
+        {
+          backgroundColor: colors.fillStrong,
+          borderColor: colors.danger,
+        },
+      ]}
       testID={`ai-test-result-${result.reason}`}
     >
-      <Text style={styles.failText}>✕ {TEST_RESULT_LABELS[result.reason]}</Text>
+      <Text
+        numberOfLines={1}
+        style={[styles.text, { color: colors.danger }]}
+      >
+        ✕ {TEST_RESULT_LABELS[result.reason]}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   badge: {
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 8,
   },
-  ok: { backgroundColor: colors.accentSoft },
-  okText: { color: colors.accent, fontSize: typography.body, fontWeight: '600' },
-  fail: { backgroundColor: colors.dangerSoft },
-  failText: { color: colors.danger, fontSize: typography.body, fontWeight: '600' },
+  text: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
 });

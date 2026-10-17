@@ -7,7 +7,12 @@
 import { colors } from '@/theme';
 
 export function categoryColor(categoryId: number): string {
-  return colors.categoryPalette[(categoryId - 1) % colors.categoryPalette.length] ?? colors.accent;
+  const item = colors.categoryPalette[(categoryId - 1) % colors.categoryPalette.length] as
+    | { darkFg: string }
+    | string
+    | undefined;
+  if (!item) return colors.accent;
+  return typeof item === 'string' ? item : item.darkFg;
 }
 
 /**

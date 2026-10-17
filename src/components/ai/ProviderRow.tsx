@@ -5,9 +5,9 @@
  * the provider's config screen.
  */
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { ConfigurableAIProvider } from '@/services/AiConfigService';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 import { PROVIDER_ICONS, PROVIDER_LABELS } from './providerMeta';
 
 export const MASK_BULLETS = '•'.repeat(12);
@@ -30,26 +30,50 @@ export function ProviderRow({
   suffix: string | null;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      activeOpacity={0.7}
+      style={[
+        styles.row,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.separator,
+        },
+      ]}
       accessibilityRole="button"
       accessibilityLabel={`${PROVIDER_LABELS[provider]} settings`}
       testID={`ai-provider-row-${provider}`}
     >
-      <Ionicons name={PROVIDER_ICONS[provider]} size={20} color={colors.accent} style={styles.icon} />
+      <Ionicons
+        name={PROVIDER_ICONS[provider]}
+        size={20}
+        color={colors.accent}
+        style={styles.icon}
+      />
       <View style={styles.info}>
-        <Text style={styles.name}>{PROVIDER_LABELS[provider]}</Text>
         <Text
-          style={configured ? styles.masked : styles.notConfigured}
+          numberOfLines={1}
+          style={[styles.name, { color: colors.text }]}
+        >
+          {PROVIDER_LABELS[provider]}
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.status,
+            { color: colors.textSecondary },
+            configured && styles.masked,
+          ]}
           testID={`ai-provider-status-${provider}`}
         >
           {configured && suffix ? suffix : 'Not configured'}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-    </Pressable>
+      <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+    </TouchableOpacity>
   );
 }
 
@@ -57,19 +81,33 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
     minHeight: 56,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 8,
   },
-  icon: { marginRight: spacing.md },
-  info: { flex: 1, marginRight: spacing.sm },
-  name: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  masked: { fontSize: typography.caption, color: colors.muted, fontVariant: moneyFontVariant },
-  notConfigured: { fontSize: typography.caption, color: colors.muted, fontStyle: 'italic' },
-  pressed: { opacity: 0.7 },
+  icon: {
+    marginRight: 12,
+  },
+  info: {
+    flex: 1,
+    marginRight: 8,
+  },
+  name: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  status: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: geistWeights.regular,
+    marginTop: 2,
+  },
+  masked: {
+    fontVariant: tabularNumsVariant,
+  },
 });

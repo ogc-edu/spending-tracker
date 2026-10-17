@@ -10,7 +10,9 @@ import type {
   Category,
   Commitment,
   CommitmentPayment,
+  CreditBillPayment,
   Expense,
+  ExpenseInstallment,
   PayrollAllocation,
   Settings,
   User,
@@ -28,8 +30,8 @@ export interface UserRepository {
   count(): Promise<number>;
 }
 
-/** Account type — the four supported storage accounts (plan 004 / ACC-1). */
-export const ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'credit_card'] as const;
+/** Account type — the five supported storage accounts (credit accounts: credit_card, paylater). */
+export const ACCOUNT_TYPES = ['cash', 'bank', 'ewallet', 'credit_card', 'paylater'] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
 /** Delete-blocking message shown when an account still has referencing expenses (FK-protected). */
@@ -41,6 +43,9 @@ export interface AccountInput {
   name: string;
   type: AccountType;
   initialBalanceSen: number;
+  statementDay?: number | null;
+  dueDay?: number | null;
+  openingOwedSen?: number;
 }
 
 /**
@@ -50,10 +55,18 @@ export interface AccountInput {
  * configured — delete() blocks on referencing expenses (plan 004 edge cases).
  */
 export interface AccountRepository {
-  create(input: { userId: number; name: string; type: AccountType; initialBalanceSen: number }): Promise<Account>;
+  create(input: {
+    userId: number;
+    name: string;
+    type: AccountType;
+    initialBalanceSen: number;
+    statementDay?: number | null;
+    dueDay?: number | null;
+    openingOwedSen?: number;
+  }): Promise<Account>;
   list(userId: number): Promise<Account[]>;
   byId(userId: number, id: number): Promise<Account | null>;
-  /** Available money = sum of balances, credit_card owed negated. Single SQL. */
+  /** Available money = sum of balances, credit_card/paylater owed negated. Single SQL. */
   sumBalances(userId: number): Promise<number>;
   /** Number of expenses referencing this account (for delete-blocking). */
   countExpenses(userId: number, accountId: number): Promise<number>;
@@ -63,6 +76,12 @@ export interface AccountRepository {
    * touches nothing else, so history stays as it was.
    */
   setBalance(userId: number, id: number, balanceSen: number): Promise<Account>;
+  /** Update billing cycle configuration for a credit account. */
+  updateBillingCycle(
+    userId: number,
+    id: number,
+    cycle: { statementDay: number | null; dueDay: number | null },
+  ): Promise<Account>;
   /** Deletes only when no expense references the account; otherwise throws with ACCOUNT_DELETE_BLOCKED_MESSAGE. */
   delete(userId: number, id: number): Promise<void>;
 }
@@ -93,6 +112,12 @@ export interface CategoryRepository {
 export const EXPENSE_LINKED_READ_ONLY_MESSAGE =
   'This expense was auto-created from a commitment payment — un-pay the payment in Commitments to change or remove it';
 
+/** Plan 020 installment plan input attached to a credit-account expense. */
+export interface ExpenseInstallmentInput {
+  months: number;
+  monthlyRateBp: number;
+}
+
 /** Input accepted by ExpenseService.create/edit — sen already parsed by the form (plan 005). */
 export interface ExpenseInput {
   amountSen: number;
@@ -102,6 +127,8 @@ export interface ExpenseInput {
   date: string;
   /** Optional free text, ≤200 chars. Stored, NEVER sent to AI (plan 013 hygiene). */
   description?: string;
+  /** Optional instalment plan (credit accounts only, plan 020). */
+  installment?: ExpenseInstallmentInput;
 }
 
 /** Row shape the transaction context inserts (service-scoped userId, description defaulted). */
@@ -142,6 +169,20 @@ export interface ExpenseTx {
    * purchases arrive as +owed). Bumps updated_at.
    */
   adjustBalance(userId: number, accountId: number, deltaSen: number): void;
+  /** Insert an installment split plan linked to an expense (plan 020). */
+  insertInstallment(input: {
+    id?: string;
+    userId: number;
+    expenseId: number;
+    months: number;
+    monthlyRateBp: number;
+    principalSen: number;
+    createdAt?: string;
+  }): ExpenseInstallment;
+  /** Lookup installment plan for an expense. */
+  getInstallmentByExpenseId(userId: number, expenseId: number): ExpenseInstallment | null;
+  /** Remove installment plan for an expense. */
+  deleteInstallmentByExpenseId(userId: number, expenseId: number): void;
 }
 
 
@@ -152,6 +193,8 @@ export interface ExpenseTx {
  * a case-insensitive substring match on description with `%`/`_` escaped.
  */
 export interface ExpenseFilter {
+  /** Filter by account id. */
+  accountId?: number;
   /** Case-insensitive LIKE '%…%' on description; `%` and `_` are escaped (matched literally). */
   search?: string;
   /** Single-select category filter (F1). */
@@ -200,6 +243,10 @@ export interface ExpenseRepository {
    * with query(): identical predicate builder.
    */
   sum(userId: number, filter?: ExpenseFilter): Promise<ExpenseTotals>;
+  /** Fetch installment plan for an expense. */
+  getInstallment(userId: number, expenseId: number): Promise<ExpenseInstallment | null>;
+  /** List all installment plans for the user. */
+  listInstallments(userId: number): Promise<ExpenseInstallment[]>;
   /**
    * Run `fn` inside ONE SQLite transaction (D1). The callback MUST be
    * synchronous (see ExpenseTx) — it receives the transactional contexts and
@@ -381,6 +428,61 @@ export interface SettingsRepository {
    * write. Returns the row.
    */
   setAiPrefs(userId: number, patch: Partial<AiPrefs>): Promise<Settings>;
+  /** Get user's theme mode ('system' | 'light' | 'dark'), default 'dark'. */
+  themeMode(userId: number): Promise<'system' | 'light' | 'dark'>;
+  /** Set user's theme mode. */
+  setThemeMode(userId: number, mode: 'system' | 'light' | 'dark'): Promise<Settings>;
+}
+
+/* ── Plan 020: Credit Bill Payments ──────────────────────────────────────── */
+
+/**
+ * Transaction-scoped credit bill payment operations (plan 020).
+ * All methods are synchronous (expo-sqlite requirement).
+ */
+export interface CreditBillTx {
+  /** User-scoped account fetch. */
+  getAccount(userId: number, accountId: number): Account | null;
+  /** Atomic balance adjustment (deltaSen is signed). */
+  adjustBalance(userId: number, accountId: number, deltaSen: number): void;
+  /** Insert payment row. */
+  insertPayment(input: {
+    id?: string;
+    userId: number;
+    accountId: number;
+    billYear: number;
+    billMonth: number;
+    amountSen: number;
+    paidDate: string;
+    fromAccountId: number;
+    createdAt?: string;
+  }): CreditBillPayment;
+  /** User-scoped payment fetch. */
+  getPaymentById(userId: number, paymentId: string): CreditBillPayment | null;
+  /** Delete payment row (undo). */
+  deletePayment(userId: number, paymentId: string): void;
+  /** Payments for an account, chronological. */
+  listPaymentsForAccount(userId: number, accountId: number): CreditBillPayment[];
+  /** Expenses on an account. */
+  listExpensesForAccount(userId: number, accountId: number): Expense[];
+  /** Installment plans for user. */
+  listInstallments(userId: number): ExpenseInstallment[];
+}
+
+export interface CreditBillRepository {
+  /** List all payments for a user, optionally filtered by credit account. */
+  listPayments(userId: number, accountId?: number): Promise<CreditBillPayment[]>;
+  /** Lookup payment by id. */
+  paymentById(userId: number, paymentId: string): Promise<CreditBillPayment | null>;
+  /** Payments recorded for a specific bill cycle. */
+  paymentsForBill(
+    userId: number,
+    accountId: number,
+    billYear: number,
+    billMonth: number,
+  ): Promise<CreditBillPayment[]>;
+  /** Run operations in a single atomic transaction. */
+  transaction<T>(fn: (tx: CreditBillTx) => T): Promise<T>;
 }
 
 /* ── Plan 013: AI provider prefs (non-secret) ────────────────────────────── */

@@ -9,6 +9,7 @@ import { getDb } from './client';
 import { DrizzleAccountRepository } from '@/repositories/drizzle/accountRepository';
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
 import { DrizzleCommitmentRepository } from '@/repositories/drizzle/commitmentRepository';
+import { DrizzleCreditBillRepository } from '@/repositories/drizzle/creditBillRepository';
 import { DrizzleExpenseRepository } from '@/repositories/drizzle/expenseRepository';
 import { DrizzlePayrollRepository } from '@/repositories/drizzle/payrollRepository';
 import { DrizzleSettingsRepository } from '@/repositories/drizzle/settingsRepository';
@@ -16,6 +17,7 @@ import type {
   AccountRepository,
   CategoryRepository,
   CommitmentRepository,
+  CreditBillRepository,
   ExpenseRepository,
   PayrollRepository,
   SettingsRepository,
@@ -28,6 +30,7 @@ export interface Repositories {
   commitments: CommitmentRepository;
   settings: SettingsRepository;
   payroll: PayrollRepository;
+  creditBills?: CreditBillRepository;
 }
 
 /** Repositories bound to the initialized app DB. Throws if initDb() hasn't resolved. */
@@ -40,5 +43,6 @@ export function repositories(): Repositories {
     commitments: new DrizzleCommitmentRepository(db as unknown as never),
     settings: new DrizzleSettingsRepository(db as unknown as never),
     payroll: new DrizzlePayrollRepository(db as unknown as never),
+    creditBills: new DrizzleCreditBillRepository(db as unknown as never),
   };
 }

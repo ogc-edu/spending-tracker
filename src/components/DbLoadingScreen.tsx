@@ -1,18 +1,23 @@
+import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, typography } from '@/theme';
+import { geistWeights, useTheme } from '@/theme';
 
 /** Shown while the database initializes or recovers. */
 export function DbLoadingScreen() {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.container}>
-      <View style={styles.brandIconWrap}>
-        <Ionicons name="wallet" size={32} color={colors.accent} />
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      <View style={[styles.brandIconWrap, { backgroundColor: colors.surface }]}>
+        <Ionicons name="wallet-outline" size={32} color={colors.accent} />
       </View>
-      <Text style={styles.title}>Spending Tracker</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Spending Tracker</Text>
       <View style={styles.loadingRow}>
         <ActivityIndicator size="small" color={colors.accent} />
-        <Text style={styles.note}>Preparing your finances…</Text>
+        <Text style={[styles.note, { color: colors.textSecondary }]}>
+          Preparing your finances…
+        </Text>
       </View>
     </View>
   );
@@ -21,35 +26,34 @@ export function DbLoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
+    padding: 24,
   },
   brandIconWrap: {
     width: 64,
     height: 64,
-    borderRadius: 20,
-    backgroundColor: colors.accentSoft,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
   title: {
-    fontSize: typography.title,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.lg,
-    letterSpacing: -0.3,
+    fontFamily: geistWeights.bold,
+    letterSpacing: -0.4,
+    marginBottom: 20,
   },
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 8,
   },
   note: {
-    fontSize: typography.body,
-    color: colors.muted,
-    fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 19,
+    fontFamily: geistWeights.medium,
   },
 });

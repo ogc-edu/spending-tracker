@@ -39,18 +39,17 @@ async function press(tree: ReactTestRenderer, testID: string): Promise<void> {
 
 const base = { title: 'Delete expense', message: 'Reverses the balance change.' };
 
-/** Flatten a Pressable-style FUNCTION (test renderer sees the function, not its result).
- *  Plan 018: the testID sits on BOTH the Button component element and its inner
- *  Pressable — resolve the deepest match (the Pressable carries the style fn). */
+/** Plan 018: the testID sits on BOTH the Button component element and the touchable it renders
+ *  (a TouchableOpacity with a static style — NativeWind drops Pressable style functions on
+ *  Android). Resolve the deepest match that carries a style. */
 function pressableOf(tree: ReactTestRenderer, testID: string): ReactTestInstance {
   const matches = tree.root.findAllByProps({ testID });
-  const withStyleFn = matches.filter((el) => typeof el.props.style === 'function');
-  return withStyleFn[withStyleFn.length - 1]!;
+  const styled = matches.filter((el) => el.props.style != null);
+  return styled[styled.length - 1]!;
 }
 
 function flattenedStyle(button: ReactTestInstance): { minHeight: number } {
-  const styleFn = button.props.style as (state: { pressed: boolean }) => unknown;
-  return StyleSheet.flatten(styleFn({ pressed: false })) as { minHeight: number };
+  return StyleSheet.flatten(button.props.style) as { minHeight: number };
 }
 
 describe('ConfirmSheet (plan 016)', () => {

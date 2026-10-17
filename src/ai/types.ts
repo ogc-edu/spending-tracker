@@ -68,6 +68,7 @@ export interface DebtSnapshot {
   upcomingBeforeNextMonthSen: number;
   overdueSen: number;
   totalRemainingSen: number;
+  creditBillsTotalSen?: number;
 }
 
 /* ------------------------------------------------------------------ *

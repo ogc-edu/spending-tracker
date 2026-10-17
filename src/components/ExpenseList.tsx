@@ -1,23 +1,24 @@
-/**
- * ExpenseList (Plan 004 — Audit Ledger)
- *
- * Daily grouped modular BentoCard containers with date headers and daily totals via MoneyDisplay.
- * List container tagged with testID="expenses-list" and testID="expense-list".
- * Pagination and pull-to-refresh preserved.
- */
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import type { Account, Category, Expense } from '@/db/schema';
-import { ExpenseRow } from '@/components/ExpenseRow';
-import { BentoCard } from '@/components/ui/BentoCard';
-import { MoneyDisplay } from '@/components/ui/MoneyDisplay';
-import { formatDayLabel, todayLocal } from '@/utils/dates';
-import { colors, spacing } from '@/theme';
+import React, { useMemo } from 'react';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  SectionList,
+  StyleSheet,
+  View,
+} from 'react-native';
+import type { Account, Category, Expense, ExpenseInstallment } from '@/db/schema';
+import { DayHeader } from '@/components/ui/DayHeader';
+import { ExpenseRow } from '@/components/ui/ExpenseRow';
+import { formatSen } from '@/utils/money';
+import { todayLocal } from '@/utils/dates';
+import { useTheme } from '@/theme';
 
 export interface ExpenseListProps {
   expenses: Expense[];
   categories: Category[];
   accounts: Account[];
-  /** True while more batches exist (offset + loaded < filtered count). */
+  installments?: Record<number, ExpenseInstallment>;
+  /** True while more batches exist (loaded rows < filtered count). */
   hasMore: boolean;
   onEndReached(): void;
   onRefresh?(): void;
@@ -27,7 +28,7 @@ export interface ExpenseListProps {
   onDeleteRow?(expense: Expense): void;
 }
 
-/** One dated section over the date-desc page (order preserved). */
+/** One dated section over the date-desc list. */
 export interface ExpenseSection {
   title: string;
   date: string;
@@ -35,24 +36,34 @@ export interface ExpenseSection {
   data: Expense[];
 }
 
-/** "Today" / "Yesterday" / "DD Mon" label for a `YYYY-MM-DD` date. */
-function dateGroupLabel(dateStr: string, today: string): string {
-  if (dateStr === today) return 'Today';
-  const [y, m, d] = today.split('-').map(Number);
-  const yesterday = new Date(y, m - 1, d - 1);
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  const ymd = `${yesterday.getFullYear()}-${pad(yesterday.getMonth() + 1)}-${pad(yesterday.getDate())}`;
-  if (dateStr === ymd) return 'Yesterday';
-  return formatDayLabel(dateStr);
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+/** Format date string YYYY-MM-DD into "TODAY · FRI 10 OCT" or "THU 9 OCT". */
+export function formatDayHeaderTitle(dateStr: string, today: string = todayLocal()): string {
+  const parts = dateStr.split('-').map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2];
+  if (y == null || m == null || d == null || isNaN(y) || isNaN(m) || isNaN(d)) {
+    return dateStr;
+  }
+  const dateObj = new Date(y, m - 1, d);
+  const weekday = WEEKDAYS[dateObj.getDay()] ?? '';
+  const monthStr = (SHORT_MONTHS[m - 1] ?? '').toUpperCase();
+  const dayStr = `${weekday} ${d} ${monthStr}`.trim();
+  if (dateStr === today) {
+    return `TODAY · ${dayStr}`;
+  }
+  return dayStr;
 }
 
-export function groupByDate(expenses: Expense[]): ExpenseSection[] {
-  const today = todayLocal();
+export function groupByDate(expenses: Expense[], today: string = todayLocal()): ExpenseSection[] {
   const sections: ExpenseSection[] = [];
   for (const expense of expenses) {
-    const title = dateGroupLabel(expense.date, today);
+    const title = formatDayHeaderTitle(expense.date, today);
     const last = sections[sections.length - 1];
-    if (last && last.title === title) {
+    if (last && last.date === expense.date) {
       last.data.push(expense);
       last.totalSen += expense.amountSen;
     } else {
@@ -71,65 +82,58 @@ export function ExpenseList({
   expenses,
   categories,
   accounts,
+  installments = {},
   hasMore,
   onEndReached,
   onRefresh,
   refreshing = false,
   onPressRow,
-  onEditRow,
-  onDeleteRow,
 }: ExpenseListProps) {
-  const accountName = (id: number | null): string | null =>
-    id == null ? null : (accounts.find((a) => a.id === id)?.name ?? null);
+  const { colors } = useTheme();
 
-  const sections = groupByDate(expenses);
+  const sections = useMemo(() => groupByDate(expenses), [expenses]);
 
   return (
-    <View className="flex-1" testID="expenses-list">
-      <FlatList
-        data={sections}
-        keyExtractor={(section, index) => `${section.date}-${index}`}
-        renderItem={({ item: section }) => (
-          <BentoCard className="mx-4 mb-3.5 p-0 overflow-hidden border border-border/60 bg-card rounded-2xl shadow-sm">
-            {/* Date Header: Displays formatted date string on the left, daily total sum on the right */}
-            <View className="flex-row items-center justify-between px-4 py-2.5 bg-muted/20 border-b border-border/60">
-              <Text className="text-sm font-bold text-foreground tracking-tight">
-                {section.title}
-              </Text>
-              <MoneyDisplay
-                amountInSen={section.totalSen}
-                size="sm"
-                className="text-muted-foreground font-semibold"
-              />
-            </View>
-            {/* Transaction Rows */}
-            <View>
-              {section.data.map((expense, idx) => (
-                <View
-                  key={expense.id}
-                  className={idx > 0 ? 'border-t border-border/40' : ''}
-                >
-                  <ExpenseRow
-                    expense={expense}
-                    category={categories.find((c) => c.id === expense.categoryId)}
-                    accountName={accountName(expense.accountId)}
-                    onPress={() => onPressRow(expense)}
-                    onEdit={onEditRow ? () => onEditRow(expense) : undefined}
-                    onDelete={onDeleteRow ? () => onDeleteRow(expense) : undefined}
-                  />
-                </View>
-              ))}
-            </View>
-          </BentoCard>
+    <View style={styles.container} testID="expenses-list">
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => String(item.id)}
+        renderSectionHeader={({ section }) => (
+          <DayHeader
+            title={section.title}
+            total={formatSen(section.totalSen)}
+          />
         )}
+        renderItem={({ item, index, section }) => {
+          const isLast = index === section.data.length - 1;
+          const category = categories.find((c) => c.id === item.categoryId);
+          const account = accounts.find((a) => a.id === item.accountId);
+          const inst = installments[item.id];
+          const moSuffix = inst ? ` · ${inst.months} mo` : '';
+          const meta = `${category?.name ?? 'Expense'} · ${account?.name ?? 'Account'}${moSuffix}`;
+
+          return (
+            <ExpenseRow
+              categoryIndex={category?.id}
+              categoryName={category?.name}
+              note={item.description}
+              meta={meta}
+              amount={formatSen(item.amountSen)}
+              isLast={isLast}
+              onPress={() => onPressRow(item)}
+              testID={`expense-row-${item.id}`}
+            />
+          );
+        }}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.4}
+        stickySectionHeadersEnabled={false}
         refreshControl={
           onRefresh ? (
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.muted}
+              tintColor={colors.accent}
             />
           ) : undefined
         }
@@ -137,6 +141,7 @@ export function ExpenseList({
           hasMore ? (
             <ActivityIndicator
               style={styles.footer}
+              color={colors.accent}
               testID="expense-list-footer"
             />
           ) : null
@@ -149,7 +154,13 @@ export function ExpenseList({
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 120, paddingTop: spacing.sm },
-  footer: { marginVertical: spacing.lg },
+  container: {
+    flex: 1,
+  },
+  content: {
+    paddingBottom: 96,
+  },
+  footer: {
+    marginVertical: 16,
+  },
 });
-

@@ -6,7 +6,7 @@
  * list refreshes on focus (SQLite is the source of truth, A4).
  */
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -15,7 +15,7 @@ import { CommitmentForm } from '@/components/CommitmentForm';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { useToast } from '@/components/ToastProvider';
 import type { CommitmentInput } from '@/repositories/types';
-import { colors, spacing, typography } from '@/theme';
+import { useTheme } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -25,6 +25,7 @@ export default function NewCommitmentScreen() {
   const router = useRouter();
   const { authService } = useAuth();
   const toast = useToast();
+  const { colors } = useTheme();
   const [submitting, setSubmitting] = useState(false);
 
   const service = useMemo(() => {
@@ -48,8 +49,7 @@ export default function NewCommitmentScreen() {
   return (
     <KeyboardScreen>
       <ScrollView
-        className="flex-1 bg-background"
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.bg }]}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         testID="new-commitment-screen"
@@ -60,30 +60,17 @@ export default function NewCommitmentScreen() {
           submitting={submitting}
           onCancel={() => router.back()}
         />
-        <Pressable
-          onPress={() => router.back()}
-          className="items-center py-4 min-h-[44px] justify-center active:opacity-60"
-          style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
-          accessibilityRole="button"
-        >
-          <Text className="text-muted-foreground text-base font-semibold" style={styles.cancelLinkLabel}>Cancel</Text>
-        </Pressable>
       </ScrollView>
     </KeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl, paddingBottom: spacing.xxl },
-  center: {
+  container: {
     flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
   },
-  cancelLink: { alignItems: 'center', paddingVertical: spacing.lg },
-  cancelLinkLabel: { color: colors.muted, fontSize: typography.body, fontWeight: '600' },
-  pressed: { opacity: 0.6 },
+  content: {
+    padding: 16,
+    paddingBottom: 32,
+  },
 });

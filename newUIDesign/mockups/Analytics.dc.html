@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Analytics</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./theme.css">
+</helmet>
+<div style="width: 354px; height: 792px; box-sizing: border-box; background: var(--bg); color: var(--text); font-family: 'Geist', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 44px 0 16px; display: flex; flex-direction: column; gap: 16px">
+
+    <h1 style="margin: 0; padding: 0 16px; font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.02em">Analytics</h1>
+
+    <div style="display: flex; gap: 8px; overflow-x: auto; padding: 0 16px; scrollbar-width: none">
+      <sc-for list="{{cats}}" as="c" hint-placeholder-count="6">
+        <button onClick="{{c.pick}}" aria-pressed="{{c.on}}" style="flex-shrink: 0; height: 36px; padding: 0 14px; border-radius: 18px; font-size: 14px; font-weight: 500; cursor: pointer; background: {{c.bg}}; color: {{c.fg}}; border: 1px solid {{c.border}}">{{c.name}}</button>
+      </sc-for>
+    </div>
+
+    <div style="margin: 0 16px; padding: 2px; border-radius: 10px; background: var(--segment-track); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))">
+      <sc-for list="{{grains}}" as="g" hint-placeholder-count="3">
+        <button onClick="{{g.pick}}" aria-pressed="{{g.on}}" style="height: 36px; border: 0; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: {{g.bg}}; color: {{g.fg}}">{{g.label}}</button>
+      </sc-for>
+    </div>
+
+    <div style="padding: 0 16px; display: flex; justify-content: space-between; align-items: flex-end">
+      <div>
+        <div style="font-size: 12px; font-weight: 500; color: var(--text-secondary)">{{selTitle}}</div>
+        <div style="font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.02em">{{selValue}}</div>
+      </div>
+      <div style="text-align: right">
+        <div style="font-size: 12px; color: var(--text-secondary)">{{avgLabel}}</div>
+        <div style="font-size: 14px; font-weight: 600">{{avgValue}}</div>
+      </div>
+    </div>
+
+    <div style="padding: 0 16px">
+      <div role="group" aria-label="Spending per period" style="height: 168px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--separator-strong); gap: {{gap}}px">
+        <sc-for list="{{bars}}" as="b" hint-placeholder-count="12">
+          <button onClick="{{b.pick}}" aria-label="{{b.aria}}" style="flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; display: flex; align-items: flex-end">
+            <span style="display: block; width: 100%; border-radius: 4px 4px 1px 1px; height: {{b.h}}%; background: {{b.bg}}"></span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="display: flex; gap: {{gap}}px; margin-top: 6px">
+        <sc-for list="{{bars}}" as="b" hint-placeholder-count="12">
+          <span style="flex: 1; min-width: 0; text-align: center; font-size: 10px; color: {{b.labelColor}}; white-space: nowrap; overflow: visible">{{b.label}}</span>
+        </sc-for>
+      </div>
+      <div style="margin-top: 10px; font-size: 12px; color: var(--text-tertiary)">Highest: <span style="color: var(--emphasis); font-weight: 600">{{maxLabel}}</span> · tap a bar to compare</div>
+    </div>
+
+    <div style="padding: 0 16px; display: flex; flex-direction: column">
+      <h2 style="margin: 4px 0 6px; font-size: 15px; font-weight: 600">{{breakdownTitle}}</h2>
+      <sc-for list="{{breakdown}}" as="r" hint-placeholder-count="5">
+        <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--separator)">
+          <div style="display: flex; justify-content: space-between; font-size: 14px">
+            <span style="font-weight: 500">{{r.name}}</span>
+            <span><span style="color: var(--text-tertiary); font-size: 12px; margin-right: 8px">{{r.pct}}%</span><span style="font-weight: 600">{{r.value}}</span></span>
+          </div>
+          <div style="height: 4px; border-radius: 2px; background: var(--track)"><div style="height: 4px; border-radius: 2px; background: var(--bar-muted); width: {{r.pct}}%"></div></div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <nav aria-label="Main" style="flex-shrink: 0; height: 80px; box-sizing: border-box; padding: 6px 8px 16px; background: var(--tabbar); border-top: 1px solid var(--separator); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center">
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"></rect><path d="M3 10h18"></path><path d="M6 3h12"></path></svg>Home</a>
+    <a href="Expenses.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="3.5" cy="6" r="1"></circle><circle cx="3.5" cy="12" r="1"></circle><circle cx="3.5" cy="18" r="1"></circle></svg>Expenses</a>
+    <a href="AddExpense.dc.html" aria-label="Add expense" style="display: flex; justify-content: center">
+      <span style="width: 48px; height: 48px; border-radius: 24px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
+      </span>
+    </a>
+    <a href="Commitments.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 500; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>Due</a>
+    <a href="Analytics.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text); font-size: 11px; font-weight: 600; padding: 4px 0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V12M12 20V5M19 20v-9"></path></svg>Analytics</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":354,"height":792}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { cat: 'All', grain: 'month', sel: null };
+  }
+  renderVals() {
+    const s = this.state;
+    const fmt = (sen) => 'RM' + Math.floor(sen / 100).toLocaleString('en-MY') + '.' + String(sen % 100).padStart(2, '0');
+    const shares = { Food: 0.34, Groceries: 0.22, Transport: 0.14, Shopping: 0.18, Bills: 0.08, Other: 0.04 };
+    const catNames = ['All', 'Food', 'Groceries', 'Transport', 'Shopping', 'Bills', 'Other'];
+    const cats = catNames.map((name) => {
+      const on = s.cat === name;
+      return { name, on, bg: on ? 'var(--accent)' : 'var(--fill)', fg: on ? 'var(--on-accent)' : 'var(--text)', border: on ? 'var(--accent)' : 'var(--fill-strong)', pick: () => this.setState({ cat: name, sel: null }) };
+    });
+    const grains = [['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(([id, label]) => {
+      const on = s.grain === id;
+      return { label, on, bg: on ? 'var(--segment-thumb)' : 'transparent', fg: on ? 'var(--text)' : 'var(--text-secondary)', pick: () => this.setState({ grain: id, sel: null }) };
+    });
+    const wave = (i, k) => {
+      const x = Math.sin(i * 1.7 + k) * 0.5 + Math.sin(i * 0.6 + k * 2) * 0.35 + 1.2;
+      return Math.max(0.15, x);
+    };
+    let periods;
+    if (s.grain === 'month') {
+      const m = ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
+      periods = m.map((label, i) => ({ label, title: label + (i < 2 ? ' 2025' : ' 2026'), base: Math.round(160000 * wave(i, 1)) }));
+      periods[11].base = 39600;
+    } else if (s.grain === 'week') {
+      const w = ['21 Jul', '28 Jul', '4 Aug', '11 Aug', '18 Aug', '25 Aug', '1 Sep', '8 Sep', '15 Sep', '22 Sep', '29 Sep', '6 Oct'];
+      periods = w.map((label, i) => ({ label: i % 2 === 0 ? label : '', title: 'Week of ' + label, base: Math.round(38000 * wave(i, 2)) }));
+    } else {
+      periods = Array.from({ length: 30 }, (_, i) => {
+        const d = ((i + 10) % 30) + 1;
+        const mon = i < 20 ? 'Sep' : 'Oct';
+        return { label: i % 5 === 0 ? String(d) : '', title: d + ' ' + mon, base: Math.round(5200 * wave(i, 3) * (i % 7 === 5 ? 2.2 : 1)) };
+      });
+    }
+    const factor = s.cat === 'All' ? 1 : shares[s.cat];
+    const vals = periods.map((p) => Math.round(p.base * factor));
+    const max = Math.max(...vals);
+    const maxIdx = vals.indexOf(max);
+    const sel = s.sel === null ? maxIdx : s.sel;
+    const bars = periods.map((p, i) => {
+      const isMax = i === maxIdx;
+      const isSel = i === sel;
+      return {
+        label: p.label,
+        h: Math.max(2, Math.round((vals[i] / max) * 100)),
+        bg: isSel ? 'var(--chart-active)' : isMax ? 'var(--chart-max)' : 'var(--chart-idle)',
+        labelColor: isSel ? 'var(--text)' : 'var(--text-tertiary)',
+        aria: p.title + ', ' + fmt(vals[i]),
+        pick: () => this.setState({ sel: i }),
+      };
+    });
+    const total = vals.reduce((a, b) => a + b, 0);
+    const avg = Math.floor(total / vals.length);
+    const unit = s.grain === 'month' ? 'month' : s.grain === 'week' ? 'week' : 'day';
+    const selVal = vals[sel];
+    const breakdownNames = s.cat === 'All' ? Object.keys(shares) : [s.cat];
+    const breakdown = breakdownNames.map((name) => {
+      const share = s.cat === 'All' ? shares[name] : 1;
+      return { name, pct: Math.round(share * 100), value: fmt(Math.round(selVal * share)) };
+    });
+    return {
+      cats, grains, bars,
+      gap: s.grain === 'day' ? 2 : 6,
+      selTitle: periods[sel].title + (s.cat === 'All' ? '' : ' · ' + s.cat),
+      selValue: fmt(selVal),
+      avgLabel: 'Average per ' + unit,
+      avgValue: fmt(avg),
+      maxLabel: periods[maxIdx].title + ' · ' + fmt(max),
+      breakdownTitle: 'Breakdown · ' + periods[sel].title,
+      breakdown,
+    };
+  }
+}
+</script>
+</body>
+</html>

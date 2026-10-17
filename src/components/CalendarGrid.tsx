@@ -12,7 +12,7 @@
  * compare lexicographically — no Date math needed for bounds).
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '@/theme';
+import { radius, spacing, typography, useTheme } from '@/theme';
 import { daysInMonth, formatMonthLabel, todayLocal } from '@/utils/dates';
 
 export const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -52,6 +52,7 @@ export interface CalendarGridProps {
 }
 
 export function CalendarGrid({ year, month, value, minDate, maxDate, onSelect }: CalendarGridProps) {
+  const { colors } = useTheme();
   const todayIso = todayLocal();
   const monthLabel = formatMonthLabel(year, month);
 
@@ -66,7 +67,7 @@ export function CalendarGrid({ year, month, value, minDate, maxDate, onSelect }:
     <View>
       <View style={styles.weekRow}>
         {WEEKDAY_LABELS.map((label) => (
-          <Text key={label} style={styles.weekLabel}>
+          <Text key={label} style={[styles.weekLabel, { color: colors.textSecondary }]}>
             {label}
           </Text>
         ))}
@@ -80,7 +81,11 @@ export function CalendarGrid({ year, month, value, minDate, maxDate, onSelect }:
               key={iso}
               onPress={() => onSelect(iso)}
               disabled={isDisabled(iso)}
-              style={[styles.dayCell, isSelected(iso) && styles.daySelected, isToday(iso) && styles.dayToday]}
+              style={[
+                styles.dayCell,
+                isToday(iso) && [styles.dayToday, { borderColor: colors.accent }],
+                isSelected(iso) && { backgroundColor: colors.daySelectedBg },
+              ]}
               accessibilityRole="button"
               accessibilityLabel={`${Number(iso.slice(8, 10))} ${monthLabel}`}
               accessibilityState={{ selected: isSelected(iso), disabled: isDisabled(iso) }}
@@ -89,9 +94,10 @@ export function CalendarGrid({ year, month, value, minDate, maxDate, onSelect }:
               <Text
                 style={[
                   styles.dayText,
-                  isSelected(iso) && styles.dayTextSelected,
-                  isToday(iso) && styles.dayTextToday,
-                  isDisabled(iso) && styles.dayTextDisabled,
+                  { color: colors.text },
+                  isToday(iso) && [styles.dayTextBold, { color: colors.accent }],
+                  isSelected(iso) && [styles.dayTextBold, { color: colors.onDaySelected }],
+                  isDisabled(iso) && [styles.dayTextDisabled, { color: colors.handle }],
                 ]}
               >
                 {Number(iso.slice(8, 10))}
@@ -106,7 +112,7 @@ export function CalendarGrid({ year, month, value, minDate, maxDate, onSelect }:
 
 const styles = StyleSheet.create({
   weekRow: { flexDirection: 'row', marginBottom: spacing.xs },
-  weekLabel: { width: COLUMN_WIDTH, textAlign: 'center', fontSize: typography.caption, fontWeight: '700', color: colors.muted },
+  weekLabel: { width: COLUMN_WIDTH, textAlign: 'center', fontSize: typography.caption, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   dayCell: {
     width: COLUMN_WIDTH,
@@ -116,10 +122,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.full,
   },
-  dayToday: { borderWidth: 1.5, borderColor: colors.accent },
-  daySelected: { backgroundColor: colors.accent },
-  dayText: { fontSize: typography.body, fontWeight: '600', color: colors.text },
-  dayTextSelected: { color: colors.surface, fontWeight: '700' },
-  dayTextToday: { color: colors.accent, fontWeight: '700' },
-  dayTextDisabled: { color: colors.border, fontWeight: '400' },
+  dayToday: { borderWidth: 1.5 },
+  dayText: { fontSize: typography.body, fontWeight: '600' },
+  dayTextBold: { fontWeight: '700' },
+  dayTextDisabled: { fontWeight: '400' },
 });

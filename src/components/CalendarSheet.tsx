@@ -1,19 +1,7 @@
-/**
- * CalendarSheet (plan 016 follow-up) — the themed bottom-sheet date picker
- * used by commitment dates. Replaces pure typing: tapping a date field opens
- * this sheet, so the keyboard never covers the input and dates are picked,
- * not typed. Values stay `YYYY-MM-DD` (the engine/DB contract); DD-MM-YYYY
- * display lives in the owning form (formatDDMMYYYY).
- *
- * The sheet is chrome only (title, close, month/year navigation, Cancel); the
- * actual calendar is the reusable CalendarGrid (responsive — fits any
- * screen width). The displayed month is captured at MOUNT — the owner
- * remounts per open via a `key` so every open anchors to value/today.
- */
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MIN_TOUCH_TARGET, colors, radius, spacing, typography } from '@/theme';
+import { MIN_TOUCH_TARGET, geistWeights, useTheme } from '@/theme';
 import { formatMonthLabel, toLocalDateString } from '@/utils/dates';
 import { CalendarGrid, type CalendarGridProps } from './CalendarGrid';
 import { Sheet } from '@/components/ui/Sheet';
@@ -45,6 +33,7 @@ export function CalendarSheet({
   onSelect,
   onCancel,
 }: CalendarSheetProps) {
+  const { colors } = useTheme();
   const [view, setView] = useState<{ year: number; month: number }>(() => {
     const anchor =
       (value && value >= '0001-01-01' && value) ||
@@ -85,20 +74,18 @@ export function CalendarSheet({
       cardTestID="calendar-sheet"
     >
       {/* Month + year navigator */}
-      <View className="flex-row items-center justify-between bg-muted/30 rounded-xl px-1 mb-4" style={styles.monthBar}>
+      <View style={[styles.monthBar, { backgroundColor: colors.fill }]}>
         <Pressable
           onPress={() => shiftYear(-1)}
-          className="w-11 h-11 items-center justify-center"
           style={styles.monthArrow}
           accessibilityRole="button"
           accessibilityLabel="Previous year"
           testID="calendar-prev-year"
         >
-          <Ionicons name="play-skip-back" size={16} color={colors.muted} />
+          <Ionicons name="play-skip-back" size={16} color={colors.textTertiary} />
         </Pressable>
         <Pressable
           onPress={() => shiftMonth(-1)}
-          className="w-11 h-11 items-center justify-center"
           style={styles.monthArrow}
           accessibilityRole="button"
           accessibilityLabel="Previous month"
@@ -106,12 +93,11 @@ export function CalendarSheet({
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
-        <Text className="text-base font-bold text-foreground" style={styles.monthLabel} testID="calendar-month-label">
+        <Text style={[styles.monthLabel, { color: colors.text }]} testID="calendar-month-label">
           {formatMonthLabel(view.year, view.month)}
         </Text>
         <Pressable
           onPress={() => shiftMonth(1)}
-          className="w-11 h-11 items-center justify-center"
           style={styles.monthArrow}
           accessibilityRole="button"
           accessibilityLabel="Next month"
@@ -121,24 +107,25 @@ export function CalendarSheet({
         </Pressable>
         <Pressable
           onPress={() => shiftYear(1)}
-          className="w-11 h-11 items-center justify-center"
           style={styles.monthArrow}
           accessibilityRole="button"
           accessibilityLabel="Next year"
           testID="calendar-next-year"
         >
-          <Ionicons name="play-skip-forward" size={16} color={colors.muted} />
+          <Ionicons name="play-skip-forward" size={16} color={colors.textTertiary} />
         </Pressable>
       </View>
 
       <CalendarGrid {...gridProps} />
 
-      <Button
-        label="Cancel"
-        variant="secondary"
-        onPress={onCancel}
-        testID="calendar-cancel"
-      />
+      <View style={styles.cancelContainer}>
+        <Button
+          label="Cancel"
+          variant="secondary"
+          onPress={onCancel}
+          testID="calendar-cancel"
+        />
+      </View>
     </Sheet>
   );
 }
@@ -148,10 +135,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md,
+    borderRadius: 12,
+    paddingHorizontal: 4,
+    marginBottom: 16,
   },
   monthArrow: {
     width: MIN_TOUCH_TARGET,
@@ -159,5 +145,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  monthLabel: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text },
+  monthLabel: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+  },
+  cancelContainer: {
+    marginTop: 12,
+  },
 });

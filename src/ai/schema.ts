@@ -43,6 +43,7 @@ export const DebtSnapshotSchema = z.object({
   upcomingBeforeNextMonthSen: sen,
   overdueSen: sen,
   totalRemainingSen: sen,
+  creditBillsTotalSen: optionalSen,
 });
 
 export const SpendingSnapshotSchema = z.object({

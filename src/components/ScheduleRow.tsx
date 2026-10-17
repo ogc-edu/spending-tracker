@@ -1,17 +1,11 @@
-/**
- * ScheduleRow (plan 008 UI) — one derived payment slot in the commitment
- * detail. Upcoming rows show the due date (overdue highlighted in danger,
- * never hidden) and a Mark paid action; paid rows show the linked expense
- * (paid date + paying account) and the Un-pay action (E7's counterpart).
- * Pure presentation — money is formatted via formatSen, never computed here.
- */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { CommitmentPayment } from '@/db/schema';
 import type { ScheduledPayment } from '@/engine/commitments';
 import { formatDayLabel } from '@/utils/dates';
 import { formatSen, spokenMoneyLabel } from '@/utils/money';
-import { colors, moneyFontVariant, spacing, typography } from '@/theme';
+import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 
 export interface ScheduleRowProps {
   slot: ScheduledPayment;
@@ -38,72 +32,148 @@ export function ScheduleRow({
   onMarkPaid,
   onUnPay,
 }: ScheduleRowProps) {
+  const { colors } = useTheme();
+
   if (payment) {
     return (
-      <View className="flex-row items-center gap-2 bg-card border border-border rounded-xl p-3.5 mb-2 min-h-[52px]" style={[styles.row, styles.paidRow]} testID="schedule-row-paid">
+      <View
+        style={[
+          styles.row,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.separator,
+          },
+        ]}
+        testID="schedule-row-paid"
+      >
         <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
-        <View className="flex-1" style={styles.body}>
-          <View className="flex-row items-center gap-2" style={styles.line}>
-            <Text className="text-base font-bold text-foreground" style={styles.amount} numberOfLines={1} accessibilityLabel={`Payment, ${spokenMoneyLabel(payment.amountSen)}`}>
+        <View style={styles.body}>
+          <View style={styles.line}>
+            <Text
+              style={[
+                styles.amount,
+                { color: colors.text },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              accessibilityLabel={`Payment, ${spokenMoneyLabel(payment.amountSen)}`}
+            >
               {formatSen(payment.amountSen)}
             </Text>
-            <Text className="text-xs text-accent font-bold" style={styles.paidLabel}>Paid</Text>
+            <Text style={[styles.paidLabel, { color: colors.accent }]}>Paid</Text>
           </View>
-          <Text className="text-xs text-muted-foreground mt-0.5" style={styles.meta}>
+          <Text
+            numberOfLines={1}
+            style={[styles.meta, { color: colors.textTertiary }]}
+          >
             {formatDayLabel(payment.dueDate)} · paid {formatDayLabel(payment.paidDate ?? payment.dueDate)}
             {accountName ? ` · ${accountName}` : ''}
           </Text>
         </View>
-        <Pressable
+        <TouchableOpacity
           onPress={() => onUnPay(payment)}
           disabled={busy}
-          className="flex-row items-center gap-1 border border-destructive/30 rounded-lg py-2 px-3 bg-destructive/10 min-h-[44px]"
-          style={({ pressed }) => [styles.unpay, pressed && styles.pressed]}
+          activeOpacity={0.7}
+          style={[
+            styles.unpay,
+            {
+              borderColor: colors.danger,
+              backgroundColor: colors.fillStrong,
+            },
+          ]}
           accessibilityRole="button"
           testID="schedule-row-unpay"
         >
           <Ionicons name="arrow-undo-outline" size={14} color={colors.danger} />
-          <Text className="text-destructive text-xs font-bold" style={styles.unpayLabel}>Un-pay</Text>
-        </Pressable>
+          <Text style={[styles.unpayLabel, { color: colors.danger }]}>Un-pay</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View className="flex-row items-center gap-2 bg-card border border-border rounded-xl p-3.5 mb-2 min-h-[52px]" style={styles.row} testID="schedule-row-upcoming">
-      <Ionicons name="calendar-outline" size={18} color={overdue ? colors.danger : colors.muted} />
-      <View className="flex-1" style={styles.body}>
-        <View className="flex-row items-center gap-2" style={styles.line}>
-          <Text className="text-base font-bold text-foreground" style={styles.amount} numberOfLines={1} accessibilityLabel={`Payment, ${spokenMoneyLabel(slot.amountSen)}`}>
+    <View
+      style={[
+        styles.row,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.separator,
+        },
+      ]}
+      testID="schedule-row-upcoming"
+    >
+      <Ionicons
+        name="calendar-outline"
+        size={18}
+        color={overdue ? colors.danger : colors.textTertiary}
+      />
+      <View style={styles.body}>
+        <View style={styles.line}>
+          <Text
+            style={[
+              styles.amount,
+              { color: colors.text },
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            accessibilityLabel={`Payment, ${spokenMoneyLabel(slot.amountSen)}`}
+          >
             {formatSen(slot.amountSen)}
           </Text>
-          <Text className={`text-xs ${overdue ? 'text-destructive font-bold' : 'text-muted-foreground font-semibold'}`} style={[styles.dueLabel, overdue && styles.overdueLabel]}>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.dueLabel,
+              { color: overdue ? colors.danger : colors.textSecondary },
+              overdue && styles.overdueLabel,
+            ]}
+          >
             {formatDayLabel(slot.dueDate)}
           </Text>
         </View>
         {overdue ? (
-          <Text className="self-start mt-1 bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded" style={styles.overdueBadge} testID="schedule-row-overdue">
+          <Text
+            style={[
+              styles.overdueBadge,
+              {
+                color: colors.danger,
+                backgroundColor: colors.fillStrong,
+              },
+            ]}
+            testID="schedule-row-overdue"
+          >
             Overdue
           </Text>
         ) : null}
       </View>
-      <Pressable
+      <TouchableOpacity
         onPress={() => onMarkPaid(slot)}
         disabled={busy || !canMarkPaid}
-        className={`flex-row items-center gap-1.5 bg-emerald-600 dark:bg-emerald-500 rounded-lg py-2 px-3 min-h-[44px] ${(!canMarkPaid || busy) ? 'opacity-40' : ''}`}
-        style={({ pressed }) => [
+        activeOpacity={0.7}
+        style={[
           styles.markPaid,
+          {
+            backgroundColor: colors.accent,
+          },
           (!canMarkPaid || busy) && styles.buttonDisabled,
-          pressed && styles.pressed,
         ]}
         accessibilityRole="button"
         testID="mark-paid-button"
       >
-        <View testID="schedule-row-mark-paid" className="flex-row items-center gap-1.5">
-          <Ionicons name="checkmark" size={14} color="#fff" />
-          <Text className="text-white text-xs font-bold" style={styles.markPaidLabel}>Mark paid</Text>
+        <View testID="schedule-row-mark-paid" style={styles.markPaidInner}>
+          <Ionicons name="checkmark" size={14} color={colors.onAccent} />
+          <Text
+            style={[
+              styles.markPaidLabel,
+              { color: colors.onAccent },
+            ]}
+          >
+            Mark paid
+          </Text>
         </View>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -112,56 +182,97 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
+    gap: 8,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: spacing.sm,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    minHeight: 52,
   },
-  paidRow: { backgroundColor: colors.surface },
-  body: { flex: 1 },
-  line: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  amount: { fontSize: typography.emphasis, fontWeight: '700', color: colors.text, fontVariant: moneyFontVariant },
-  paidLabel: { fontSize: typography.caption, color: colors.accent, fontWeight: '700' },
-  dueLabel: { fontSize: typography.caption, color: colors.muted, fontWeight: '600' },
-  overdueLabel: { color: colors.danger, fontWeight: '700' },
-  meta: { fontSize: typography.caption, color: colors.muted, marginTop: spacing.xs },
+  body: {
+    flex: 1,
+    minWidth: 0,
+  },
+  line: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  amount: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    fontVariant: tabularNumsVariant,
+  },
+  paidLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+  },
+  dueLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: geistWeights.semiBold,
+  },
+  overdueLabel: {
+    fontWeight: '700',
+  },
+  meta: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+    fontWeight: '400',
+  },
   overdueBadge: {
     alignSelf: 'flex-start',
-    marginTop: spacing.xs,
-    backgroundColor: colors.dangerSoft,
-    color: colors.danger,
-    fontSize: typography.caption,
+    marginTop: 4,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '700',
     overflow: 'hidden',
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: spacing.xs,
+    borderRadius: 4,
   },
   markPaid: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.accent,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minHeight: 44,
   },
-  markPaidLabel: { color: colors.onAccent, fontSize: typography.caption, fontWeight: '700' },
+  markPaidInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  markPaidLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+  },
   unpay: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 4,
     borderWidth: 1,
-    borderColor: colors.danger,
-    borderRadius: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.dangerSoft,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minHeight: 44,
   },
-  unpayLabel: { color: colors.danger, fontSize: typography.caption, fontWeight: '700' },
-  buttonDisabled: { opacity: 0.6 },
-  pressed: { opacity: 0.7 },
+  unpayLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+  },
+  buttonDisabled: {
+    opacity: 0.4,
+  },
 });

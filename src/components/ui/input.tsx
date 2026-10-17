@@ -1,3 +1,4 @@
+import { colors } from '@/theme';
 import { cn } from '@/lib/utils';
 import { Platform, TextInput } from 'react-native';
 
@@ -22,7 +23,7 @@ function Input({ className, style, ...props }: React.ComponentProps<typeof TextI
         }),
         className
       )}
-      placeholderTextColor="#64748B"
+      placeholderTextColor={colors.muted}
       {...props}
     />
   );

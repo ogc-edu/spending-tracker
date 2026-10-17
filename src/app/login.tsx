@@ -1,16 +1,27 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, Redirect } from 'expo-router';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { z } from 'zod';
 import { useAuth } from '@/auth/AuthProvider';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/input';
-import { Text } from '@/components/ui/text';
+import { FormGroup, FormRow } from '@/components/ui/FormGroup';
+import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import { geistWeights, useTheme } from '@/theme';
+
+import { DEFAULT_USER_EMAIL, DEFAULT_USER_PASSWORD } from '@/db/seedUser';
 
 const schema = z.object({
   email: z.string().trim().min(1, 'Email required').email('Invalid email'),
@@ -21,6 +32,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function LoginScreen() {
   const { status, login } = useAuth();
+  const { colors } = useTheme();
   const [formError, setFormError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -30,7 +42,7 @@ export default function LoginScreen() {
     formState: { isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: DEFAULT_USER_EMAIL, password: DEFAULT_USER_PASSWORD },
   });
 
   if (status === 'signedIn') {
@@ -39,8 +51,8 @@ export default function LoginScreen() {
 
   if (status === 'loading') {
     return (
-      <View className="flex-1 bg-background justify-center items-center">
-        <ActivityIndicator color="#15803D" />
+      <View style={[styles.loadingBox, { backgroundColor: colors.bg }]}>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
@@ -56,118 +68,215 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.bg }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
-        className="flex-1 px-6 justify-center"
+        style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View className="items-center mb-8">
-          <View className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/40 items-center justify-center mb-3 border border-emerald-200 dark:border-emerald-800/30">
-            <Ionicons name="wallet" size={32} color="#15803D" />
-          </View>
-          <Text className="text-2xl font-extrabold text-foreground tracking-tight">Spending Tracker</Text>
-          <Text className="text-sm font-medium text-muted-foreground mt-1">Sign in to manage your finances</Text>
-        </View>
-
-        <Card className="p-6 border border-border shadow-none">
-          <Controller
-            control={control}
-            name="email"
-            render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-              <View className="mb-4">
-                <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5" nativeID="login-label-email">
-                  Email
-                </Text>
-                <Input
-                  className="min-h-[48px] h-12 rounded-xl bg-background border border-border px-4 text-base text-foreground"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  placeholder="you@example.com"
-                  placeholderTextColor="#6B7280"
-                  accessibilityLabel="Email address"
-                  accessibilityLabelledBy="login-label-email"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  editable={!isSubmitting}
-                  testID="login-email"
-                />
-                {error ? <Text className="text-destructive text-xs font-semibold mt-1.5">{error.message}</Text> : null}
-              </View>
-            )}
-          />
-
-          <Controller
-            control={control}
-            name="password"
-            render={({ field: { value, onChange, onBlur }, fieldState: { error } }) => (
-              <View className="mb-4">
-                <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5" nativeID="login-label-password">
-                  Password
-                </Text>
-                <View className="relative justify-center">
-                  <Input
-                    className="min-h-[48px] h-12 rounded-xl bg-background border border-border pl-4 pr-12 text-base text-foreground"
-                    secureTextEntry={!showPassword}
-                    placeholder="••••••••"
-                    placeholderTextColor="#6B7280"
-                    accessibilityLabel="Password"
-                    accessibilityLabelledBy="login-label-password"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    editable={!isSubmitting}
-                    testID="login-password"
-                  />
-                  <Pressable
-                    onPress={() => setShowPassword((v) => !v)}
-                    className="absolute right-0 top-0 bottom-0 w-12 min-h-[44px] items-center justify-center"
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color="#6B7280"
-                    />
-                  </Pressable>
-                </View>
-                {error ? <Text className="text-destructive text-xs font-semibold mt-1.5">{error.message}</Text> : null}
-              </View>
-            )}
-          />
-
-          {formError ? (
-            <View className="bg-destructive/10 border border-destructive/20 rounded-xl p-3 mb-4" testID="login-error">
-              <Text className="text-destructive text-sm font-medium">{formError}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Centred App Icon & Header */}
+          <View style={styles.header}>
+            <View style={[styles.iconWrap, { backgroundColor: colors.surface }]}>
+              <Ionicons name="wallet-outline" size={32} color={colors.accent} />
             </View>
-          ) : null}
+            <Text style={[styles.title, { color: colors.text }]}>Spending Tracker</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Sign in to manage your finances
+            </Text>
+          </View>
 
-          <Button
-            label="Log in"
-            variant="default"
-            size="default"
-            busy={isSubmitting}
-            disabled={isSubmitting}
-            onPress={handleSubmit(onSubmit)}
-            testID="login-submit"
-            className="mt-2"
-          />
-        </Card>
+          {/* Form */}
+          <View style={styles.formSection}>
+            <FormGroup>
+              <Controller
+                control={control}
+                name="email"
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <FormRow
+                    label="Email"
+                    right={
+                      <TextInput
+                        style={[styles.input, { color: colors.text }]}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="email-address"
+                        placeholder="you@example.com"
+                        placeholderTextColor={colors.textTertiary}
+                        accessibilityLabel="Email address"
+                        value={value}
+                        onChangeText={onChange}
+                        onBlur={onBlur}
+                        editable={!isSubmitting}
+                        testID="login-email"
+                      />
+                    }
+                  />
+                )}
+              />
 
-        <View className="flex-row justify-center mt-6 items-center">
-          <Text className="text-muted-foreground text-sm font-medium">Don&apos;t have an account? </Text>
-          <Link href={"/register" as never} className="text-primary text-sm font-bold min-h-[44px] justify-center items-center py-2" testID="login-register-link">
-            Register
-          </Link>
-        </View>
+              <Controller
+                control={control}
+                name="password"
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <FormRow
+                    label="Password"
+                    isLast
+                    right={
+                      <View style={styles.passwordRow}>
+                        <TextInput
+                          style={[styles.input, { color: colors.text }]}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          secureTextEntry={!showPassword}
+                          placeholder="Password"
+                          placeholderTextColor={colors.textTertiary}
+                          accessibilityLabel="Password"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          editable={!isSubmitting}
+                          testID="login-password"
+                        />
+                        <Pressable
+                          onPress={() => setShowPassword(!showPassword)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                          hitSlop={8}
+                          testID="login-toggle-password"
+                          style={styles.eyeButton}
+                        >
+                          <Ionicons
+                            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                            size={18}
+                            color={colors.textTertiary}
+                          />
+                        </Pressable>
+                      </View>
+                    }
+                  />
+                )}
+              />
+            </FormGroup>
 
-        <Text className="text-center text-muted-foreground text-xs mt-4">
-          Default: ooiguancheng18@gmail.com / 1234
-        </Text>
+            {formError ? (
+              <Text style={[styles.errorText, { color: colors.danger }]}>
+                {formError}
+              </Text>
+            ) : null}
+
+            <PrimaryButton
+              label="Sign in"
+              loading={isSubmitting}
+              onPress={handleSubmit(onSubmit)}
+              testID="login-submit"
+            />
+
+            <View style={styles.footerRow}>
+              <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+                Don’t have an account?{' '}
+              </Text>
+              <Link href={"/register" as never} asChild>
+                <Pressable testID="login-register-link">
+                  <Text style={[styles.linkText, { color: colors.link }]}>
+                    Sign up
+                  </Text>
+                </Pressable>
+              </Link>
+            </View>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  loadingBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '700',
+    fontFamily: geistWeights.bold,
+    letterSpacing: -0.56,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontFamily: geistWeights.medium,
+    marginTop: 4,
+  },
+  formSection: {
+    gap: 16,
+  },
+  input: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: geistWeights.medium,
+    textAlign: 'right',
+    paddingVertical: 12,
+  },
+  passwordRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  eyeButton: {
+    paddingLeft: 8,
+    paddingVertical: 4,
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: geistWeights.medium,
+    textAlign: 'center',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  footerText: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontFamily: geistWeights.regular,
+  },
+  linkText: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontFamily: geistWeights.semiBold,
+    fontWeight: '600',
+  },
+});

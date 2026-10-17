@@ -1,0 +1,90 @@
+/* Theme tokens for the HTML mockups. Same names and values as design.jsonc → themes.
+   Switch with ?theme=light | ?theme=dark (default dark). */
+:root, :root[data-theme="dark"] {
+  --bg: #000000;
+  --tabbar: #0B0B0C;
+  --surface: #111113;
+  --fill: #1C1C1E;
+  --fill-strong: #2C2C2E;
+  --sheet: #1C1C1E;
+  --separator: #1C1C1E;
+  --separator-strong: #2A2A2E;
+  --chip-border: #2C2C2E;
+  --track: #2A2A2E;
+  --handle: #48484A;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --text: #F5F5F7;
+  --text-secondary: #A1A1A6;
+  --text-tertiary: #8E8E93;
+  --accent: #F5B83D;
+  --on-accent: #000000;
+  --emphasis: #F5B83D;
+  --link: #F5B83D;
+  --selected-bg: #2A2416;
+  --switch-off: #3A3A3C;
+  --segment-track: #1C1C1E;
+  --segment-thumb: #3A3A3C;
+  --chart-active: #F5B83D;
+  --chart-max: #8A6A26;
+  --chart-idle: #3A3A3C;
+  --bar-muted: #8E8E93;
+  --card-shadow: 0 -6px 14px rgba(0, 0, 0, 0.55);
+  --card-bank: #24408F;
+  --card-cash: #0E6B63;
+  --card-credit: #3A3A3C;
+  --card-spl: #B8430F;
+  --cat-food-tile: #1C1C1E;      --cat-food-fg: #F5B83D;
+  --cat-groceries-tile: #1C1C1E; --cat-groceries-fg: #7FC8A9;
+  --cat-transport-tile: #1C1C1E; --cat-transport-fg: #7AA7FF;
+  --cat-shopping-tile: #1C1C1E;  --cat-shopping-fg: #F28FB1;
+  --cat-bills-tile: #1C1C1E;     --cat-bills-fg: #C3A6FF;
+  --cat-health-tile: #1C1C1E;    --cat-health-fg: #FF8A7A;
+  --danger: #FF6961;
+}
+
+:root[data-theme="light"] {
+  --bg: #F2F2F2;
+  --tabbar: #FFFFFF;
+  --surface: #FFFFFF;
+  --fill: #FFFFFF;
+  --fill-strong: #EBEBEB;
+  --sheet: #FFFFFF;
+  --separator: #E4E4E4;
+  --separator-strong: #E4E4E4;
+  --chip-border: #E0E0E0;
+  --track: #E9E9E9;
+  --handle: #D1D1D6;
+  --scrim: rgba(0, 0, 0, 0.35);
+  --text: #111111;
+  --text-secondary: #55555A;
+  --text-tertiary: #6C6C70;
+  --accent: #111111;
+  --on-accent: #FFFFFF;
+  --emphasis: #111111;
+  --link: #111111;
+  --selected-bg: #F4F4F4;
+  --switch-off: #E0E0E0;
+  --segment-track: #E8E8E8;
+  --segment-thumb: #FFFFFF;
+  --chart-active: #5FD3A0;
+  --chart-max: #A9E7CA;
+  --chart-idle: #E3F6EC;
+  --bar-muted: #C7C7CC;
+  --card-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+  --card-bank: #24408F;
+  --card-cash: #0E6B63;
+  --card-credit: #1F1F21;
+  --card-spl: #B8430F;
+  --cat-food-tile: #FBE6B4;      --cat-food-fg: #5C3F00;
+  --cat-groceries-tile: #CDEFDF; --cat-groceries-fg: #0F5135;
+  --cat-transport-tile: #D9E6FF; --cat-transport-fg: #173E8C;
+  --cat-shopping-tile: #F9D7E3;  --cat-shopping-fg: #7A1F43;
+  --cat-bills-tile: #E6DCFF;     --cat-bills-fg: #45297F;
+  --cat-health-tile: #FFDCD6;    --cat-health-fg: #84261A;
+  --danger: #C5221F;
+}
+
+body { margin: 0; background: var(--bg); }
+a { color: var(--link); text-decoration: none; }
+:root[data-theme="light"] a { font-weight: 600; }
+button, input { font-family: inherit; }
