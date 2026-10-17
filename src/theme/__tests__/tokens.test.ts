@@ -188,6 +188,7 @@ describe('theme tokens', () => {
 
 describe('Wave 1A — Dark theme contrast (WCAG AA ≥ 4.5:1)', () => {
   it.each([
+    [themes.dark.onDaySelected, themes.dark.daySelectedBg],
     [themes.dark.text, themes.dark.bg],
     [themes.dark.text, themes.dark.surface],
     [themes.dark.textSecondary, themes.dark.bg],
@@ -202,6 +203,7 @@ describe('Wave 1A — Dark theme contrast (WCAG AA ≥ 4.5:1)', () => {
 
 describe('Wave 1A — Light theme contrast (WCAG AA ≥ 4.5:1)', () => {
   it.each([
+    [themes.light.onDaySelected, themes.light.daySelectedBg],
     [themes.light.text, themes.light.bg],
     [themes.light.text, themes.light.surface],
     [themes.light.textSecondary, themes.light.bg],

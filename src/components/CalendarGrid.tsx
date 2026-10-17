@@ -84,7 +84,7 @@ export function CalendarGrid({ year, month, value, minDate, maxDate, onSelect }:
               style={[
                 styles.dayCell,
                 isToday(iso) && [styles.dayToday, { borderColor: colors.accent }],
-                isSelected(iso) && { backgroundColor: colors.accent },
+                isSelected(iso) && { backgroundColor: colors.daySelectedBg },
               ]}
               accessibilityRole="button"
               accessibilityLabel={`${Number(iso.slice(8, 10))} ${monthLabel}`}
@@ -96,7 +96,7 @@ export function CalendarGrid({ year, month, value, minDate, maxDate, onSelect }:
                   styles.dayText,
                   { color: colors.text },
                   isToday(iso) && [styles.dayTextBold, { color: colors.accent }],
-                  isSelected(iso) && [styles.dayTextBold, { color: colors.onAccent }],
+                  isSelected(iso) && [styles.dayTextBold, { color: colors.onDaySelected }],
                   isDisabled(iso) && [styles.dayTextDisabled, { color: colors.handle }],
                 ]}
               >

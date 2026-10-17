@@ -25,6 +25,10 @@ export const darkTheme = {
   emphasis: '#F5B83D',
   link: '#F5B83D',
   selectedBg: '#2A2416',
+  // Calendar selected day: amber disc in dark; light grey disc + bold ink in light (a solid ink/green
+  // disc swallowed the number and fought the airy sheet).
+  daySelectedBg: '#F5B83D',
+  onDaySelected: '#000000',
   switchOff: '#3A3A3C',
   segmentTrack: '#1C1C1E',
   segmentThumb: '#3A3A3C',
@@ -57,6 +61,8 @@ export const lightTheme = {
   emphasis: '#111111',
   link: '#111111',
   selectedBg: '#F4F4F4',
+  daySelectedBg: '#E2E2E4',
+  onDaySelected: '#111111',
   switchOff: '#E0E0E0',
   segmentTrack: '#E8E8E8',
   segmentThumb: '#FFFFFF',
