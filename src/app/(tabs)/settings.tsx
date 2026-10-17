@@ -23,7 +23,7 @@ import { CategoryAddSheet } from '@/components/CategoryAddSheet';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/components/ToastProvider';
 import { formatSen } from '@/utils/money';
-import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
+import { accountShades, geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 
 import { AccountSwatch, type AccountCardType } from '@/components/ui/AccountSwatch';
 import { Chip } from '@/components/ui/Chip';
@@ -237,6 +237,8 @@ export default function SettingsScreen() {
     : 'None';
   const hasActiveKey = activeAiProvider ? Boolean(aiSuffixes[activeAiProvider as ConfigurableAIProvider]) : false;
 
+  const shades = accountShades(accounts);
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.bg }]} testID="settings-screen">
       {/* Top Bar */}
@@ -326,7 +328,7 @@ export default function SettingsScreen() {
                   key={acc.id}
                   minHeight={56}
                   isLast={isLast}
-                  left={<AccountSwatch accountType={acc.type as AccountCardType} variant="settings" />}
+                  left={<AccountSwatch accountType={acc.type as AccountCardType} shade={shades.get(acc.id)} variant="settings" />}
                   label={acc.name}
                   sublabel={kindLine}
                   value={

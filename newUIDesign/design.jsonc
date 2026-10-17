@@ -132,16 +132,20 @@
   // graphite in dark and near-black in light. Text on every card is #FFFFFF; secondary text on cards
   // is #FFFFFF at opacity 0.8–0.85; hairlines inside cards rgba(255,255,255,0.22).
   "accountCards": {
-    "bank":        { "dark": "#24408F", "light": "#24408F" },
-    "cash":        { "dark": "#0E6B63", "light": "#0E6B63" },
-    "ewallet":     { "dark": "#5A3E9E", "light": "#5A3E9E", "note": "Not in mockups; same treatment as bank." },
-    "credit_card": { "dark": "#3A3A3C", "light": "#1F1F21" },
-    "paylater":    { "dark": "#B8430F", "light": "#B8430F", "note": "New account type from plan 020 Phase B (SPayLater)." },
+    // Shade families (src/theme/colors.ts accountCardShades): the n-th account of a type by ascending id
+    // gets shade n (wrapping), so same-type accounts stay distinct in the Wallet stack. Shade 0 below.
+    // Rev 2026-10-17: credit_card dark #3A3A3C → #3A4150 (was the switchOff grey, read as disabled);
+    // paylater #B8430F → #A63C0C (0.8-opacity caption now ≥ 4.5:1). Pay pill text = card colour.
+    "bank":        { "dark": "#24408F", "light": "#24408F", "shades": ["#24408F", "#1D5E9E", "#3A2F86"] },
+    "cash":        { "dark": "#0E6B63", "light": "#0E6B63", "shades": ["#0E6B63", "#2D6834", "#53601A"] },
+    "ewallet":     { "dark": "#5A3E9E", "light": "#5A3E9E", "shades": ["#5A3E9E", "#7A3690", "#8C2F63"] },
+    "credit_card": { "dark": "#3A4150", "light": "#1F1F21", "shadesDark": ["#3A4150", "#5A2A3A", "#4A3F2C"], "shadesLight": ["#1F1F21", "#4A1F2C", "#3A3122"] },
+    "paylater":    { "dark": "#A63C0C", "light": "#A63C0C", "shades": ["#A63C0C", "#A8322D", "#8F500E"], "note": "New account type from plan 020 Phase B (SPayLater)." },
     "onCard": {
       "text": "#FFFFFF",
       "textSoftOpacity": 0.8,
       "hairline": "rgba(255,255,255,0.22)",
-      "payButton": { "bg": "#FFFFFF", "text": "#7A2A07", "note": "White pill on the pay-later card; text is a dark rust for contrast." },
+      "payButton": { "bg": "#FFFFFF", "text": "card colour", "note": "White pill; text takes the card's own colour (≥ 4.5:1 on white for every shade)." },
       "paidPill": { "bg": "rgba(0,0,0,0.25)", "text": "#FFFFFF" }
     }
   },

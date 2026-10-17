@@ -7,7 +7,10 @@
  */
 import { describe, expect, it } from '@jest/globals';
 import {
+  accountCardColor,
   accountCards,
+  accountCardShades,
+  accountShades,
   categoryPalette,
   colors,
   fontFamilies,
@@ -123,13 +126,28 @@ describe('theme tokens', () => {
     expect(accountCards.bank.dark).toBe('#24408F');
     expect(accountCards.cash.dark).toBe('#0E6B63');
     expect(accountCards.ewallet.dark).toBe('#5A3E9E');
-    expect(accountCards.credit_card.dark).toBe('#3A3A3C');
+    expect(accountCards.credit_card.dark).toBe('#3A4150');
     expect(accountCards.credit_card.light).toBe('#1F1F21');
-    expect(accountCards.paylater.dark).toBe('#B8430F');
+    expect(accountCards.paylater.dark).toBe('#A63C0C');
 
     expect(onCard.text).toBe('#FFFFFF');
     expect(onCard.payButton.bg).toBe('#FFFFFF');
-    expect(onCard.payButton.text).toBe('#7A2A07');
+  });
+
+  it('accountCardColor wraps shades and falls back to bank', () => {
+    expect(accountCardColor('bank', 'dark', 1)).toBe('#1D5E9E');
+    expect(accountCardColor('bank', 'dark', 3)).toBe('#24408F');
+    expect(accountCardColor('nope', 'light')).toBe('#24408F');
+  });
+
+  it('accountShades numbers each type by ascending id', () => {
+    const shades = accountShades([
+      { id: 7, type: 'bank' },
+      { id: 2, type: 'cash' },
+      { id: 3, type: 'bank' },
+      { id: 9, type: 'bank' },
+    ]);
+    expect([shades.get(3), shades.get(7), shades.get(9), shades.get(2)]).toEqual([0, 1, 2, 0]);
   });
 
   it('has 12 category palette entries aligned with seed', () => {
@@ -197,16 +215,25 @@ describe('Wave 1A — Light theme contrast (WCAG AA ≥ 4.5:1)', () => {
 });
 
 describe('Wave 1A — onCard contrast (WCAG AA ≥ 4.5:1)', () => {
-  it.each([
-    [onCard.text, accountCards.bank.dark],
-    [onCard.text, accountCards.cash.dark],
-    [onCard.text, accountCards.ewallet.dark],
-    [onCard.text, accountCards.credit_card.dark],
-    [onCard.text, accountCards.credit_card.light],
-    [onCard.text, accountCards.paylater.dark],
-    [onCard.payButton.text, onCard.payButton.bg],
-  ])('%s on %s ≥ 4.5:1', (fg, bg) => {
-    expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+  /** #FFFFFF at `opacity` composited over `bg`. */
+  const softWhite = (bg: string, opacity: number): string => {
+    const v = bg.replace('#', '');
+    return `#${[0, 2, 4]
+      .map((i) => Math.round(255 * opacity + Number.parseInt(v.slice(i, i + 2), 16) * (1 - opacity)))
+      .map((c) => c.toString(16).padStart(2, '0'))
+      .join('')}`;
+  };
+  const shades = Object.entries(accountCardShades).flatMap(([type, family]) =>
+    [...family.dark, ...family.light].map((bg) => [type, bg] as const),
+  );
+
+  // Card text is white; the pay pill uses the card colour on white — same ratio.
+  it.each(shades)('%s %s: white text ≥ 4.5:1', (_type, bg) => {
+    expect(contrast(onCard.text, bg)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(shades)('%s %s: 0.8-opacity caption ≥ 4.5:1', (_type, bg) => {
+    expect(contrast(softWhite(bg, onCard.textSoftOpacity), bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
 

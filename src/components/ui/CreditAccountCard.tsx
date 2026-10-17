@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import {
-  accountCards,
+  accountCardColor,
   geistWeights,
   onCard,
   tabularNumsVariant,
@@ -28,6 +28,8 @@ export interface CreditAccountCardProps {
   account: {
     name: string;
     type: AccountCardType;
+    /** Shade within the type's family — from `accountShades()`. */
+    shade?: number;
     cycleText?: string;
     owedText: string;
   };
@@ -46,10 +48,7 @@ export function CreditAccountCard({
 }: CreditAccountCardProps) {
   const { scheme } = useTheme();
 
-  const cardBg =
-    accountCards[account.type]?.[scheme] ??
-    accountCards[account.type]?.dark ??
-    accountCards.paylater[scheme];
+  const cardBg = accountCardColor(account.type, scheme, account.shade ?? 0);
 
   return (
     <View
@@ -162,7 +161,7 @@ export function CreditAccountCard({
                     style={[
                       styles.payText,
                       {
-                        color: onCard.payButton.text,
+                        color: cardBg,
                       },
                     ]}
                   >

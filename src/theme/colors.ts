@@ -77,19 +77,63 @@ export type ThemeTokens = {
   [K in keyof typeof darkTheme]: string;
 };
 
-export const accountCards = {
-  bank: { dark: '#24408F', light: '#24408F' },
-  cash: { dark: '#0E6B63', light: '#0E6B63' },
-  ewallet: { dark: '#5A3E9E', light: '#5A3E9E' },
-  credit_card: { dark: '#3A3A3C', light: '#1F1F21' },
-  paylater: { dark: '#B8430F', light: '#B8430F' },
+/**
+ * Account card colours. Each account type owns a hue family so the type still reads at a glance
+ * (blue = bank, teal/green = cash, violet = e-wallet, graphite = credit card, rust = pay later);
+ * accounts of the same type step through the family's shades so two banks never render as one
+ * slab in the Wallet stack. Every shade keeps #FFFFFF ≥ 6:1 and the 0.8-opacity secondary text
+ * ≥ 4.5:1 (asserted in tokens.test.ts). Shade 0 is the design.jsonc colour, except credit_card dark
+ * (cooled from #3A3A3C, which is the switchOff/segmentThumb grey and read as disabled) and pay later
+ * (darkened from #B8430F so the 0.8 caption passes AA).
+ */
+export const accountCardShades = {
+  bank: { dark: ['#24408F', '#1D5E9E', '#3A2F86'], light: ['#24408F', '#1D5E9E', '#3A2F86'] },
+  cash: { dark: ['#0E6B63', '#2D6834', '#53601A'], light: ['#0E6B63', '#2D6834', '#53601A'] },
+  ewallet: { dark: ['#5A3E9E', '#7A3690', '#8C2F63'], light: ['#5A3E9E', '#7A3690', '#8C2F63'] },
+  credit_card: { dark: ['#3A4150', '#5A2A3A', '#4A3F2C'], light: ['#1F1F21', '#4A1F2C', '#3A3122'] },
+  paylater: { dark: ['#A63C0C', '#A8322D', '#8F500E'], light: ['#A63C0C', '#A8322D', '#8F500E'] },
 } as const;
+
+export type AccountCardType = keyof typeof accountCardShades;
+
+/** Shade 0 of each family — the colour a lone account of that type gets. */
+export const accountCards = Object.fromEntries(
+  Object.entries(accountCardShades).map(([type, s]) => [type, { dark: s.dark[0], light: s.light[0] }]),
+) as { [K in AccountCardType]: { dark: string; light: string } };
+
+/** Card colour for an account; `shade` wraps around the family. Unknown types fall back to bank. */
+export function accountCardColor(type: string, scheme: 'dark' | 'light', shade = 0): string {
+  const family = (accountCardShades as Record<string, { dark: readonly string[]; light: readonly string[] }>)[type]
+    ?? accountCardShades.bank;
+  const list = family[scheme];
+  return list[((shade % list.length) + list.length) % list.length]!;
+}
+
+/**
+ * Shade index per account id: the n-th account of a type (by ascending id) gets shade n. Keyed by
+ * creation order, so adding an account never recolours existing ones and every screen agrees even
+ * when it shows a type-filtered subset.
+ */
+export function accountShades(accounts: readonly { id: number; type: string }[]): Map<number, number> {
+  const byType = new Map<string, number[]>();
+  for (const a of accounts) {
+    const ids = byType.get(a.type) ?? [];
+    ids.push(a.id);
+    byType.set(a.type, ids);
+  }
+  const shades = new Map<number, number>();
+  for (const ids of byType.values()) {
+    ids.sort((x, y) => x - y).forEach((id, i) => shades.set(id, i));
+  }
+  return shades;
+}
 
 export const onCard = {
   text: '#FFFFFF',
   textSoftOpacity: 0.8,
   hairline: 'rgba(255,255,255,0.22)',
-  payButton: { bg: '#FFFFFF', text: '#7A2A07' },
+  // Pill text takes the card's own colour (≥ 4.5:1 on white by construction above).
+  payButton: { bg: '#FFFFFF' },
   paidPill: { bg: 'rgba(0,0,0,0.25)', text: '#FFFFFF' },
 } as const;
 
@@ -153,6 +197,7 @@ export const colors = {
   porcelain,
   themes,
   accountCards,
+  accountCardShades,
   onCard,
   categoryPalette,
 

@@ -51,7 +51,7 @@ import {
   todayLocal,
 } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { geistWeights, useTheme } from '@/theme';
+import { accountShades, geistWeights, useTheme } from '@/theme';
 
 import { ScreenTitleBlock } from '@/components/ui/ScreenTitleBlock';
 import { IconButton } from '@/components/ui/IconButton';
@@ -337,6 +337,8 @@ export default function CommitmentsScreen() {
   const paylaterAccounts = creditAccountsData.filter((d) => d.account.type === 'paylater');
   const creditCardAccounts = creditAccountsData.filter((d) => d.account.type === 'credit_card');
 
+  const shades = accountShades(accounts);
+
   return (
     <View
       style={[styles.screen, { backgroundColor: colors.bg }]}
@@ -407,6 +409,7 @@ export default function CommitmentsScreen() {
                         account={{
                           name: account.name,
                           type: account.type as AccountCardType,
+                          shade: shades.get(account.id),
                           cycleText: formatCycleText(account.statementDay, account.dueDay),
                           owedText: formatSen(account.balanceSen),
                         }}
@@ -435,6 +438,7 @@ export default function CommitmentsScreen() {
                         account={{
                           name: account.name,
                           type: account.type as AccountCardType,
+                          shade: shades.get(account.id),
                           cycleText: formatCycleText(account.statementDay, account.dueDay),
                           owedText: formatSen(account.balanceSen),
                         }}

@@ -11,6 +11,7 @@ export interface WalletCardData {
   amount: string;
   amountLabel: string;
   accountType: AccountCardType;
+  shade?: number;
   lines?: readonly WalletCardLine[] | WalletCardLine[];
 }
 
@@ -96,6 +97,7 @@ export function WalletStack({
             amount={card.amount}
             amountLabel={card.amountLabel}
             accountType={card.accountType}
+            shade={card.shade}
             lines={card.lines}
             isOpen={activeOpenId === card.id}
             onToggle={() => handleToggle(card.id)}

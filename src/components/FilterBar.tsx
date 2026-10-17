@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Account, Category } from '@/db/schema';
 import type { PeriodPreset } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
+import { accountShades, geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 import { AccountSwatch } from '@/components/ui/AccountSwatch';
 import { CategoryTile } from '@/components/ui/CategoryTile';
 import { FilterPill } from '@/components/ui/FilterPill';
@@ -113,6 +113,7 @@ export function FilterBar({
   const categoryPillLabel = selectedCategory ? selectedCategory.name : 'All categories';
 
   // Account pill label
+  const shades = accountShades(accounts);
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
   const accountPillLabel = selectedAccount ? selectedAccount.name : 'All accounts';
 
@@ -392,7 +393,7 @@ export function FilterBar({
                 testID={`account-filter-item-${acc.id}`}
               >
                 <View style={styles.rowLead}>
-                  <AccountSwatch accountType={acc.type as never} />
+                  <AccountSwatch accountType={acc.type as never} shade={shades.get(acc.id)} />
                   <View>
                     <Text
                       numberOfLines={1}

@@ -23,7 +23,7 @@ import type { AIResult, AskSnapshot } from '@/ai/types';
 import type { CreditBill } from '@/engine/creditBills';
 import { daysInMonth, toLocalDateString } from '@/utils/dates';
 import { formatSen } from '@/utils/money';
-import { geistWeights, useTheme } from '@/theme';
+import { accountShades, geistWeights, useTheme } from '@/theme';
 
 import { DueRow } from '@/components/ui/DueRow';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -282,6 +282,7 @@ export default function HomeScreen() {
 
   // Account card builder
   const walletCards: WalletCardData[] = useMemo(() => {
+    const shades = accountShades(accounts);
     return accounts.map((acc) => {
       const isCredit = acc.type === 'credit_card' || acc.type === 'paylater';
 
@@ -361,6 +362,7 @@ export default function HomeScreen() {
         amount: formatSen(acc.balanceSen),
         amountLabel: isCredit ? 'Owed' : 'Balance',
         accountType: acc.type as AccountCardType,
+        shade: shades.get(acc.id),
         lines,
       };
     });

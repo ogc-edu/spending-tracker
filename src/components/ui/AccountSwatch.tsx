@@ -1,11 +1,13 @@
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { accountCards, useTheme } from '@/theme';
+import { accountCardColor, useTheme, type AccountCardType } from '@/theme';
 
-export type AccountCardType = keyof typeof accountCards;
+export type { AccountCardType };
 
 export interface AccountSwatchProps {
   accountType?: AccountCardType;
+  /** Shade within the type's family — from `accountShades()`. */
+  shade?: number;
   color?: string;
   variant?: 'default' | 'settings';
   style?: StyleProp<ViewStyle>;
@@ -14,6 +16,7 @@ export interface AccountSwatchProps {
 
 export function AccountSwatch({
   accountType,
+  shade = 0,
   color,
   variant = 'default',
   style,
@@ -21,10 +24,7 @@ export function AccountSwatch({
 }: AccountSwatchProps) {
   const { scheme } = useTheme();
 
-  const swatchColor =
-    color ??
-    (accountType ? accountCards[accountType]?.[scheme] : undefined) ??
-    accountCards.bank[scheme];
+  const swatchColor = color ?? accountCardColor(accountType ?? 'bank', scheme, shade);
 
   const isSettings = variant === 'settings';
 

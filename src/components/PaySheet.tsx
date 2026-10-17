@@ -12,7 +12,7 @@ import { type AccountCardType } from '@/components/ui/AccountSwatch';
 import { Sheet } from '@/components/ui/Sheet';
 import { MoneyInput } from '@/components/MoneyInput';
 import { useToast } from '@/components/ToastProvider';
-import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
+import { accountShades, geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 import { formatSen, formatSenInput, parseMoneyToSen } from '@/utils/money';
 import { todayLocal } from '@/utils/dates';
 import { haptics } from '@/utils/haptics';
@@ -58,6 +58,7 @@ export function PaySheet({
   const { colors } = useTheme();
   const toast = useToast();
 
+  const shades = accountShades(sourceAccounts);
   const nonCreditSources = sourceAccounts.filter(
     (a) => a.type === 'bank' || a.type === 'cash' || a.type === 'ewallet',
   );
@@ -200,6 +201,7 @@ export function PaySheet({
                     name={src.name}
                     kind={formatSen(src.balanceSen)}
                     accountType={src.type as AccountCardType}
+                    shade={shades.get(src.id)}
                     selected={selectedSourceId === src.id}
                     onPress={() => setSelectedSourceId(src.id)}
                     testID={`pay-from-account-${src.id}`}

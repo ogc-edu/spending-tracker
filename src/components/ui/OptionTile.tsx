@@ -17,6 +17,7 @@ export interface OptionTileProps {
   onPress?: () => void;
   accountType?: AccountCardType;
   swatchColor?: string;
+  shade?: number;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
@@ -29,6 +30,7 @@ export function OptionTile({
   onPress,
   accountType,
   swatchColor,
+  shade,
   disabled = false,
   style,
   testID,
@@ -56,7 +58,7 @@ export function OptionTile({
         style,
       ]}
     >
-      <AccountSwatch accountType={accountType} color={swatchColor} />
+      <AccountSwatch accountType={accountType} shade={shade} color={swatchColor} />
       <View style={styles.textContainer}>
         <Text
           numberOfLines={1}

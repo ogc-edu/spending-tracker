@@ -14,7 +14,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import {
-  accountCards,
+  accountCardColor,
   geistWeights,
   onCard,
   tabularNumsVariant,
@@ -34,6 +34,8 @@ export interface WalletCardProps {
   amount: string;
   amountLabel: string; // 'Balance' | 'Owed'
   accountType: AccountCardType;
+  /** Shade within the type's family — from `accountShades()`. */
+  shade?: number;
   lines?: readonly WalletCardLine[] | WalletCardLine[];
   isOpen: boolean;
   onToggle: () => void;
@@ -53,6 +55,7 @@ export function WalletCard({
   amount,
   amountLabel,
   accountType,
+  shade = 0,
   lines = [],
   isOpen,
   onToggle,
@@ -62,10 +65,7 @@ export function WalletCard({
 }: WalletCardProps) {
   const { scheme, colors } = useTheme();
 
-  const cardBg =
-    accountCards[accountType]?.[scheme] ??
-    accountCards[accountType]?.dark ??
-    accountCards.bank[scheme];
+  const cardBg = accountCardColor(accountType, scheme, shade);
 
   const heightValue = useSharedValue(isOpen ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT);
 
