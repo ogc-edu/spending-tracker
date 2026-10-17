@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { CommitmentPayment } from '@/db/schema';
 import type { ScheduledPayment } from '@/engine/commitments';
@@ -71,23 +71,23 @@ export function ScheduleRow({
             {accountName ? ` · ${accountName}` : ''}
           </Text>
         </View>
-        <Pressable
+        <TouchableOpacity
           onPress={() => onUnPay(payment)}
           disabled={busy}
-          style={({ pressed }) => [
+          activeOpacity={0.7}
+          style={[
             styles.unpay,
             {
               borderColor: colors.danger,
               backgroundColor: colors.fillStrong,
             },
-            pressed && styles.pressed,
           ]}
           accessibilityRole="button"
           testID="schedule-row-unpay"
         >
           <Ionicons name="arrow-undo-outline" size={14} color={colors.danger} />
           <Text style={[styles.unpayLabel, { color: colors.danger }]}>Un-pay</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -148,16 +148,16 @@ export function ScheduleRow({
           </Text>
         ) : null}
       </View>
-      <Pressable
+      <TouchableOpacity
         onPress={() => onMarkPaid(slot)}
         disabled={busy || !canMarkPaid}
-        style={({ pressed }) => [
+        activeOpacity={0.7}
+        style={[
           styles.markPaid,
           {
             backgroundColor: colors.accent,
           },
           (!canMarkPaid || busy) && styles.buttonDisabled,
-          pressed && styles.pressed,
         ]}
         accessibilityRole="button"
         testID="mark-paid-button"
@@ -173,7 +173,7 @@ export function ScheduleRow({
             Mark paid
           </Text>
         </View>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -274,8 +274,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.4,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

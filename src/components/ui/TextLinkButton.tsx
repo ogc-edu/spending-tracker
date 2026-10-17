@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   type StyleProp,
   type TextStyle,
   type ViewStyle,
@@ -37,16 +37,16 @@ export function TextLinkButton({
   const content = label ?? children;
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       testID={testID}
-      style={({ pressed }) => [
+      activeOpacity={0.6}
+      style={[
         styles.button,
         disabled && styles.disabled,
-        pressed && styles.pressed,
         style,
       ]}
     >
@@ -68,7 +68,7 @@ export function TextLinkButton({
       ) : (
         content
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -84,9 +84,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.6,
   },
   disabled: {
     opacity: 0.4,

@@ -2,7 +2,7 @@ import * as React from 'react';
 import {
   ActivityIndicator,
   Platform,
-  Pressable,
+  TouchableOpacity,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -80,13 +80,13 @@ export type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
 export type ButtonSize = VariantProps<typeof buttonVariants>['size'];
 
 export interface ButtonProps
-  extends Omit<React.ComponentProps<typeof Pressable>, 'style'>,
+  extends Omit<React.ComponentProps<typeof TouchableOpacity>, 'style'>,
     VariantProps<typeof buttonVariants> {
   label?: string;
   icon?: keyof typeof Ionicons.glyphMap;
   busy?: boolean;
   flex?: boolean;
-  style?: StyleProp<ViewStyle> | ((state: { pressed: boolean }) => StyleProp<ViewStyle>);
+  style?: StyleProp<ViewStyle>;
 }
 
 function Button({
@@ -111,7 +111,9 @@ function Button({
 
   return (
     <TextClassContext.Provider value={textColorClass}>
-      <Pressable
+      {/* TouchableOpacity + static style array, not Pressable's style function: NativeWind's
+          css-interop drops function styles on Android (fill, border and height vanish). */}
+      <TouchableOpacity
         testID={testID}
         disabled={inactive}
         className={cn(
@@ -120,12 +122,12 @@ function Button({
           inactive && 'opacity-50',
           className
         )}
-        style={({ pressed }) => [
+        activeOpacity={0.85}
+        style={[
           { minHeight: 48 },
           flex ? { flex: 1 } : undefined,
           inactive ? { opacity: 0.55 } : undefined,
-          pressed ? { opacity: 0.85 } : undefined,
-          typeof style === 'function' ? style({ pressed }) : style,
+          style,
         ]}
         accessibilityRole="button"
         accessibilityState={{ disabled: inactive, busy }}
@@ -149,7 +151,7 @@ function Button({
         ) : (
           children
         )}
-      </Pressable>
+      </TouchableOpacity>
     </TextClassContext.Provider>
   );
 }

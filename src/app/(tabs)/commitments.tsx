@@ -26,6 +26,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -565,19 +566,19 @@ export default function CommitmentsScreen() {
                             {formatSen(c.paymentSen)}
                           </Text>
                         </View>
-                        <Pressable
+                        <TouchableOpacity
                           onPress={() => handleRestore(c)}
                           disabled={busy}
-                          style={({ pressed }) => [
+                          activeOpacity={0.75}
+                          style={[
                             styles.restoreBtn,
                             { backgroundColor: colors.fillStrong },
-                            pressed && styles.pressed,
                           ]}
                           accessibilityRole="button"
                           testID={`commitment-restore-${c.id}`}
                         >
                           <Text style={[styles.restoreBtnText, { color: colors.link }]}>Restore</Text>
-                        </Pressable>
+                        </TouchableOpacity>
                       </View>
                     ))}
                   </View>
@@ -731,8 +732,5 @@ const styles = StyleSheet.create({
     width: 1,
     height: 1,
     opacity: 0,
-  },
-  pressed: {
-    opacity: 0.75,
   },
 });

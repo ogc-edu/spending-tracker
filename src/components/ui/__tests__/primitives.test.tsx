@@ -318,8 +318,7 @@ describe('Plan 002 — Reusable UI Component Primitives', () => {
         </TouchTarget>
       );
       const target = tree.root.findByProps({ accessibilityRole: 'button' });
-      const styleFn = target.props.style as (state: { pressed: boolean }) => unknown;
-      const flattened = StyleSheet.flatten(styleFn({ pressed: false })) as {
+      const flattened = StyleSheet.flatten(target.props.style) as {
         minHeight: number;
         minWidth: number;
       };
@@ -335,8 +334,7 @@ describe('Plan 002 — Reusable UI Component Primitives', () => {
         </TouchTarget>
       );
       const target = tree.root.findByProps({ accessibilityRole: 'button' });
-      const styleFn = target.props.style as (state: { pressed: boolean }) => unknown;
-      const flattened = StyleSheet.flatten(styleFn({ pressed: false })) as {
+      const flattened = StyleSheet.flatten(target.props.style) as {
         minHeight: number;
         minWidth: number;
       };

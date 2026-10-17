@@ -5,7 +5,7 @@
  * the provider's config screen.
  */
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { ConfigurableAIProvider } from '@/services/AiConfigService';
 import { geistWeights, tabularNumsVariant, useTheme } from '@/theme';
 import { PROVIDER_ICONS, PROVIDER_LABELS } from './providerMeta';
@@ -33,15 +33,15 @@ export function ProviderRow({
   const { colors } = useTheme();
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
-      style={({ pressed }) => [
+      activeOpacity={0.7}
+      style={[
         styles.row,
         {
           backgroundColor: colors.surface,
           borderColor: colors.separator,
         },
-        pressed && styles.pressed,
       ]}
       accessibilityRole="button"
       accessibilityLabel={`${PROVIDER_LABELS[provider]} settings`}
@@ -73,7 +73,7 @@ export function ProviderRow({
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -109,8 +109,5 @@ const styles = StyleSheet.create({
   },
   masked: {
     fontVariant: tabularNumsVariant,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

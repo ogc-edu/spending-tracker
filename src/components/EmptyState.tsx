@@ -9,7 +9,7 @@
  * The action is a ≥44pt button (touchTarget) with a screen-reader role —
  * asserted in the component test.
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, touchTarget, typography } from '@/theme';
 
@@ -31,15 +31,16 @@ export function EmptyState({ icon, title, body, action, testID }: EmptyStateProp
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
       {action ? (
-        <Pressable
+        <TouchableOpacity
           onPress={action.onPress}
-          style={({ pressed }) => [styles.action, touchTarget, pressed && styles.pressed]}
+          activeOpacity={0.8}
+          style={[styles.action, touchTarget]}
           accessibilityRole="button"
           accessibilityLabel={action.label}
           testID={testID ? `${testID}-action` : 'empty-state-action'}
         >
           <Text style={styles.actionLabel}>{action.label}</Text>
-        </Pressable>
+        </TouchableOpacity>
       ) : null}
     </View>
   );
@@ -67,5 +68,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionLabel: { color: colors.surface, fontSize: typography.body, fontWeight: '700' },
-  pressed: { opacity: 0.8 },
 });

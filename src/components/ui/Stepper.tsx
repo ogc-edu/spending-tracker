@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle,
@@ -51,7 +51,7 @@ export function Stepper({
 
   return (
     <View style={[styles.container, style]} testID={testID}>
-      <Pressable
+      <TouchableOpacity
         onPress={handleDecrease}
         disabled={!canDecrease}
         hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
@@ -59,13 +59,13 @@ export function Stepper({
         accessibilityLabel="Decrease value"
         accessibilityState={{ disabled: !canDecrease }}
         testID={testID ? `${testID}-decrease` : undefined}
-        style={({ pressed }) => [
+        activeOpacity={0.7}
+        style={[
           styles.button,
           {
             backgroundColor: colors.fillStrong,
           },
           !canDecrease && styles.disabled,
-          pressed && canDecrease && styles.pressed,
         ]}
       >
         <Text
@@ -78,7 +78,7 @@ export function Stepper({
         >
           −
         </Text>
-      </Pressable>
+      </TouchableOpacity>
 
       <View style={styles.valueContainer}>
         <Text
@@ -94,7 +94,7 @@ export function Stepper({
         </Text>
       </View>
 
-      <Pressable
+      <TouchableOpacity
         onPress={handleIncrease}
         disabled={!canIncrease}
         hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
@@ -102,13 +102,13 @@ export function Stepper({
         accessibilityLabel="Increase value"
         accessibilityState={{ disabled: !canIncrease }}
         testID={testID ? `${testID}-increase` : undefined}
-        style={({ pressed }) => [
+        activeOpacity={0.7}
+        style={[
           styles.button,
           {
             backgroundColor: colors.fillStrong,
           },
           !canIncrease && styles.disabled,
-          pressed && canIncrease && styles.pressed,
         ]}
       >
         <Text
@@ -121,7 +121,7 @@ export function Stepper({
         >
           +
         </Text>
-      </Pressable>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -158,9 +158,6 @@ const styles = StyleSheet.create({
     fontFamily: geistWeights.semiBold,
     fontVariant: tabularNumsVariant,
     textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
   },
   disabled: {
     opacity: 0.35,

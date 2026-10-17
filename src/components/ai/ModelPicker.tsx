@@ -4,7 +4,7 @@
  * AI-8). No model ids are hardcoded anywhere — the list comes from discovery;
  * manual entry carries whatever the user types.
  */
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ModelInfo } from '@/ai/types';
 import { geistWeights, useTheme } from '@/theme';
@@ -59,14 +59,15 @@ export function ModelPicker({
         >
           Discovery failed — enter the model ID manually (must be valid for the test to pass).
         </Text>
-        <Pressable
+        <TouchableOpacity
           onPress={() => manualValue.trim() && onSelect(manualValue.trim())}
           disabled={!manualValue.trim()}
-          style={({ pressed }) => [
+          activeOpacity={0.7}
+          style={[
             styles.useButton,
             {
               backgroundColor: colors.accent,
-              opacity: !manualValue.trim() ? 0.4 : pressed ? 0.7 : 1,
+              opacity: !manualValue.trim() ? 0.4 : 1,
             },
           ]}
           accessibilityRole="button"
@@ -78,7 +79,7 @@ export function ModelPicker({
           >
             Use this model
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -106,16 +107,16 @@ export function ModelPicker({
       {models.map((m) => {
         const active = m.id === selected;
         return (
-          <Pressable
+          <TouchableOpacity
             key={m.id}
             onPress={() => onSelect(m.id)}
-            style={({ pressed }) => [
+            activeOpacity={0.7}
+            style={[
               styles.modelRow,
               {
                 borderColor: active ? colors.accent : colors.separator,
                 backgroundColor: colors.fill,
               },
-              pressed && styles.pressed,
             ]}
             accessibilityRole="radio"
             accessibilityState={{ selected: active }}
@@ -155,7 +156,7 @@ export function ModelPicker({
                 Selected
               </Text>
             ) : null}
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -234,8 +235,5 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: '600',
     fontFamily: geistWeights.semiBold,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

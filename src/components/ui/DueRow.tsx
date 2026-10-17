@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle,
@@ -120,13 +120,13 @@ export function DueRow({
 
   if (onPress) {
     return (
-      <Pressable
+      <TouchableOpacity
         onPress={onPress}
         accessibilityRole="button"
-        style={({ pressed }) => [pressed && styles.pressed]}
+        activeOpacity={0.7}
       >
         {content}
-      </Pressable>
+      </TouchableOpacity>
     );
   }
 
@@ -178,8 +178,5 @@ const styles = StyleSheet.create({
     fontFamily: geistWeights.semiBold,
     fontVariant: tabularNumsVariant,
     textAlign: 'right',
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

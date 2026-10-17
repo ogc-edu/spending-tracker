@@ -41,8 +41,7 @@ describe('EmptyState (plan 016)', () => {
       />,
     );
     const action = tree.root.findByProps({ testID: 'dashboard-empty-accounts-action' });
-    const styleFn = action.props.style as (state: { pressed: boolean }) => unknown;
-    const flattened = StyleSheet.flatten(styleFn({ pressed: false })) as { minHeight: number };
+    const flattened = StyleSheet.flatten(action.props.style) as { minHeight: number };
     expect(action.props.accessibilityRole).toBe('button');
     expect(flattened.minHeight).toBeGreaterThanOrEqual(44);
     await act(async () => {

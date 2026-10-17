@@ -4,7 +4,7 @@
  * "No AI provider configured" empty state. No automatic fallback — the user
  * picks the active provider explicitly, one tap to switch.
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { AIProviderName } from '@/ai/types';
 import type { ConfigurableAIProvider } from '@/services/AiConfigService';
@@ -58,16 +58,16 @@ export function ActiveProviderSelector({
       {configured.map((provider) => {
         const isActive = active === provider;
         return (
-          <Pressable
+          <TouchableOpacity
             key={provider}
             onPress={() => onSelect(provider)}
-            style={({ pressed }) => [
+            activeOpacity={0.7}
+            style={[
               styles.option,
               {
                 backgroundColor: colors.surface,
                 borderColor: isActive ? colors.accent : colors.separator,
               },
-              pressed && styles.pressed,
             ]}
             accessibilityRole="radio"
             accessibilityState={{ selected: isActive }}
@@ -108,7 +108,7 @@ export function ActiveProviderSelector({
                 </Text>
               </View>
             ) : null}
-          </Pressable>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -173,8 +173,5 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: '700',
     fontFamily: geistWeights.bold,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

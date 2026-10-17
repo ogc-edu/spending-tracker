@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle,
@@ -119,14 +119,14 @@ export function FormRow({
 
   if (onPress) {
     return (
-      <Pressable
+      <TouchableOpacity
         onPress={onPress}
         disabled={disabled}
         accessibilityRole="button"
-        style={({ pressed }) => [pressed && styles.pressed]}
+        activeOpacity={0.7}
       >
         {content}
-      </Pressable>
+      </TouchableOpacity>
     );
   }
 
@@ -171,8 +171,5 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '500',
     fontFamily: geistWeights.medium,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

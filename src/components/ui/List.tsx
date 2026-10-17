@@ -9,7 +9,7 @@
  *    element, custom children. minHeight 56 so rows never feel cramped.
  *  - `SectionLabel` is the date/group header ("Today", "01 Sep").
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Children, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
@@ -45,16 +45,16 @@ export function ListRow({ children, onPress, disabled = false, testID }: ListRow
     );
   }
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-      android_ripple={{ color: colors.separator, borderless: false }}
+      activeOpacity={0.7}
+      style={styles.row}
       accessibilityRole="button"
       testID={testID}
     >
       {children}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -82,7 +82,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
   },
-  pressed: { opacity: 0.7, backgroundColor: colors.background },
   iconWrap: {
     width: 40,
     height: 40,

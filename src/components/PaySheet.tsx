@@ -3,6 +3,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import type { Account } from '@/db/schema';
@@ -214,32 +215,32 @@ export function PaySheet({
 
         {/* Buttons row */}
         <View style={styles.buttonsRow}>
-          <Pressable
+          <TouchableOpacity
             onPress={onClose}
             disabled={submitting}
             accessibilityRole="button"
             accessibilityLabel="Cancel"
             testID="pay-sheet-cancel"
-            style={({ pressed }) => [
+            activeOpacity={0.8}
+            style={[
               styles.cancelButton,
               { backgroundColor: colors.fillStrong },
-              pressed && styles.pressed,
             ]}
           >
             <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable
+          <TouchableOpacity
             onPress={handlePay}
             disabled={!canPay}
             accessibilityRole="button"
             accessibilityLabel={`Pay ${formatSen(amountSen)}`}
             testID="pay-sheet-confirm"
-            style={({ pressed }) => [
+            activeOpacity={0.8}
+            style={[
               styles.payButton,
               { backgroundColor: colors.accent },
               !canPay && styles.buttonDisabled,
-              pressed && styles.pressed,
             ]}
           >
             <Text
@@ -248,7 +249,7 @@ export function PaySheet({
             >
               {submitting ? 'Paying...' : `Pay ${formatSen(amountSen)}`}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </Sheet>
@@ -347,8 +348,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.4,
-  },
-  pressed: {
-    opacity: 0.8,
   },
 });

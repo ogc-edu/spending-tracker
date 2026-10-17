@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { MAX_QUESTION_CHARS } from '@/ai/types';
@@ -124,18 +124,18 @@ export function AskAiSheet({
               accessibilityLabel="Ask a question about your money"
               testID="ask-ai-input"
             />
-            <Pressable
+            <TouchableOpacity
               onPress={() => submit(text)}
               disabled={!canSend}
               accessibilityRole="button"
               accessibilityLabel="Send question"
               accessibilityState={{ disabled: !canSend, busy: ai.pending }}
-              style={({ pressed }) => [
+              activeOpacity={0.8}
+              style={[
                 styles.sendButton,
                 {
                   backgroundColor: canSend ? colors.accent : colors.fillStrong,
                 },
-                pressed && canSend && styles.pressed,
               ]}
               testID="ask-ai-send"
             >
@@ -149,7 +149,7 @@ export function AskAiSheet({
                   strokeWidth={2.2}
                 />
               )}
-            </Pressable>
+            </TouchableOpacity>
           </View>
 
           {/* Shared AI Analysis Result */}
@@ -199,8 +199,5 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pressed: {
-    opacity: 0.8,
   },
 });

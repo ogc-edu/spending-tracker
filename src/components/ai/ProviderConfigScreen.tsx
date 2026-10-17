@@ -15,11 +15,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -294,17 +294,18 @@ export function ProviderConfigScreen({
           ) : null}
 
           <View style={styles.buttonRow}>
-            <Pressable
+            <TouchableOpacity
               onPress={() => void saveKey()}
               disabled={!keyText.trim() || saving}
               accessibilityRole="button"
               testID="ai-save-key-button"
-              style={({ pressed }) => [
+              activeOpacity={0.8}
+              style={[
                 styles.button,
                 styles.buttonFlex,
                 {
                   backgroundColor: colors.accent,
-                  opacity: !keyText.trim() || saving ? 0.4 : pressed ? 0.8 : 1,
+                  opacity: !keyText.trim() || saving ? 0.4 : 1,
                 },
               ]}
             >
@@ -318,21 +319,22 @@ export function ProviderConfigScreen({
                   {hasKey ? 'Replace key' : 'Save key'}
                 </Text>
               )}
-            </Pressable>
+            </TouchableOpacity>
 
             {hasKey ? (
-              <Pressable
+              <TouchableOpacity
                 onPress={removeKey}
                 disabled={removing}
                 accessibilityRole="button"
                 testID="ai-remove-key-button"
-                style={({ pressed }) => [
+                activeOpacity={0.8}
+                style={[
                   styles.button,
                   {
                     backgroundColor: colors.fillStrong,
                     borderColor: colors.danger,
                     borderWidth: 1,
-                    opacity: removing ? 0.4 : pressed ? 0.8 : 1,
+                    opacity: removing ? 0.4 : 1,
                   },
                 ]}
               >
@@ -343,7 +345,7 @@ export function ProviderConfigScreen({
                 >
                   Remove
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             ) : null}
           </View>
         </View>
@@ -353,19 +355,20 @@ export function ProviderConfigScreen({
       <SettingsGroup title="Connection">
         <View style={styles.groupBody}>
           <View style={styles.buttonRow}>
-            <Pressable
+            <TouchableOpacity
               onPress={() => void runTest()}
               disabled={!effectiveKey || testing}
               accessibilityRole="button"
               testID="ai-test-button"
-              style={({ pressed }) => [
+              activeOpacity={0.8}
+              style={[
                 styles.button,
                 styles.buttonFlex,
                 {
                   backgroundColor: colors.fillStrong,
                   borderColor: colors.separatorStrong,
                   borderWidth: 1,
-                  opacity: !effectiveKey || testing ? 0.4 : pressed ? 0.8 : 1,
+                  opacity: !effectiveKey || testing ? 0.4 : 1,
                 },
               ]}
             >
@@ -380,20 +383,20 @@ export function ProviderConfigScreen({
               >
                 {testing ? 'Testing…' : 'Test Connection'}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
 
             {testing ? (
-              <Pressable
+              <TouchableOpacity
                 onPress={stopTest}
                 accessibilityRole="button"
                 testID="ai-stop-test-button"
-                style={({ pressed }) => [
+                activeOpacity={0.8}
+                style={[
                   styles.button,
                   {
                     backgroundColor: colors.fillStrong,
                     borderColor: colors.danger,
                     borderWidth: 1,
-                    opacity: pressed ? 0.8 : 1,
                   },
                 ]}
               >
@@ -404,7 +407,7 @@ export function ProviderConfigScreen({
                 >
                   Stop
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             ) : null}
           </View>
 

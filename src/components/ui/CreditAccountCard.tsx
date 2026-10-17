@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle,
@@ -143,18 +143,18 @@ export function CreditAccountCard({
               </Text>
 
               {bill.status === 'unpaid' ? (
-                <Pressable
+                <TouchableOpacity
                   onPress={() => onPay?.(bill.id)}
                   hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                   accessibilityRole="button"
                   accessibilityLabel={`Pay ${bill.title}`}
                   testID={testID ? `${testID}-pay-${bill.id}` : undefined}
-                  style={({ pressed }) => [
+                  activeOpacity={0.8}
+                  style={[
                     styles.payPill,
                     {
                       backgroundColor: onCard.payButton.bg,
                     },
-                    pressed && styles.pressed,
                   ]}
                 >
                   <Text
@@ -167,7 +167,7 @@ export function CreditAccountCard({
                   >
                     Pay
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               ) : bill.status === 'paid' ? (
                 <View
                   style={[
@@ -308,8 +308,5 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: '600',
     fontFamily: geistWeights.semiBold,
-  },
-  pressed: {
-    opacity: 0.8,
   },
 });

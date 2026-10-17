@@ -15,7 +15,7 @@
  * all reload here. No SQL, no money math — services + engine only.
  */
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -269,35 +269,35 @@ export default function CommitmentDetailScreen() {
             {commitment.name}
           </Text>
           {commitment.status !== 'cancelled' && !archived ? (
-            <Pressable
+            <TouchableOpacity
               onPress={() => router.push(`/commitments/${commitmentId}/edit` as never)}
-              style={({ pressed }) => [
+              activeOpacity={0.7}
+              style={[
                 styles.editPill,
                 { backgroundColor: colors.fillStrong },
-                pressed && styles.pressed,
               ]}
               accessibilityRole="button"
               accessibilityLabel="Edit commitment"
               testID="commitment-edit"
             >
               <Text style={[styles.editPillText, { color: colors.text }]}>Edit</Text>
-            </Pressable>
+            </TouchableOpacity>
           ) : null}
           {!archived ? (
-            <Pressable
+            <TouchableOpacity
               onPress={handleDelete}
               disabled={busy}
-              style={({ pressed }) => [
+              activeOpacity={0.7}
+              style={[
                 styles.deleteBtn,
                 { backgroundColor: colors.fillStrong },
-                pressed && styles.pressed,
               ]}
               accessibilityRole="button"
               accessibilityLabel="Delete commitment"
               testID="commitment-delete"
             >
               <Ionicons name="trash-outline" size={18} color={colors.danger} />
-            </Pressable>
+            </TouchableOpacity>
           ) : null}
         </View>
 
@@ -477,9 +477,10 @@ export default function CommitmentDetailScreen() {
                 />
               ))}
               {hiddenUnpaid > 0 ? (
-                <Pressable
+                <TouchableOpacity
                   onPress={() => setShowAllSchedule((v) => !v)}
-                  style={({ pressed }) => [styles.showAllButton, pressed && styles.pressed]}
+                  activeOpacity={0.7}
+                  style={[styles.showAllButton]}
                   accessibilityRole="button"
                   testID="commitment-schedule-expand"
                 >
@@ -487,7 +488,7 @@ export default function CommitmentDetailScreen() {
                   <Text style={[styles.showAllLabel, { color: colors.link }]}>
                     {showAllSchedule ? 'Show fewer' : `Show all ${unpaid.length} payments`}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               ) : null}
             </>
           ) : null}
@@ -523,13 +524,13 @@ export default function CommitmentDetailScreen() {
 
       {/* Restore control for archived */}
       {archived ? (
-        <Pressable
+        <TouchableOpacity
           onPress={handleRestore}
           disabled={busy}
-          style={({ pressed }) => [
+          activeOpacity={0.7}
+          style={[
             styles.restoreBtn,
             { backgroundColor: colors.fillStrong },
-            pressed && styles.pressed,
           ]}
           accessibilityRole="button"
           testID="commitment-restore"
@@ -538,7 +539,7 @@ export default function CommitmentDetailScreen() {
           <Text style={[styles.restoreBtnText, { color: colors.text }]}>
             Restore commitment
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       ) : null}
 
       <PaymentFlowSheet
@@ -800,8 +801,5 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
     fontFamily: geistWeights.semiBold,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

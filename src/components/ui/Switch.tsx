@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  Pressable,
   StyleSheet,
+  TouchableOpacity,
   View,
   type StyleProp,
   type ViewStyle,
@@ -34,7 +34,7 @@ export function Switch({
   };
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={handlePress}
       disabled={disabled}
       hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
@@ -42,13 +42,13 @@ export function Switch({
       accessibilityState={{ checked: value, disabled }}
       accessibilityLabel={accessibilityLabel}
       testID={testID}
-      style={({ pressed }) => [
+      activeOpacity={0.85}
+      style={[
         styles.track,
         {
           backgroundColor: value ? colors.accent : colors.switchOff,
         },
         disabled && styles.disabled,
-        pressed && styles.pressed,
         style,
       ]}
     >
@@ -61,7 +61,7 @@ export function Switch({
           },
         ]}
       />
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -77,9 +77,6 @@ const styles = StyleSheet.create({
     width: 27,
     height: 27,
     borderRadius: 13.5,
-  },
-  pressed: {
-    opacity: 0.85,
   },
   disabled: {
     opacity: 0.4,

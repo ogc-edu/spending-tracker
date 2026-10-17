@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Account } from '@/db/schema';
 import type { ScheduledPayment } from '@/engine/commitments';
@@ -71,16 +71,16 @@ export function PaymentFlowSheet({
           {accounts.map((account) => {
             const selected = selectedId === account.id;
             return (
-              <Pressable
+              <TouchableOpacity
                 key={account.id}
                 onPress={() => setSelectedId(account.id)}
-                style={({ pressed }) => [
+                activeOpacity={0.75}
+                style={[
                   styles.chip,
                   {
                     backgroundColor: selected ? colors.selectedBg : colors.fillStrong,
                     borderColor: selected ? colors.accent : colors.fillStrong,
                   },
-                  pressed && styles.pressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
@@ -109,19 +109,19 @@ export function PaymentFlowSheet({
                 >
                   {ACCOUNT_TYPE_LABELS[account.type as AccountType]}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             );
           })}
 
-          <Pressable
+          <TouchableOpacity
             onPress={() => setSelectedId(null)}
-            style={({ pressed }) => [
+            activeOpacity={0.75}
+            style={[
               styles.chip,
               {
                 backgroundColor: selectedId === null ? colors.selectedBg : colors.fillStrong,
                 borderColor: selectedId === null ? colors.accent : colors.fillStrong,
               },
-              pressed && styles.pressed,
             ]}
             accessibilityRole="button"
             accessibilityState={{ selected: selectedId === null }}
@@ -141,37 +141,37 @@ export function PaymentFlowSheet({
             >
               No account
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.actions}>
-          <Pressable
+          <TouchableOpacity
             onPress={onCancel}
             disabled={busy}
-            style={({ pressed }) => [
+            activeOpacity={0.75}
+            style={[
               styles.cancelBtn,
               { backgroundColor: colors.fillStrong },
               busy && styles.disabled,
-              pressed && styles.pressed,
             ]}
             accessibilityRole="button"
             accessibilityLabel="Cancel"
             testID="payment-flow-cancel"
           >
             <Text style={[styles.cancelBtnText, { color: colors.text }]}>Cancel</Text>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable
+          <TouchableOpacity
             onPress={() => {
               haptics.paymentSuccess();
               onConfirm(selectedId);
             }}
             disabled={busy}
-            style={({ pressed }) => [
+            activeOpacity={0.75}
+            style={[
               styles.confirmBtn,
               { backgroundColor: colors.accent },
               busy && styles.disabled,
-              pressed && styles.pressed,
             ]}
             accessibilityRole="button"
             accessibilityLabel="Mark paid"
@@ -183,7 +183,7 @@ export function PaymentFlowSheet({
                 Mark paid
               </Text>
             </View>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </Sheet>
@@ -284,8 +284,5 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.4,
-  },
-  pressed: {
-    opacity: 0.75,
   },
 });
