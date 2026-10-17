@@ -20,7 +20,9 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+// TouchableOpacity + static style arrays, not Pressable's style function: NativeWind's css-interop
+// drops function styles on Android (rows collapse, buttons lose their fill) — same fix as 6d99648.
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { z } from 'zod';
 import { COMMITMENT_TYPES, type CommitmentInput } from '@/repositories/types';
 import { formatDDMMYYYY, isValidDateStr } from '@/utils/dates';
@@ -232,16 +234,16 @@ export function CommitmentForm({
               {label}
               {props.optional ? ' (optional)' : ''}
             </Text>
-            <Pressable
+            <TouchableOpacity
               onPress={() => setDateField(name)}
               disabled={submitting}
-              style={({ pressed }) => [
+              activeOpacity={0.75}
+              style={[
                 styles.dateField,
                 {
                   backgroundColor: colors.surface,
                   borderColor: error ? colors.danger : colors.separator,
                 },
-                pressed && styles.pressed,
               ]}
               accessibilityRole="button"
               accessibilityLabel={`${label}, ${value ? `${formatDDMMYYYY(value)}, picked` : 'not picked'}`}
@@ -257,7 +259,7 @@ export function CommitmentForm({
                 {value ? formatDDMMYYYY(value) : (props.placeholder ?? 'Select a date')}
               </Text>
               <Ionicons name="chevron-down" size={16} color={colors.textTertiary} />
-            </Pressable>
+            </TouchableOpacity>
             {minDate ? (
               <Text style={[styles.dateHint, { color: colors.textTertiary }]}>
                 Earliest: {formatDDMMYYYY(minDate)}
@@ -342,36 +344,39 @@ export function CommitmentForm({
       />
 
       <View style={styles.actions}>
-        <Pressable
+        {/* Secondary mirrors an unselected chip (surface + hairline border); primary mirrors a
+            selected chip (accent fill: ink in light, amber in dark) — one visual language. */}
+        <TouchableOpacity
           onPress={onCancel}
           disabled={submitting}
-          style={({ pressed }) => [
+          activeOpacity={0.75}
+          style={[
             styles.cancelButton,
-            { backgroundColor: colors.fillStrong },
-            pressed && styles.pressed,
+            { backgroundColor: colors.surface, borderColor: colors.chipBorder },
           ]}
           accessibilityRole="button"
           testID="commitment-form-cancel"
         >
           <Text style={[styles.cancelText, { color: colors.text }]}>Cancel</Text>
-        </Pressable>
+        </TouchableOpacity>
 
-        <Pressable
+        <TouchableOpacity
           onPress={handleSubmit(onValid)}
           disabled={submitting}
-          style={({ pressed }) => [
+          activeOpacity={0.8}
+          style={[
             styles.submitButton,
             { backgroundColor: colors.accent },
             submitting && styles.buttonDisabled,
-            pressed && styles.pressed,
           ]}
           accessibilityRole="button"
+          accessibilityState={{ disabled: submitting, busy: submitting }}
           testID="commitment-form-submit"
         >
-          <Text style={[styles.submitText, { color: colors.onAccent }]}>
-            {submitting ? 'Saving...' : submitLabel}
+          <Text numberOfLines={1} style={[styles.submitText, { color: colors.onAccent }]}>
+            {submitting ? 'Saving…' : submitLabel}
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       <CalendarSheet
@@ -439,9 +444,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  pressed: {
-    opacity: 0.75,
-  },
   fieldError: {
     marginTop: 4,
     fontSize: 12,
@@ -455,13 +457,14 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     marginTop: 12,
   },
   cancelButton: {
     flex: 1,
     height: 50,
     borderRadius: 14,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -475,6 +478,7 @@ const styles = StyleSheet.create({
     flex: 2,
     height: 50,
     borderRadius: 14,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },

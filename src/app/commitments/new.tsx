@@ -6,7 +6,7 @@
  * list refreshes on focus (SQLite is the source of truth, A4).
  */
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { repositories } from '@/db';
@@ -15,7 +15,7 @@ import { CommitmentForm } from '@/components/CommitmentForm';
 import { KeyboardScreen } from '@/components/KeyboardScreen';
 import { useToast } from '@/components/ToastProvider';
 import type { CommitmentInput } from '@/repositories/types';
-import { geistWeights, useTheme } from '@/theme';
+import { useTheme } from '@/theme';
 
 function errMsg(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -60,15 +60,6 @@ export default function NewCommitmentScreen() {
           submitting={submitting}
           onCancel={() => router.back()}
         />
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.cancelLink, pressed && styles.pressed]}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.cancelLinkLabel, { color: colors.textSecondary }]}>
-            Cancel
-          </Text>
-        </Pressable>
       </ScrollView>
     </KeyboardScreen>
   );
@@ -81,20 +72,5 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 32,
-  },
-  cancelLink: {
-    alignItems: 'center',
-    paddingVertical: 16,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  cancelLinkLabel: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '600',
-    fontFamily: geistWeights.semiBold,
-  },
-  pressed: {
-    opacity: 0.6,
   },
 });
