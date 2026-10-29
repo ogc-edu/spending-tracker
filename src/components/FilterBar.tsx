@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Account, Category } from '@/db/schema';
 import type { PeriodPreset } from '@/utils/dates';
@@ -130,8 +130,15 @@ export function FilterBar({
         />
       </View>
 
-      {/* FilterPills row */}
-      <View style={styles.pillsRow}>
+      {/* FilterPills row — one line that scrolls sideways instead of wrapping a pill onto a
+          second row on narrow phones. Bleeds to the screen edges (the header pads by 16). */}
+      <ScrollView
+        horizontal
+        keyboardShouldPersistTaps="handled"
+        style={styles.pillsScroll}
+        contentContainerStyle={styles.pillsRow}
+        testID="filter-pills-scroll"
+      >
         <FilterPill
           label={periodPillLabel}
           selected={period !== 'all'}
@@ -150,7 +157,7 @@ export function FilterBar({
           onPress={() => setAccountSheetVisible(true)}
           testID="filter-pill-account"
         />
-      </View>
+      </ScrollView>
 
       {/* Period Picker Sheet */}
       <Sheet
@@ -444,10 +451,16 @@ const styles = StyleSheet.create({
   searchWrap: {
     paddingHorizontal: 0,
   },
+  pillsScroll: {
+    flexGrow: 0,
+    marginHorizontal: -16,
+  },
   pillsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingBottom: 6, // room for the horizontal scroll indicator under the pills
   },
   sheetContent: {
     paddingVertical: 8,
