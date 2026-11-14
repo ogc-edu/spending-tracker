@@ -4,6 +4,7 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testMatch: ['**/__tests__/**/*.test.ts?(x)'],
+  modulePathIgnorePatterns: ['<rootDir>/.claude/'],
   // jest-expo's default allowlist, plus @noble/hashes (pure ESM) so Babel
   // transforms it for Jest.
   transformIgnorePatterns: [

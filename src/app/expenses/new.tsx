@@ -149,6 +149,7 @@ export default function NewExpenseScreen() {
     date: todayLocal(),
     categoryId: lastUsedCategoryId ?? categories[0]?.id,
     accountId: lastUsedAccountId ?? accounts[0]?.id,
+    paymentMethod: 'Others' as const,
   };
 
   return (

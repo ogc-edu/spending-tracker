@@ -12,6 +12,8 @@ import type { CategoryRepository } from '@/repositories/types';
 export const CATEGORY_NAME_MAX = 24;
 export const CANNOT_DELETE_OTHER_MESSAGE =
   "'Other' is the built-in fallback category and can't be deleted";
+export const CANNOT_DELETE_DEBT_REPAYMENT_MESSAGE =
+  "'Debt / Repayment' is a system category for commitment payments and can't be deleted";
 
 export class CategoryService {
   constructor(private readonly categories: CategoryRepository) {}
@@ -53,8 +55,12 @@ export class CategoryService {
     const all = await this.categories.list();
     const target = all.find((c) => c.id === id);
     if (!target) return; // already gone — idempotent
-    if (target.name.toLowerCase() === 'other') {
+    const lower = target.name.trim().toLowerCase();
+    if (lower === 'other') {
       throw new Error(CANNOT_DELETE_OTHER_MESSAGE);
+    }
+    if (lower === 'debt / repayment') {
+      throw new Error(CANNOT_DELETE_DEBT_REPAYMENT_MESSAGE);
     }
     await this.categories.remove(id);
   }

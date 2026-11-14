@@ -125,7 +125,7 @@ export function formatMonthLabel(year: number, month: number): string {
 }
 
 /** "01 Sep" — compact date for expense list rows (deterministic, no locale dependence). */
-const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export function formatDayLabel(dateStr: string): string {
   const [, month, day] = dateStr.split('-').map(Number);
   return `${String(day).padStart(2, '0')} ${SHORT_MONTHS[month - 1] ?? ''}`.trim();

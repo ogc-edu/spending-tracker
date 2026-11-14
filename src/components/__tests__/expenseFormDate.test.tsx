@@ -136,6 +136,7 @@ describe('ExpenseForm date field — picker, not a text input', () => {
       accountId: 1,
       date: '2026-09-30',
       description: '',
+      paymentMethod: 'Others',
     });
   });
 

@@ -573,3 +573,191 @@ describe('ExpenseService installments (Wave 1B)', () => {
     expect(await balanceOf(fixture, fixture.credit)).toBe(50000);
   });
 });
+
+describe('ExpenseService payment method & statement cutoff commitment linking', () => {
+  it('Others does not create or link any commitment, only deducts wallet balance', async () => {
+    const fixture = await makeFixture();
+    const initialCash = await balanceOf(fixture, fixture.cash);
+
+    const expense = await fixture.service.create(
+      input(fixture, {
+        amountSen: 5000,
+        paymentMethod: 'Others',
+        date: '2026-10-15',
+      }),
+    );
+
+    expect(expense.paymentMethod).toBe('Others');
+    expect(expense.linkedCommitmentId).toBeNull();
+    expect(await balanceOf(fixture, fixture.cash)).toBe(initialCash - 5000);
+
+    const allCommitments = fixture.test.db.select().from(commitments).all();
+    expect(allCommitments).toHaveLength(0);
+  });
+
+  it('SPL before 21st auto-creates SPL-Oct commitment and deducts wallet balance', async () => {
+    const fixture = await makeFixture();
+    const initialCash = await balanceOf(fixture, fixture.cash);
+
+    const expense = await fixture.service.create(
+      input(fixture, {
+        amountSen: 7500,
+        paymentMethod: 'SPL',
+        date: '2026-10-18',
+      }),
+    );
+
+    expect(expense.paymentMethod).toBe('SPL');
+    expect(expense.linkedCommitmentId).not.toBeNull();
+    expect(await balanceOf(fixture, fixture.cash)).toBe(initialCash - 7500);
+
+    const allCommitments = fixture.test.db.select().from(commitments).all();
+    expect(allCommitments).toHaveLength(1);
+    const comm = allCommitments[0]!;
+    expect(comm.id).toBe(expense.linkedCommitmentId);
+    expect(comm.name).toBe('SPL-Oct');
+    expect(comm.type).toBe('bnpl');
+    expect(comm.frequency).toBe('one_time');
+    expect(comm.totalSen).toBe(7500);
+    expect(comm.remainingSen).toBe(7500);
+    expect(comm.paymentSen).toBe(7500);
+    expect(comm.dueDate).toBe('2026-11-10');
+  });
+
+  it('SPL on or after 21st rolls to next month SPL-Nov commitment', async () => {
+    const fixture = await makeFixture();
+    const expense = await fixture.service.create(
+      input(fixture, {
+        amountSen: 3200,
+        paymentMethod: 'SPL',
+        date: '2026-10-21',
+      }),
+    );
+
+    expect(expense.linkedCommitmentId).not.toBeNull();
+    const comm = fixture.test.db
+      .select()
+      .from(commitments)
+      .where(commitments.id.getSQL().mapWith(Number))
+      .all()[0]!;
+    expect(comm.name).toBe('SPL-Nov');
+    expect(comm.dueDate).toBe('2026-12-10');
+    expect(comm.paymentSen).toBe(3200);
+  });
+
+  it('Maybank CC creates MaybankCC-<MMM> commitment with type credit_card', async () => {
+    const fixture = await makeFixture();
+    const expense = await fixture.service.create(
+      input(fixture, {
+        amountSen: 12000,
+        paymentMethod: 'Maybank CC',
+        date: '2026-10-10',
+      }),
+    );
+
+    const comm = fixture.test.db.select().from(commitments).all()[0]!;
+    expect(comm.name).toBe('MaybankCC-Oct');
+    expect(comm.type).toBe('credit_card');
+    expect(comm.paymentSen).toBe(12000);
+  });
+
+  it('second expense in the same cycle increments existing commitment', async () => {
+    const fixture = await makeFixture();
+    const exp1 = await fixture.service.create(
+      input(fixture, {
+        amountSen: 4000,
+        paymentMethod: 'SPL',
+        date: '2026-10-05',
+      }),
+    );
+    const exp2 = await fixture.service.create(
+      input(fixture, {
+        amountSen: 6000,
+        paymentMethod: 'SPL',
+        date: '2026-10-19',
+      }),
+    );
+
+    expect(exp1.linkedCommitmentId).toBe(exp2.linkedCommitmentId);
+
+    const allCommitments = fixture.test.db.select().from(commitments).all();
+    expect(allCommitments).toHaveLength(1);
+    const comm = allCommitments[0]!;
+    expect(comm.totalSen).toBe(10000);
+    expect(comm.remainingSen).toBe(10000);
+    expect(comm.paymentSen).toBe(10000);
+  });
+
+  it('deleting an expense decrements the linked commitment', async () => {
+    const fixture = await makeFixture();
+    const exp = await fixture.service.create(
+      input(fixture, {
+        amountSen: 8000,
+        paymentMethod: 'SPL',
+        date: '2026-10-10',
+      }),
+    );
+
+    let comm = fixture.test.db.select().from(commitments).all()[0]!;
+    expect(comm.paymentSen).toBe(8000);
+
+    await fixture.service.delete(exp.id);
+
+    comm = fixture.test.db.select().from(commitments).all()[0]!;
+    expect(comm.paymentSen).toBe(0);
+    expect(comm.remainingSen).toBe(0);
+    expect(comm.totalSen).toBe(0);
+  });
+
+  it('editing expense amount adjusts the linked commitment delta', async () => {
+    const fixture = await makeFixture();
+    const exp = await fixture.service.create(
+      input(fixture, {
+        amountSen: 5000,
+        paymentMethod: 'SPL',
+        date: '2026-10-10',
+      }),
+    );
+
+    await fixture.service.edit(
+      exp.id,
+      input(fixture, {
+        amountSen: 9000,
+        paymentMethod: 'SPL',
+        date: '2026-10-10',
+      }),
+    );
+
+    const comm = fixture.test.db.select().from(commitments).all()[0]!;
+    expect(comm.paymentSen).toBe(9000);
+    expect(comm.totalSen).toBe(9000);
+  });
+
+  it('editing expense across cutoff moves commitment allocation', async () => {
+    const fixture = await makeFixture();
+    const exp = await fixture.service.create(
+      input(fixture, {
+        amountSen: 5000,
+        paymentMethod: 'SPL',
+        date: '2026-10-10', // SPL-Oct
+      }),
+    );
+
+    // Edit date to 2026-10-25 -> rolls to SPL-Nov
+    await fixture.service.edit(
+      exp.id,
+      input(fixture, {
+        amountSen: 5000,
+        paymentMethod: 'SPL',
+        date: '2026-10-25',
+      }),
+    );
+
+    const all = fixture.test.db.select().from(commitments).all();
+    const oct = all.find((c) => c.name === 'SPL-Oct')!;
+    const nov = all.find((c) => c.name === 'SPL-Nov')!;
+
+    expect(oct.paymentSen).toBe(0);
+    expect(nov.paymentSen).toBe(5000);
+  });
+});

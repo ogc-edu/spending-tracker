@@ -187,9 +187,22 @@ export class DrizzleCommitmentRepository implements CommitmentRepository {
         const rows = tx
           .select()
           .from(categories)
-          .where(eq(categories.name, name))
+          .where(sql`lower(${categories.name}) = lower(${name})`)
           .all() as unknown as Category[];
         return rows[0] ?? null;
+      },
+      insertCategory: (input: { name: string; icon: string; type?: string }): Category => {
+        const rows = tx
+          .insert(categories)
+          .values({
+            name: input.name,
+            icon: input.icon,
+            type: input.type ?? 'expense',
+          })
+          .returning()
+          .all() as unknown as Category[];
+        if (!rows[0]) throw new Error('category insert returned no row');
+        return rows[0];
       },
       getPaymentByDueDate: (userId: number, commitmentId: number, dueDate: string): CommitmentPayment | null => {
         const rows = tx

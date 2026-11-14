@@ -15,9 +15,20 @@
  *
  * All reads are user-scoped (A10) — every query filters by `userId`.
  */
-import { and, desc, eq, gte, lt, lte, sql, type Column, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lt, lte, sql, type Column, type SQL } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
-import { accounts, categories, expenseInstallments, expenses, type Account, type Category, type Expense, type ExpenseInstallment } from '@/db/schema';
+import {
+  accounts,
+  categories,
+  commitments,
+  expenseInstallments,
+  expenses,
+  type Account,
+  type Category,
+  type Commitment,
+  type Expense,
+  type ExpenseInstallment,
+} from '@/db/schema';
 import { DATE_RE, monthStartDate, nextMonthStartDate } from '@/utils/dates';
 import type { ExpenseFilter, ExpenseRepository, ExpenseTotals, ExpenseTx, NewExpenseRow } from '../types';
 
@@ -262,6 +273,62 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
               eq(expenseInstallments.expenseId, String(expenseId)),
             ),
           )
+          .run();
+      },
+      findCommitmentByName: (userId: number, name: string): Commitment | null => {
+        const rows = tx
+          .select()
+          .from(commitments)
+          .where(
+            and(
+              eq(commitments.userId, userId),
+              eq(commitments.name, name),
+              eq(commitments.status, 'active'),
+              isNull(commitments.archivedAt),
+            ),
+          )
+          .all() as unknown as Commitment[];
+        return rows[0] ?? null;
+      },
+      getCommitmentById: (userId: number, id: number): Commitment | null => {
+        const rows = tx
+          .select()
+          .from(commitments)
+          .where(and(eq(commitments.userId, userId), eq(commitments.id, id)))
+          .all() as unknown as Commitment[];
+        return rows[0] ?? null;
+      },
+      insertCommitment: (input): Commitment => {
+        const rows = tx
+          .insert(commitments)
+          .values({
+            userId: input.userId,
+            name: input.name,
+            type: input.type,
+            totalSen: input.totalSen,
+            remainingSen: input.remainingSen,
+            paymentSen: input.paymentSen,
+            frequency: input.frequency,
+            startDate: input.startDate,
+            endDate: input.endDate ?? null,
+            dueDate: input.dueDate,
+            status: 'active',
+          })
+          .returning()
+          .all() as unknown as Commitment[];
+        const row = rows[0];
+        if (!row) throw new Error('commitment insert failed');
+        return row;
+      },
+      adjustCommitmentAmounts: (userId: number, commitmentId: number, deltaSen: number): void => {
+        tx.update(commitments)
+          .set({
+            paymentSen: sql`MAX(0, ${commitments.paymentSen} + ${deltaSen})`,
+            totalSen: sql`MAX(0, ${commitments.totalSen} + ${deltaSen})`,
+            remainingSen: sql`MAX(0, ${commitments.remainingSen} + ${deltaSen})`,
+            updatedAt: Date.now(),
+          })
+          .where(and(eq(commitments.id, commitmentId), eq(commitments.userId, userId)))
           .run();
       },
     };

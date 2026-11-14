@@ -228,6 +228,7 @@ export default function EditExpenseScreen() {
     amount: formatSenInput(installment ? installment.principalSen : expense.amountSen),
     categoryId: expense.categoryId,
     accountId: expense.accountId ?? undefined,
+    paymentMethod: (expense.paymentMethod as any) ?? 'Others',
     date: expense.date,
     description: expense.description ?? '',
     installment: installment

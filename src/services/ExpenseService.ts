@@ -26,13 +26,16 @@ import { z } from 'zod';
 import type { Account, Category, Expense, ExpenseInstallment } from '@/db/schema';
 import { DATE_RE, isValidDateStr } from '@/utils/dates';
 import { splitInstallment } from '@/engine/creditBills';
+import { resolvePaymentCommitment } from '@/engine/paymentCommitment';
 import {
   EXPENSE_LINKED_READ_ONLY_MESSAGE,
+  PAYMENT_METHODS,
   type CategoryRepository,
   type ExpenseFilter,
   type ExpenseInput,
   type ExpenseRepository,
   type ExpenseTotals,
+  type PaymentMethod,
 } from '@/repositories/types';
 import type { CurrentUserSource } from './AccountService';
 
@@ -51,6 +54,7 @@ export const expenseInputSchema = z.object({
     .max(200, 'Description must be 200 characters or fewer')
     .optional()
     .default(''),
+  paymentMethod: z.enum(PAYMENT_METHODS).optional().default('Others'),
   installment: z
     .object({
       months: z.number().int().min(2, 'Months must be at least 2').max(24, 'Months must be at most 24'),
@@ -169,6 +173,29 @@ export class ExpenseService {
         finalAmountSen = split.totalPayableSen;
       }
 
+      let linkedCommitmentId: number | null = null;
+      const target = resolvePaymentCommitment(data.date, data.paymentMethod);
+      if (target) {
+        const existing = tx.findCommitmentByName(userId, target.commitmentName);
+        if (existing) {
+          tx.adjustCommitmentAmounts(userId, existing.id, finalAmountSen);
+          linkedCommitmentId = existing.id;
+        } else {
+          const created = tx.insertCommitment({
+            userId,
+            name: target.commitmentName,
+            type: target.commitmentType,
+            totalSen: finalAmountSen,
+            remainingSen: finalAmountSen,
+            paymentSen: finalAmountSen,
+            frequency: 'one_time',
+            startDate: data.date,
+            dueDate: target.dueDate,
+          });
+          linkedCommitmentId = created.id;
+        }
+      }
+
       const expense = tx.insert({
         userId,
         amountSen: finalAmountSen,
@@ -176,6 +203,8 @@ export class ExpenseService {
         accountId: data.accountId,
         date: data.date,
         description: data.description,
+        paymentMethod: data.paymentMethod,
+        linkedCommitmentId,
       });
 
       if (data.installment) {
@@ -246,12 +275,80 @@ export class ExpenseService {
         });
       }
 
+      // Handle linked commitment adjustments
+      let linkedCommitmentId = old.linkedCommitmentId;
+      const newTarget = resolvePaymentCommitment(data.date, data.paymentMethod);
+
+      if (old.linkedCommitmentId !== null) {
+        const oldCommitment = tx.getCommitmentById(userId, old.linkedCommitmentId);
+        const sameTarget =
+          newTarget && oldCommitment && oldCommitment.name === newTarget.commitmentName;
+
+        if (sameTarget) {
+          const delta = finalAmountSen - old.amountSen;
+          if (delta !== 0) {
+            tx.adjustCommitmentAmounts(userId, old.linkedCommitmentId, delta);
+          }
+        } else {
+          // Revert old commitment
+          tx.adjustCommitmentAmounts(userId, old.linkedCommitmentId, -old.amountSen);
+          if (newTarget) {
+            const existing = tx.findCommitmentByName(userId, newTarget.commitmentName);
+            if (existing) {
+              tx.adjustCommitmentAmounts(userId, existing.id, finalAmountSen);
+              linkedCommitmentId = existing.id;
+            } else {
+              const created = tx.insertCommitment({
+                userId,
+                name: newTarget.commitmentName,
+                type: newTarget.commitmentType,
+                totalSen: finalAmountSen,
+                remainingSen: finalAmountSen,
+                paymentSen: finalAmountSen,
+                frequency: 'one_time',
+                startDate: data.date,
+                dueDate: newTarget.dueDate,
+              });
+              linkedCommitmentId = created.id;
+            }
+          } else {
+            linkedCommitmentId = null;
+          }
+        }
+      } else {
+        // Old had no linked commitment (was Others)
+        if (newTarget) {
+          const existing = tx.findCommitmentByName(userId, newTarget.commitmentName);
+          if (existing) {
+            tx.adjustCommitmentAmounts(userId, existing.id, finalAmountSen);
+            linkedCommitmentId = existing.id;
+          } else {
+            const created = tx.insertCommitment({
+              userId,
+              name: newTarget.commitmentName,
+              type: newTarget.commitmentType,
+              totalSen: finalAmountSen,
+              remainingSen: finalAmountSen,
+              paymentSen: finalAmountSen,
+              frequency: 'one_time',
+              startDate: data.date,
+              dueDate: newTarget.dueDate,
+            });
+            linkedCommitmentId = created.id;
+          }
+        } else {
+          linkedCommitmentId = null;
+        }
+      }
+
       return tx.update(userId, id, {
         amountSen: finalAmountSen,
         categoryId: data.categoryId,
         accountId: data.accountId,
         date: data.date,
         description: data.description,
+        paymentMethod: data.paymentMethod,
+        linkedCommitmentId,
       });
     });
   }
@@ -268,6 +365,9 @@ export class ExpenseService {
         if (account) {
           tx.adjustBalance(userId, account.id, -balanceEffectFor(account, old.amountSen));
         }
+      }
+      if (old.linkedCommitmentId !== null) {
+        tx.adjustCommitmentAmounts(userId, old.linkedCommitmentId, -old.amountSen);
       }
       const oldInst = tx.getInstallmentByExpenseId(userId, id);
       if (oldInst) {

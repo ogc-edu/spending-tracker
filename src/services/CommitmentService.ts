@@ -230,9 +230,13 @@ export class CommitmentService {
         if (!account) throw new Error('unknown account');
         tx.adjustBalance(userId, account.id, balanceEffectFor(account, slot.amountSen));
       }
-      const debtCategory = tx.getCategoryByName(DEBT_REPAYMENT_CATEGORY_NAME);
+      let debtCategory = tx.getCategoryByName(DEBT_REPAYMENT_CATEGORY_NAME);
       if (!debtCategory) {
-        throw new Error(`${DEBT_REPAYMENT_CATEGORY_NAME} category missing — reseed categories`);
+        debtCategory = tx.insertCategory({
+          name: DEBT_REPAYMENT_CATEGORY_NAME,
+          icon: 'card-outline',
+          type: 'expense',
+        });
       }
       const today = todayLocal();
       const payment = tx.insertPayment({

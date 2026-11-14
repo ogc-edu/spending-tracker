@@ -30,6 +30,8 @@ const mockExpense: Expense = {
   accountId: 10,
   date: '2026-10-06',
   description: 'Netflix subscription',
+  paymentMethod: 'Others',
+  linkedCommitmentId: null,
   commitmentPaymentId: 456,
   createdAt: 1000,
   updatedAt: 1000,

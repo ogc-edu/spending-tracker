@@ -17,7 +17,11 @@ import {
 import { createMigratedTestDb, type TestDb } from '@/db/testing';
 import { insertDefaultCategoriesIfEmpty } from '@/db/seed';
 import { DrizzleCategoryRepository } from '@/repositories/drizzle/categoryRepository';
-import { CategoryService, CANNOT_DELETE_OTHER_MESSAGE } from '@/services/CategoryService';
+import {
+  CategoryService,
+  CANNOT_DELETE_DEBT_REPAYMENT_MESSAGE,
+  CANNOT_DELETE_OTHER_MESSAGE,
+} from '@/services/CategoryService';
 
 interface Fixture {
   test: TestDb;
@@ -91,9 +95,13 @@ describe('CategoryService.delete', () => {
     expect(f.test.sqlite.pragma('foreign_keys', { simple: true })).toBe(1);
   });
 
-  it('protects Other and is idempotent for missing ids', async () => {
+  it('protects Other and Debt / Repayment and is idempotent for missing ids', async () => {
     const f = await makeFixture();
     await expect(f.service.delete(f.other.id)).rejects.toThrow(CANNOT_DELETE_OTHER_MESSAGE);
+    const debt = f.categories.find((c) => c.name.toLowerCase() === 'debt / repayment');
+    if (debt) {
+      await expect(f.service.delete(debt.id)).rejects.toThrow(CANNOT_DELETE_DEBT_REPAYMENT_MESSAGE);
+    }
     await expect(f.service.delete(99999)).resolves.toBeUndefined();
   });
 });

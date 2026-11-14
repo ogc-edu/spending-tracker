@@ -33,7 +33,8 @@ import { Stepper } from '@/components/ui/Stepper';
 import { Switch } from '@/components/ui/Switch';
 import { useKeyboardAwareFocus } from '@/components/KeyboardAwareScrollView';
 import { haptics } from '@/utils/haptics';
-import type { ExpenseInput } from '@/repositories/types';
+import { PAYMENT_METHODS, type ExpenseInput, type PaymentMethod } from '@/repositories/types';
+import { resolvePaymentCommitment } from '@/engine/paymentCommitment';
 
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -98,6 +99,7 @@ export const expenseFormSchema = z.object({
     ),
   categoryId: z.number({ error: 'Choose a category' }).int().positive('Choose a category'),
   accountId: z.number({ error: 'Choose an account' }).int().positive('Choose an account'),
+  paymentMethod: z.enum(PAYMENT_METHODS),
   date: z
     .string()
     .regex(DATE_RE, 'Use YYYY-MM-DD')
@@ -116,6 +118,7 @@ export function expenseToFormValues(expense: Expense): {
       amount: formatSenInput(expense.amountSen),
       categoryId: expense.categoryId,
       accountId: expense.accountId ?? 0,
+      paymentMethod: (expense.paymentMethod as PaymentMethod) ?? 'Others',
       date: expense.date,
       description: expense.description ?? '',
     },
@@ -167,6 +170,7 @@ export function ExpenseForm({
       date: defaults?.date ?? todayLocal(),
       categoryId: initialCategoryId,
       accountId: initialAccountId,
+      paymentMethod: defaults?.paymentMethod ?? 'Others',
     },
   });
 
@@ -294,14 +298,19 @@ export function ExpenseForm({
         ? { months: splitMonths, monthlyRateBp }
         : undefined;
 
-    void onSubmit({
+    const payload: ExpenseInput = {
       amountSen,
       categoryId: values.categoryId,
       accountId: values.accountId,
       date: values.date,
       description: values.description,
-      installment,
-    });
+      paymentMethod: values.paymentMethod,
+    };
+    if (installment) {
+      payload.installment = installment;
+    }
+
+    void onSubmit(payload);
   };
 
   return (
@@ -406,7 +415,8 @@ export function ExpenseForm({
             <View style={styles.categoryWrap} testID="category-matrix">
               {visibleCategories.map((category) => {
                 const isSelected = value === category.id;
-                const armed = armedDelete?.id === category.id;
+                const isProtected = category.name.trim().toLowerCase() === 'debt / repayment';
+                const armed = !isProtected && armedDelete?.id === category.id;
                 return (
                   <View key={category.id} style={styles.chipWrapper}>
                     <Chip
@@ -420,7 +430,10 @@ export function ExpenseForm({
                         haptics.categorySelect();
                         onChange(category.id);
                       }}
-                      onLongPress={() => setArmedDelete(armed ? null : category)}
+                      onLongPress={() => {
+                        if (isProtected) return;
+                        setArmedDelete(armed ? null : category);
+                      }}
                       delayLongPress={450}
                       testID={`expense-form-category-${category.id}`}
                     />
@@ -468,7 +481,7 @@ export function ExpenseForm({
         render={({ field: { value, onChange }, fieldState: { error } }) => (
           <View style={styles.section}>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-              Paid with
+              Paid with Wallet
             </Text>
             <View style={styles.accountsGrid}>
               {accounts.map((acc) => {
@@ -497,6 +510,90 @@ export function ExpenseForm({
             ) : null}
           </View>
         )}
+      />
+
+      {/* 4. PAYMENT METHOD SECTION */}
+      <Controller
+        control={control}
+        name="paymentMethod"
+        render={({ field: { value, onChange } }) => {
+          const selectedMethod = value ?? 'Others';
+          const target = resolvePaymentCommitment(
+            watched.date || todayLocal(),
+            selectedMethod,
+          );
+          return (
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+                Payment method
+              </Text>
+              <View style={styles.paymentMethodRow}>
+                {PAYMENT_METHODS.map((method) => {
+                  const isSelected = selectedMethod === method;
+                  return (
+                    <Pressable
+                      key={method}
+                      onPress={() => {
+                        haptics.categorySelect();
+                        onChange(method);
+                      }}
+                      style={[
+                        styles.paymentMethodChip,
+                        {
+                          backgroundColor: isSelected ? colors.accent : colors.fillStrong,
+                          borderColor: isSelected ? colors.accent : colors.chipBorder,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={method}
+                      accessibilityState={{ selected: isSelected }}
+                      testID={`payment-method-${method.replace(/\s+/g, '-')}`}
+                    >
+                      <Text
+                        style={[
+                          styles.paymentMethodChipText,
+                          {
+                            color: isSelected ? colors.onAccent : colors.text,
+                            fontWeight: isSelected ? '600' : '400',
+                          },
+                        ]}
+                      >
+                        {method}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Dynamic statement cutoff & destination commitment preview banner */}
+              {target ? (
+                <View
+                  style={[
+                    styles.commitmentPreviewBanner,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.chipBorder,
+                    },
+                  ]}
+                  testID="payment-commitment-preview"
+                >
+                  <Ionicons name="calendar-outline" size={16} color={colors.accent} />
+                  <View style={styles.previewTextContainer}>
+                    <Text style={[styles.previewTitle, { color: colors.text }]}>
+                      Statement cutoff 21st · Routes to{' '}
+                      <Text style={{ fontWeight: '700', color: colors.accent }}>
+                        {target.commitmentName}
+                      </Text>
+                    </Text>
+                    <Text style={[styles.previewSubtitle, { color: colors.textSecondary }]}>
+                      Due {formatDisplayDate(target.dueDate)} · Adds RM {amountDisplay}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          );
+        }}
       />
 
       {/* 4. CREDIT SPLIT BLOCK (Only when account is credit_card or paylater) */}
@@ -892,6 +989,47 @@ const styles = StyleSheet.create({
   accountCell: {
     width: '48%',
     flexGrow: 1,
+  },
+  paymentMethodRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  paymentMethodChip: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  paymentMethodChipText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: geistWeights.medium,
+  },
+  commitmentPreviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  previewTextContainer: {
+    flex: 1,
+    gap: 2,
+  },
+  previewTitle: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontFamily: geistWeights.medium,
+  },
+  previewSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: geistWeights.regular,
   },
   splitGroup: {
     padding: 14,

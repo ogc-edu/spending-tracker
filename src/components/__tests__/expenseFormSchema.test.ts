@@ -14,6 +14,7 @@ const validValues = {
   amount: '12.50',
   categoryId: 1,
   accountId: 1,
+  paymentMethod: 'Others' as const,
   date: '2026-09-05',
   description: 'lunch',
 };
@@ -73,6 +74,8 @@ describe('expenseToFormValues — edit-screen row → form mapping', () => {
     description: 'grab',
     date: '2026-09-05',
     accountId: 3,
+    paymentMethod: 'SPL',
+    linkedCommitmentId: 10,
     commitmentPaymentId: null,
     createdAt: 0,
     updatedAt: 0,
@@ -84,6 +87,7 @@ describe('expenseToFormValues — edit-screen row → form mapping', () => {
     expect(mapped.values.amount).toBe('120.50'); // formatSenInput round-trip
     expect(mapped.values.categoryId).toBe(2);
     expect(mapped.values.accountId).toBe(3);
+    expect(mapped.values.paymentMethod).toBe('SPL');
     expect(mapped.values.date).toBe('2026-09-05');
     expect(mapped.values.description).toBe('grab');
   });
@@ -91,5 +95,22 @@ describe('expenseToFormValues — edit-screen row → form mapping', () => {
   it('flags auto-created (linked) expenses as read-only for the UI (E7)', () => {
     const linked = expenseToFormValues({ ...base, commitmentPaymentId: 42 });
     expect(linked.readOnly).toBe(true);
+  });
+});
+
+describe('expenseFormSchema — paymentMethod', () => {
+  it('accepts valid payment methods and defaults to Others when omitted', () => {
+    expect(expenseFormSchema.safeParse({ ...validValues, paymentMethod: 'SPL' }).success).toBe(true);
+    expect(expenseFormSchema.safeParse({ ...validValues, paymentMethod: 'Maybank CC' }).success).toBe(true);
+    expect(expenseFormSchema.safeParse({ ...validValues, paymentMethod: 'Others' }).success).toBe(true);
+    const parsed = expenseFormSchema.safeParse(validValues);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.paymentMethod).toBe('Others');
+    }
+  });
+
+  it('rejects unrecognized payment method', () => {
+    expect(expenseFormSchema.safeParse({ ...validValues, paymentMethod: 'Invalid' }).success).toBe(false);
   });
 });

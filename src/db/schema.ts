@@ -152,6 +152,10 @@ export const expenses = sqliteTable(
     /** TEXT `YYYY-MM-DD` (local calendar). */
     date: text('date').notNull(),
     accountId: integer('account_id').references(() => accounts.id),
+    /** 'SPL' | 'Maybank CC' | 'Others' */
+    paymentMethod: text('payment_method').notNull().default('Others'),
+    /** Linked commitment for statement settlement (SPL / Maybank CC) */
+    linkedCommitmentId: integer('linked_commitment_id').references(() => commitments.id),
     /** Unique link enforces D3 idempotency: a commitment payment's expense is created exactly once. */
     commitmentPaymentId: integer('commitment_payment_id')
       .references(() => commitmentPayments.id)
@@ -167,6 +171,7 @@ export const expenses = sqliteTable(
     index('expenses_user_id_idx').on(t.userId),
     index('expenses_date_idx').on(t.date),
     index('expenses_category_id_idx').on(t.categoryId),
+    index('expenses_linked_commitment_id_idx').on(t.linkedCommitmentId),
   ],
 );
 

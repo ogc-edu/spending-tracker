@@ -112,6 +112,9 @@ export interface CategoryRepository {
 export const EXPENSE_LINKED_READ_ONLY_MESSAGE =
   'This expense was auto-created from a commitment payment — un-pay the payment in Commitments to change or remove it';
 
+export const PAYMENT_METHODS = ['SPL', 'Maybank CC', 'Others'] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
 /** Plan 020 installment plan input attached to a credit-account expense. */
 export interface ExpenseInstallmentInput {
   months: number;
@@ -127,6 +130,8 @@ export interface ExpenseInput {
   date: string;
   /** Optional free text, ≤200 chars. Stored, NEVER sent to AI (plan 013 hygiene). */
   description?: string;
+  /** Payment method: 'SPL' | 'Maybank CC' | 'Others'. Defaults to 'Others'. */
+  paymentMethod?: PaymentMethod;
   /** Optional instalment plan (credit accounts only, plan 020). */
   installment?: ExpenseInstallmentInput;
 }
@@ -139,6 +144,8 @@ export interface NewExpenseRow {
   accountId: number;
   date: string;
   description: string;
+  paymentMethod?: PaymentMethod;
+  linkedCommitmentId?: number | null;
 }
 
 /**
@@ -183,6 +190,25 @@ export interface ExpenseTx {
   getInstallmentByExpenseId(userId: number, expenseId: number): ExpenseInstallment | null;
   /** Remove installment plan for an expense. */
   deleteInstallmentByExpenseId(userId: number, expenseId: number): void;
+  /** Find an active commitment by its name for the user. */
+  findCommitmentByName(userId: number, name: string): Commitment | null;
+  /** Get commitment by id for the user. */
+  getCommitmentById(userId: number, id: number): Commitment | null;
+  /** Insert auto-created commitment. */
+  insertCommitment(input: {
+    userId: number;
+    name: string;
+    type: CommitmentType;
+    totalSen: number | null;
+    remainingSen: number;
+    paymentSen: number;
+    frequency: CommitmentFrequency;
+    startDate: string;
+    endDate?: string | null;
+    dueDate: string;
+  }): Commitment;
+  /** Adjust commitment paymentSen, totalSen, and remainingSen by deltaSen. */
+  adjustCommitmentAmounts(userId: number, commitmentId: number, deltaSen: number): void;
 }
 
 
@@ -308,6 +334,8 @@ export interface CommitmentTx {
   getAccount(userId: number, accountId: number): Account | null;
   /** Global category lookup by EXACT name (categories have no user_id, A10). */
   getCategoryByName(name: string): Category | null;
+  /** Insert category within commitment transaction (used for auto-healing system categories). */
+  insertCategory(input: { name: string; icon: string; type?: string }): Category;
   /** Existing paid record for a (commitment, dueDate) slot — the idempotency check. */
   getPaymentByDueDate(userId: number, commitmentId: number, dueDate: string): CommitmentPayment | null;
   /** User-scoped paid-record fetch (un-pay lookup). */

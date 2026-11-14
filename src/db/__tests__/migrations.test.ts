@@ -47,6 +47,7 @@ const INDEXES = [
   'expenses_category_id_idx',
   'expenses_user_id_idx',
   'expenses_commitment_payment_id_unique',
+  'expenses_linked_commitment_id_idx',
   'commitments_user_id_idx',
   'commitments_status_idx',
   'commitment_payments_user_id_idx',

@@ -15,6 +15,7 @@
  *  - user isolation (A10)
  */
 import { describe, expect, it } from '@jest/globals';
+import { eq } from 'drizzle-orm';
 import {
   categories as categoriesTable,
   commitmentPayments,
@@ -225,6 +226,23 @@ describe('CommitmentService.markPaid — D3 transaction', () => {
     const expense = fixture.test.db.select().from(expensesTable).get();
     expect(expense?.accountId).toBeNull();
     expect(expense?.commitmentPaymentId).toBe(payment.id);
+  });
+
+  it('auto-heals and creates Debt / Repayment category when missing', async () => {
+    const fixture = await makeFixture();
+    fixture.test.db.delete(categoriesTable).where(eq(categoriesTable.id, fixture.debtCategory.id)).run();
+
+    const commitment = await createFixed(fixture);
+    const payment = await fixture.service.markPaid(commitment.id, '2026-10-01', fixture.cash.id);
+
+    expect(payment.status).toBe('paid');
+    const recreated = fixture.test.db.select().from(categoriesTable).all() as Category[];
+    const debt = recreated.find((c) => c.name === DEBT_REPAYMENT_CATEGORY_NAME);
+    expect(debt).toBeDefined();
+
+    const rows = fixture.test.db.select().from(expensesTable).all() as Expense[];
+    const expense = rows.find((r) => r.commitmentPaymentId === payment.id);
+    expect(expense?.categoryId).toBe(debt?.id);
   });
 
   it('is idempotent: a second mark of the same slot is blocked with no new rows', async () => {

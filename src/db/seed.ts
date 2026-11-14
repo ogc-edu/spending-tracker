@@ -38,3 +38,23 @@ export async function insertDefaultCategoriesIfEmpty(db: AnySQLiteDb): Promise<n
   await db.insert(categories).values(DEFAULT_CATEGORY_SEED);
   return DEFAULT_CATEGORY_SEED.length;
 }
+
+/**
+ * Ensure system-critical categories exist (e.g. Debt / Repayment for commitment payments),
+ * even if the table was partially seeded or the category was previously deleted.
+ */
+export async function ensureRequiredCategories(db: AnySQLiteDb): Promise<void> {
+  const existing = (await db
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)) as { id: number; name: string }[];
+  const hasDebt = existing.some(
+    (c) => c.name.trim().toLowerCase() === 'debt / repayment',
+  );
+  if (!hasDebt) {
+    await db.insert(categories).values({
+      name: 'Debt / Repayment',
+      icon: 'card-outline',
+      type: 'expense',
+    });
+  }
+}
